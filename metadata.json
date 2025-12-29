@@ -1,0 +1,7 @@
+{
+  "name": "CREATIVA LABS Cabina de Fotos",
+  "description": "Alquimia Digital para Marcas",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
