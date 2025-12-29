@@ -6,22 +6,22 @@ import UploadCard from './components/UploadCard';
 import { FormState } from './types';
 
 const IDENTITIES = [
-  { id: 'f1_a', title: 'Identidad 1', url: 'F1-A.jpg' },
-  { id: 'f1_b', title: 'Identidad 2', url: 'F1-B.jpg' },
-  { id: 'f1_c', title: 'Identidad 3', url: 'F1-C.jpg' },
-  { id: 'f1_d', title: 'Identidad 4', url: 'F1-D.jpg' },
-  { id: 'bb_a', title: 'Identidad 5', url: 'BB-A.jpg' },
-  { id: 'bb_b', title: 'Identidad 6', url: 'BB-B.jpg' },
-  { id: 'bb_c', title: 'Identidad 7', url: 'BB-C.jpg' },
-  { id: 'bb_d', title: 'Identidad 8', url: 'BB-D.jpg' },
-  { id: 'suit_a', title: 'Identidad 9', url: 'SUIT-A.jpg' },
-  { id: 'suit_b', title: 'Identidad 10', url: 'SUIT-B.jpg' },
-  { id: 'suit_c', title: 'Identidad 11', url: 'SUIT-C.jpg' },
-  { id: 'suit_d', title: 'Identidad 12', url: 'SUIT-D.jpg' },
-  { id: 'pb_a', title: 'Identidad 13', url: 'PB-A.jpg' },
-  { id: 'pb_b', title: 'Identidad 14', url: 'PB-B.jpg' },
-  { id: 'pb_c', title: 'Identidad 15', url: 'PB-C.jpg' },
-  { id: 'pb_d', title: 'Identidad 16', url: 'PB-D.jpg' }
+  { id: 'f1_a', title: 'Identidad 1', url: `${import.meta.env.BASE_URL}F1-A.jpg` },
+  { id: 'f1_b', title: 'Identidad 2', url: `${import.meta.env.BASE_URL}F1-B.jpg` },
+  { id: 'f1_c', title: 'Identidad 3', url: `${import.meta.env.BASE_URL}F1-C.jpg` },
+  { id: 'f1_d', title: 'Identidad 4', url: `${import.meta.env.BASE_URL}F1-D.jpg` },
+  { id: 'bb_a', title: 'Identidad 5', url: `${import.meta.env.BASE_URL}BB-A.jpg` },
+  { id: 'bb_b', title: 'Identidad 6', url: `${import.meta.env.BASE_URL}BB-B.jpg` },
+  { id: 'bb_c', title: 'Identidad 7', url: `${import.meta.env.BASE_URL}BB-C.jpg` },
+  { id: 'bb_d', title: 'Identidad 8', url: `${import.meta.env.BASE_URL}BB-D.jpg` },
+  { id: 'suit_a', title: 'Identidad 9', url: `${import.meta.env.BASE_URL}SUIT-A.jpg` },
+  { id: 'suit_b', title: 'Identidad 10', url: `${import.meta.env.BASE_URL}SUIT-B.jpg` },
+  { id: 'suit_c', title: 'Identidad 11', url: `${import.meta.env.BASE_URL}SUIT-C.jpg` },
+  { id: 'suit_d', title: 'Identidad 12', url: `${import.meta.env.BASE_URL}SUIT-D.jpg` },
+  { id: 'pb_a', title: 'Identidad 13', url: `${import.meta.env.BASE_URL}PB-A.jpg` },
+  { id: 'pb_b', title: 'Identidad 14', url: `${import.meta.env.BASE_URL}PB-B.jpg` },
+  { id: 'pb_c', title: 'Identidad 15', url: `${import.meta.env.BASE_URL}PB-C.jpg` },
+  { id: 'pb_d', title: 'Identidad 16', url: `${import.meta.env.BASE_URL}PB-D.jpg` }
 ];
 
 const App: React.FC = () => {
