@@ -244,7 +244,7 @@ const App: React.FC = () => {
               ) : (
                 <div className="relative group">
                   <div className="w-64 aspect-[4/5] rounded-3xl overflow-hidden border-2 border-accent shadow-[0_0_40px_rgba(255,85,0,0.3)] relative">
-                    <img src={capturedImage} className="w-full h-full object-cover" alt="Tu foto" crossOrigin="anonymous" />
+                    <img src={capturedImage} className="w-full h-full object-cover" alt="Tu foto" />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                     <div className="absolute top-0 left-0 w-full h-[1px] bg-accent/50 animate-[scan_2s_linear_infinite]" />
                   </div>
@@ -387,7 +387,7 @@ const App: React.FC = () => {
               {isCapturing ? (
                 <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover scale-x-[-1]" />
               ) : (
-                <img src={capturedImage || ''} className="w-full h-full object-cover" alt="Previsualización" crossOrigin="anonymous" />
+                <img src={capturedImage || ''} className="w-full h-full object-cover" alt="Previsualización" />
               )}
               {/* Overlay Técnico */}
               <div className="absolute inset-0 border-[20px] border-black/40 pointer-events-none">

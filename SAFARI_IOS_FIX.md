@@ -19,8 +19,10 @@ Safari iOS tiene problemas conocidos con el atributo `loading` en elementos `<im
 Safari iOS es más estricto con las políticas CORS. Se agregó `crossOrigin="anonymous"` a todas las imágenes para mejorar la compatibilidad.
 
 **Archivos modificados:**
-- `components/UploadCard.tsx` (línea 65)
-- `App.tsx` (línea 349)
+- `components/UploadCard.tsx` (línea 65 - imágenes de identidades)
+- `App.tsx` (línea 349 - imagen de resultado del servidor)
+
+**IMPORTANTE:** `crossOrigin="anonymous"` **NO** se usa en imágenes capturadas de la cámara (data URLs en formato base64) porque causa errores CORS. Solo se usa en imágenes cargadas desde URLs externas.
 
 ### 3. **Estrategia de Precarga Mejorada**
 Se implementó una estrategia de precarga más robusta con timeout y manejo de errores específico para Safari iOS.
