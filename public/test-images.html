@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test de Imágenes - Safari iOS</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            padding: 20px;
+            background: #000;
+            color: #fff;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            color: #ff5500;
+            text-align: center;
+        }
+
+        .test-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+
+        .test-card {
+            background: #1a1a1a;
+            border: 2px solid #333;
+            border-radius: 12px;
+            padding: 10px;
+            text-align: center;
+        }
+
+        .test-card.success {
+            border-color: #00ff00;
+        }
+
+        .test-card.error {
+            border-color: #ff0000;
+        }
+
+        .test-card img {
+            width: 100%;
+            height: 250px;
+            object-fit: cover;
+            border-radius: 8px;
+            background: #000;
+        }
+
+        .status {
+            margin-top: 10px;
+            padding: 5px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .status.loading {
+            background: #ff9900;
+            color: #000;
+        }
+
+        .status.success {
+            background: #00ff00;
+            color: #000;
+        }
+
+        .status.error {
+            background: #ff0000;
+        }
+
+        .info {
+            font-size: 10px;
+            color: #888;
+            margin-top: 5px;
+        }
+
+        .summary {
+            background: #1a1a1a;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 30px;
+            border: 2px solid #ff5500;
+        }
+
+        .summary-stats {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 15px;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #888;
+            text-transform: uppercase;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h1>🔍 Test de Carga de Imágenes</h1>
+        <p style="text-align: center; color: #888;">Diagnóstico para Safari iOS</p>
+
+        <div class="summary">
+            <h2 style="margin-top: 0;">Resumen</h2>
+            <div class="summary-stats">
+                <div class="stat">
+                    <div class="stat-value" id="total-count">0</div>
+                    <div class="stat-label">Total</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" style="color: #00ff00;" id="success-count">0</div>
+                    <div class="stat-label">Exitosas</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" style="color: #ff0000;" id="error-count">0</div>
+                    <div class="stat-label">Fallidas</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-value" style="color: #ff9900;" id="loading-count">0</div>
+                    <div class="stat-label">Cargando</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="test-grid" id="test-grid"></div>
+    </div>
+
+    <script>
+        const IDENTITIES = [
+            { id: 'f1_a', title: 'Identidad 1', url: '/cabina/F1-A.jpg' },
+            { id: 'f1_b', title: 'Identidad 2', url: '/cabina/F1-B.jpg' },
+            { id: 'f1_c', title: 'Identidad 3', url: '/cabina/F1-C.jpg' },
+            { id: 'f1_d', title: 'Identidad 4', url: '/cabina/F1-D.jpg' },
+            { id: 'bb_a', title: 'Identidad 5', url: '/cabina/BB-A.jpg' },
+            { id: 'bb_b', title: 'Identidad 6', url: '/cabina/BB-B.jpg' },
+            { id: 'bb_c', title: 'Identidad 7', url: '/cabina/BB-C.jpg' },
+            { id: 'bb_d', title: 'Identidad 8', url: '/cabina/BB-D.jpg' },
+            { id: 'suit_a', title: 'Identidad 9', url: '/cabina/SUIT-A.jpg' },
+            { id: 'suit_b', title: 'Identidad 10', url: '/cabina/SUIT-B.jpg' },
+            { id: 'suit_c', title: 'Identidad 11', url: '/cabina/SUIT-C.jpg' },
+            { id: 'suit_d', title: 'Identidad 12', url: '/cabina/SUIT-D.jpg' },
+            { id: 'pb_a', title: 'Identidad 13', url: '/cabina/PB-A.jpg' },
+            { id: 'pb_b', title: 'Identidad 14', url: '/cabina/PB-B.jpg' },
+            { id: 'pb_c', title: 'Identidad 15', url: '/cabina/PB-C.jpg' },
+            { id: 'pb_d', title: 'Identidad 16', url: '/cabina/PB-D.jpg' }
+        ];
+
+        const stats = {
+            total: IDENTITIES.length,
+            success: 0,
+            error: 0,
+            loading: IDENTITIES.length
+        };
+
+        function updateStats() {
+            document.getElementById('total-count').textContent = stats.total;
+            document.getElementById('success-count').textContent = stats.success;
+            document.getElementById('error-count').textContent = stats.error;
+            document.getElementById('loading-count').textContent = stats.loading;
+        }
+
+        function createTestCard(identity) {
+            const card = document.createElement('div');
+            card.className = 'test-card';
+            card.id = `card-${identity.id}`;
+
+            const img = document.createElement('img');
+            img.crossOrigin = 'anonymous';
+            img.alt = identity.title;
+
+            const title = document.createElement('div');
+            title.style.fontWeight = 'bold';
+            title.style.marginTop = '10px';
+            title.textContent = identity.title;
+
+            const status = document.createElement('div');
+            status.className = 'status loading';
+            status.id = `status-${identity.id}`;
+            status.textContent = 'Cargando...';
+
+            const info = document.createElement('div');
+            info.className = 'info';
+            info.id = `info-${identity.id}`;
+            info.textContent = identity.url;
+
+            const startTime = Date.now();
+
+            img.onload = function () {
+                const loadTime = Date.now() - startTime;
+                card.className = 'test-card success';
+                status.className = 'status success';
+                status.textContent = `✓ Cargada (${loadTime}ms)`;
+
+                stats.success++;
+                stats.loading--;
+                updateStats();
+
+                console.log(`✓ ${identity.title} cargada en ${loadTime}ms`);
+            };
+
+            img.onerror = function (e) {
+                const loadTime = Date.now() - startTime;
+                card.className = 'test-card error';
+                status.className = 'status error';
+                status.textContent = `✗ Error (${loadTime}ms)`;
+
+                stats.error++;
+                stats.loading--;
+                updateStats();
+
+                console.error(`✗ ${identity.title} falló:`, e);
+            };
+
+            // Timeout de 10 segundos
+            setTimeout(() => {
+                if (status.className.includes('loading')) {
+                    card.className = 'test-card error';
+                    status.className = 'status error';
+                    status.textContent = '✗ Timeout (10s)';
+
+                    stats.error++;
+                    stats.loading--;
+                    updateStats();
+
+                    console.error(`✗ ${identity.title} timeout después de 10s`);
+                }
+            }, 10000);
+
+            img.src = identity.url;
+
+            card.appendChild(img);
+            card.appendChild(title);
+            card.appendChild(status);
+            card.appendChild(info);
+
+            return card;
+        }
+
+        // Información del navegador
+        console.log('=== INFORMACIÓN DEL NAVEGADOR ===');
+        console.log('User Agent:', navigator.userAgent);
+        console.log('Plataforma:', navigator.platform);
+        console.log('Idioma:', navigator.language);
+        console.log('Online:', navigator.onLine);
+        console.log('Viewport:', window.innerWidth + 'x' + window.innerHeight);
+        console.log('Device Pixel Ratio:', window.devicePixelRatio);
+        console.log('=================================');
+
+        // Crear tarjetas de test
+        const grid = document.getElementById('test-grid');
+        IDENTITIES.forEach(identity => {
+            grid.appendChild(createTestCard(identity));
+        });
+
+        updateStats();
+
+        // Log final después de 15 segundos
+        setTimeout(() => {
+            console.log('=== RESUMEN FINAL ===');
+            console.log('Total:', stats.total);
+            console.log('Exitosas:', stats.success);
+            console.log('Fallidas:', stats.error);
+            console.log('Aún cargando:', stats.loading);
+            console.log('Tasa de éxito:', ((stats.success / stats.total) * 100).toFixed(2) + '%');
+            console.log('====================');
+        }, 15000);
+    </script>
+</body>
+
+</html>
