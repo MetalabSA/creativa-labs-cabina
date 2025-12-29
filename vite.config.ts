@@ -12,6 +12,7 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       https: true,
     },
+    base: '/cabina/',
     plugins: [
       react(),
       basicSsl()
