@@ -21,7 +21,11 @@ const IDENTITIES = [
   { id: 'pb_a', title: 'Identidad 13', url: '/cabina/PB-A.jpg' },
   { id: 'pb_b', title: 'Identidad 14', url: '/cabina/PB-B.jpg' },
   { id: 'pb_c', title: 'Identidad 15', url: '/cabina/PB-C.jpg' },
-  { id: 'pb_d', title: 'Identidad 16', url: '/cabina/PB-D.jpg' }
+  { id: 'pb_d', title: 'Identidad 16', url: '/cabina/PB-D.jpg' },
+  { id: 'ph_a', title: 'Identidad 17', url: '/cabina/PH-A.jpg' },
+  { id: 'ph_b', title: 'Identidad 18', url: '/cabina/PH-B.jpg' },
+  { id: 'ph_c', title: 'Identidad 19', url: '/cabina/PH-C.jpg' },
+  { id: 'ph_d', title: 'Identidad 20', url: '/cabina/PH-D.jpg' }
 ];
 
 const App: React.FC = () => {
