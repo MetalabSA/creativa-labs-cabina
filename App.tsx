@@ -116,7 +116,7 @@ const App: React.FC = () => {
 
       phraseInterval = setInterval(() => {
         setCurrentPhraseIndex(prev => (prev + 1) % PHRASES.length);
-      }, 4000);
+      }, 6000);
     } else {
       setElapsedSeconds(0);
     }
@@ -294,14 +294,19 @@ const App: React.FC = () => {
             </div>
 
             <div className="flex flex-col items-center gap-4 pt-8">
-              <div className="w-48 h-1 bg-white/10 rounded-full overflow-hidden">
+              <div className="w-64 h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
                 <div
-                  className="h-full bg-accent transition-all duration-1000 ease-linear"
-                  style={{ width: `${(elapsedSeconds % 10) * 10}%` }}
+                  className="h-full bg-accent transition-all duration-1000 ease-out shadow-[0_0_15px_rgba(255,85,0,0.5)]"
+                  style={{
+                    width: `${elapsedSeconds <= 67.5
+                        ? (elapsedSeconds / 75) * 100
+                        : 90 + (Math.min(9, (elapsedSeconds - 67.5) * 0.2))
+                      }%`
+                  }}
                 />
               </div>
               <p className="text-[8px] text-white/30 font-black tracking-[3px] uppercase">
-                Por favor, mantente cerca del portal
+                {elapsedSeconds > 75 ? "Finalizando detalles finales..." : "Sincronizando con el servidor"}
               </p>
             </div>
           </div>
