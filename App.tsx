@@ -1,6 +1,6 @@
 
-import React, { useState, useRef, useEffect } from 'react';
-import { Camera, RefreshCw, Check, X, Sparkles, User, ArrowDown, Printer, AlertTriangle, Loader2 } from 'lucide-react';
+import { Camera, RefreshCw, Check, X, Sparkles, User, ArrowDown, Printer, AlertTriangle, Loader2, Download, QrCode, Smartphone, Layout, Monitor, Instagram } from 'lucide-react';
+import { QRCodeCanvas } from 'qrcode.react';
 import Background3D from './components/Background3D';
 import UploadCard from './components/UploadCard';
 import { FormState } from './types';
@@ -33,7 +33,7 @@ const App: React.FC = () => {
     selectedIdentity: null,
     details: 'Generación desde Cabina Creativa Labs',
     email: 'booth@creativa.lab',
-    aspectRatio: '1:1',
+    aspectRatio: '9:16',
     resolution: '1K',
     outputFormat: 'png'
   });
@@ -44,6 +44,7 @@ const App: React.FC = () => {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [showQR, setShowQR] = useState(false);
 
   // New state variables for webhook response
   const [resultImage, setResultImage] = useState<string | null>(null);
@@ -143,6 +144,7 @@ const App: React.FC = () => {
     const data = new FormData();
     data.append('user_photo', capturedImage);
     data.append('model_id', formData.selectedIdentity);
+    data.append('aspect_ratio', formData.aspectRatio);
     data.append('timestamp', new Date().toISOString());
 
     try {
@@ -172,31 +174,31 @@ const App: React.FC = () => {
     }
   };
 
-  const handlePrint = () => {
+  const handleDownload = async () => {
     if (!resultImage) return;
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(`
-        <html>
-          <head>
-            <title>Imprimir Foto</title>
-            <style>
-              body { margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; background: #fff; }
-              img { max-width: 100%; max-height: 100%; object-fit: contain; }
-              @media print {
-                body { background: none; }
-                img { width: 100%; height: auto; }
-              }
-            </style>
-          </head>
-          <body>
-            <img src="${resultImage}" onload="setTimeout(function(){window.print();}, 500);" />
-          </body>
-        </html>
-      `);
-      printWindow.document.close();
+    try {
+      const response = await fetch(resultImage);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `creativa-photo-${Date.now()}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Download error:', error);
+      // Fallback: open in new tab
+      window.open(resultImage, '_blank');
     }
   };
+
+  const ASPECT_RATIOS = [
+    { id: '9:16', label: '9:16', icon: Smartphone, desc: 'Portrait' },
+    { id: '16:9', label: '16:9', icon: Monitor, desc: 'Landscape' },
+    { id: '4:5', label: '4:5', icon: Instagram, desc: 'Classic' }
+  ];
 
   const handleReset = () => {
     setIsSuccess(false);
@@ -272,10 +274,55 @@ const App: React.FC = () => {
             </div>
           </div>
 
-          {/* STEP 2: Identities */}
+          {/* STEP 1.5: Aspect Ratio */}
           <div className={`transition-all duration-700 ${capturedImage ? 'opacity-100' : 'opacity-20 pointer-events-none grayscale'}`}>
             <div className="text-center mb-16">
               <span className="inline-block px-4 py-1 rounded-full bg-white/5 border border-white/10 text-white/40 text-[10px] font-black tracking-[3px] uppercase mb-6">Paso 02</span>
+              <h2 className="text-2xl font-black tracking-[0.2em] uppercase mb-12">Formato de Imagen</h2>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 max-w-3xl mx-auto">
+                {ASPECT_RATIOS.map((ratio) => (
+                  <button
+                    key={ratio.id}
+                    onClick={() => setFormData(p => ({ ...p, aspectRatio: ratio.id }))}
+                    className={`relative group flex flex-col items-center p-8 rounded-[32px] border-2 transition-all duration-500
+                      ${formData.aspectRatio === ratio.id
+                        ? 'border-accent bg-accent/5 shadow-[0_0_40px_rgba(255,85,0,0.2)]'
+                        : 'border-white/5 bg-white/2 bg-[#121215] hover:border-white/20'}`}
+                  >
+                    <div className={`mb-6 p-4 rounded-2xl transition-all duration-500
+                      ${formData.aspectRatio === ratio.id ? 'bg-accent text-white' : 'bg-white/5 text-white/40 group-hover:text-white'}`}>
+                      <ratio.icon className="w-8 h-8" />
+                    </div>
+                    <span className={`text-xl font-black tracking-[4px] mb-2 ${formData.aspectRatio === ratio.id ? 'text-white' : 'text-white/40'}`}>
+                      {ratio.label}
+                    </span>
+                    <span className="text-[10px] font-black tracking-[2px] uppercase opacity-40">
+                      {ratio.desc}
+                    </span>
+                    {formData.aspectRatio === ratio.id && (
+                      <div className="absolute top-4 right-4">
+                        <Check className="w-5 h-5 text-accent" />
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* DIVIDER */}
+          <div className="relative py-20 flex items-center justify-center">
+            <div className="absolute w-full h-[1px] bg-white/5" />
+            <div className="relative px-8 bg-[#050505] flex flex-col items-center">
+              <ArrowDown className={`w-5 h-5 transition-colors duration-500 ${formData.aspectRatio ? 'text-accent' : 'text-white/10'}`} />
+            </div>
+          </div>
+
+          {/* STEP 2: Identities */}
+          <div className={`transition-all duration-700 ${capturedImage && formData.aspectRatio ? 'opacity-100' : 'opacity-20 pointer-events-none grayscale'}`}>
+            <div className="text-center mb-16">
+              <span className="inline-block px-4 py-1 rounded-full bg-white/5 border border-white/10 text-white/40 text-[10px] font-black tracking-[3px] uppercase mb-6">Paso 03</span>
               <h2 className="text-2xl font-black tracking-[0.2em] uppercase mb-12">Elige el Estilo</h2>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 justify-items-center">
@@ -353,13 +400,27 @@ const App: React.FC = () => {
                     <img src={resultImage} alt="Resultado" className="w-full h-full object-cover" crossOrigin="anonymous" />
                   </div>
 
-                  <div className="flex gap-4">
+                  <div className="flex flex-wrap justify-center gap-4">
                     <button
                       onClick={handlePrint}
                       className="group flex items-center gap-3 px-8 py-4 bg-white text-black rounded-xl hover:bg-accent hover:text-white transition-all shadow-lg hover:shadow-accent/50"
                     >
                       <Printer className="w-5 h-5" />
                       <span className="text-xs font-black tracking-[2px] uppercase">Imprimir</span>
+                    </button>
+                    <button
+                      onClick={() => setShowQR(true)}
+                      className="group flex items-center gap-3 px-8 py-4 bg-white/10 text-white border border-white/10 rounded-xl hover:bg-white/20 transition-all shadow-lg"
+                    >
+                      <QrCode className="w-5 h-5 text-accent" />
+                      <span className="text-xs font-black tracking-[2px] uppercase">Generar QR</span>
+                    </button>
+                    <button
+                      onClick={handleDownload}
+                      className="group flex items-center gap-3 px-8 py-4 bg-white/10 text-white border border-white/10 rounded-xl hover:bg-white/20 transition-all shadow-lg"
+                    >
+                      <Download className="w-5 h-5 text-accent" />
+                      <span className="text-xs font-black tracking-[2px] uppercase">Descargar</span>
                     </button>
                   </div>
                 </>
@@ -416,6 +477,41 @@ const App: React.FC = () => {
                 </>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* QR Modal */}
+      {showQR && resultImage && (
+        <div className="fixed inset-0 z-[110] bg-black/95 backdrop-blur-2xl flex items-center justify-center p-4">
+          <div className="relative w-full max-w-sm bg-[#0a0a0c] rounded-[40px] p-12 border border-white/10 text-center flex flex-col items-center">
+            <button
+              onClick={() => setShowQR(false)}
+              className="absolute top-6 right-6 w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <div className="w-16 h-16 bg-accent/20 rounded-full flex items-center justify-center mb-8">
+              <QrCode className="w-8 h-8 text-accent" />
+            </div>
+            <h3 className="text-2xl font-black mb-2 uppercase italic">Escanear para Descargar</h3>
+            <p className="text-white/40 text-[10px] uppercase tracking-[2px] mb-8">Escanea con tu cámara para guardar en tu móvil</p>
+
+            <div className="p-4 bg-white rounded-3xl mb-8">
+              <QRCodeCanvas
+                value={resultImage}
+                size={200}
+                level="H"
+                includeMargin={true}
+              />
+            </div>
+
+            <button
+              onClick={() => setShowQR(false)}
+              className="text-[10px] font-black tracking-[4px] uppercase text-accent hover:text-white transition-colors"
+            >
+              Cerrar
+            </button>
           </div>
         </div>
       )}
