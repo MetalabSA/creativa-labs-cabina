@@ -174,6 +174,32 @@ const App: React.FC = () => {
     }
   };
 
+  const handlePrint = () => {
+    if (!resultImage) return;
+    const printWindow = window.open('', '_blank');
+    if (printWindow) {
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Imprimir Foto</title>
+            <style>
+              body { margin: 0; display: flex; align-items: center; justify-content: center; height: 100vh; background: #fff; }
+              img { max-width: 100%; max-height: 100%; object-fit: contain; }
+              @media print {
+                body { background: none; }
+                img { width: 100%; height: auto; }
+              }
+            </style>
+          </head>
+          <body>
+            <img src="${resultImage}" onload="setTimeout(function(){window.print();}, 500);" />
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+    }
+  };
+
   const handleDownload = async () => {
     if (!resultImage) return;
     try {
