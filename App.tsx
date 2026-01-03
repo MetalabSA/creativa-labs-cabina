@@ -50,6 +50,20 @@ const App: React.FC = () => {
   const [resultImage, setResultImage] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [currentPhraseIndex, setCurrentPhraseIndex] = useState(0);
+
+  const PHRASES = [
+    "Invocando a los genios digitales para tu retrato... ✨",
+    "¿Sabías que la IA analiza miles de patrones para crear tu estilo? 🧠",
+    "¡Estás quedando increíble! (O al menos eso dice nuestro algoritmo) 😉",
+    "Extrayendo creatividad del éter digital... 🌌",
+    "Dato curioso: La IA no duerme, pero toma mucho café virtual ☕",
+    "Ajustando las luces y sombras para tu obra maestra... 🎨",
+    "Casi listo... la perfección toma unos segundos extra ⌛",
+    "Convirtiendo píxeles en arte puro para ti 💎",
+    "Esperamos que estés disfrutando de la magia de Creativa Labs 🚀",
+    "Buscando tu mejor ángulo en el multiverso digital... 🌀"
+  ];
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -90,15 +104,27 @@ const App: React.FC = () => {
 
   useEffect(() => {
     let interval: any;
+    let phraseInterval: any;
+
     if (isSubmitting) {
       setElapsedSeconds(0);
+      setCurrentPhraseIndex(0);
+
       interval = setInterval(() => {
         setElapsedSeconds(prev => prev + 1);
       }, 1000);
+
+      phraseInterval = setInterval(() => {
+        setCurrentPhraseIndex(prev => (prev + 1) % PHRASES.length);
+      }, 4000);
     } else {
       setElapsedSeconds(0);
     }
-    return () => clearInterval(interval);
+
+    return () => {
+      clearInterval(interval);
+      clearInterval(phraseInterval);
+    };
   }, [isSubmitting]);
 
   const startCameraAction = () => {
@@ -241,6 +267,54 @@ const App: React.FC = () => {
   return (
     <div className="relative w-full min-h-screen font-sans text-white bg-primary overflow-x-hidden">
       <Background3D />
+
+      {/* Loading Overlay */}
+      {isSubmitting && (
+        <div className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-2xl flex flex-col items-center justify-center p-6 text-center animate-[fadeIn_0.3s_ease-out]">
+          <div className="relative mb-12">
+            {/* Pulsing Glow Background */}
+            <div className="absolute inset-0 bg-accent/20 blur-[100px] rounded-full animate-pulse" />
+
+            <div className="relative w-32 h-32 flex items-center justify-center">
+              <Loader2 className="w-full h-full text-accent animate-spin stroke-[1px]" />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="text-2xl font-black italic tracking-tighter">{elapsedSeconds}s</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="max-w-md space-y-8 relative z-10">
+            <div className="space-y-2">
+              <span className="text-accent text-[10px] font-black tracking-[5px] uppercase block animate-pulse">
+                Procesando Alquimia Digital
+              </span>
+              <h3 className="text-2xl font-black italic uppercase tracking-tight h-20 flex items-center justify-center transition-all duration-500">
+                {PHRASES[currentPhraseIndex]}
+              </h3>
+            </div>
+
+            <div className="flex flex-col items-center gap-4 pt-8">
+              <div className="w-48 h-1 bg-white/10 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-accent transition-all duration-1000 ease-linear"
+                  style={{ width: `${(elapsedSeconds % 10) * 10}%` }}
+                />
+              </div>
+              <p className="text-[8px] text-white/30 font-black tracking-[3px] uppercase">
+                Por favor, mantente cerca del portal
+              </p>
+            </div>
+          </div>
+
+          {/* Background Text Elements */}
+          <div className="absolute bottom-10 left-10 text-[100px] font-black opacity-[0.02] pointer-events-none select-none italic">
+            CREATIVE
+          </div>
+          <div className="absolute top-10 right-10 text-[100px] font-black opacity-[0.02] pointer-events-none select-none italic">
+            ALCHEMIST
+          </div>
+        </div>
+      )}
 
       {/* Hero */}
       <section className="relative h-[40vh] w-full flex flex-col items-center justify-center z-10 px-4">
