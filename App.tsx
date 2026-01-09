@@ -892,7 +892,13 @@ const App: React.FC = () => {
                             isSelected={formData.selectedIdentity === identity.id}
                             isPremium={identity.isPremium}
                             tags={identity.tags}
-                            onSelect={() => setFormData(p => ({ ...p, selectedIdentity: identity.id }))}
+                            onSelect={() => {
+                              if (identity.isPremium) {
+                                setShowPricing(true);
+                              } else {
+                                setFormData(p => ({ ...p, selectedIdentity: identity.id }));
+                              }
+                            }}
                           />
                         ))}
                     </div>
@@ -1094,7 +1100,8 @@ const App: React.FC = () => {
             </div>
 
             <h3 className="text-3xl md:text-4xl font-black mb-2 uppercase italic tracking-tight">Elegí tu Pack</h3>
-            <p className="text-white/40 text-[10px] uppercase tracking-[4px] mb-12">Impulsá tus retratos con IA</p>
+            <p className="text-accent text-[10px] font-black uppercase tracking-[4px] mb-2 shadow-accent/20 drop-shadow-sm">Desbloquea todos los estilos Premium</p>
+            <p className="text-white/40 text-[8px] uppercase tracking-[4px] mb-12">Y obtené créditos para tus retratos con IA</p>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {[
