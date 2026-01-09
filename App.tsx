@@ -9,26 +9,181 @@ import { supabase } from './lib/supabaseClient';
 import { FormState } from './types';
 
 const IDENTITIES = [
-  { id: 'f1_a', title: 'Identidad 1', url: '/cabina/F1-A.jpg' },
-  { id: 'f1_b', title: 'Identidad 2', url: '/cabina/F1-B.jpg' },
-  { id: 'f1_c', title: 'Identidad 3', url: '/cabina/F1-C.jpg' },
-  { id: 'f1_d', title: 'Identidad 4', url: '/cabina/F1-D.jpg' },
-  { id: 'bb_a', title: 'Identidad 5', url: '/cabina/BB-A.jpg' },
-  { id: 'bb_b', title: 'Identidad 6', url: '/cabina/BB-B.jpg' },
-  { id: 'bb_c', title: 'Identidad 7', url: '/cabina/BB-C.jpg' },
-  { id: 'bb_d', title: 'Identidad 8', url: '/cabina/BB-D.jpg' },
-  { id: 'suit_a', title: 'Identidad 9', url: '/cabina/SUIT-A.jpg' },
-  { id: 'suit_b', title: 'Identidad 10', url: '/cabina/SUIT-B.jpg' },
-  { id: 'suit_c', title: 'Identidad 11', url: '/cabina/SUIT-C.jpg' },
-  { id: 'suit_d', title: 'Identidad 12', url: '/cabina/SUIT-D.jpg' },
-  { id: 'pb_a', title: 'Identidad 13', url: '/cabina/PB-A.jpg' },
-  { id: 'pb_b', title: 'Identidad 14', url: '/cabina/PB-B.jpg' },
-  { id: 'pb_c', title: 'Identidad 15', url: '/cabina/PB-C.jpg' },
-  { id: 'pb_d', title: 'Identidad 16', url: '/cabina/PB-D.jpg' },
-  { id: 'ph_a', title: 'Identidad 17', url: '/cabina/PH-A.jpg' },
-  { id: 'ph_b', title: 'Identidad 18', url: '/cabina/PH-B.jpg' },
-  { id: 'ph_c', title: 'Identidad 19', url: '/cabina/PH-C.jpg' },
-  { id: 'ph_d', title: 'Identidad 20', url: '/cabina/PH-D.jpg' }
+  {
+    id: 'f1_a',
+    title: 'Red Bull Racing',
+    url: '/cabina/F1-A.jpg',
+    category: 'sports',
+    subCategory: 'Formula 1',
+    tags: ['speed', 'f1', 'action', 'professional'],
+    isPremium: true
+  },
+  {
+    id: 'f1_b',
+    title: 'Ferrari Team',
+    url: '/cabina/F1-B.jpg',
+    category: 'sports',
+    subCategory: 'Formula 1',
+    tags: ['speed', 'f1', 'classic', 'racing'],
+    isPremium: true
+  },
+  {
+    id: 'f1_c',
+    title: 'Mercedes AMG',
+    url: '/cabina/F1-C.jpg',
+    category: 'sports',
+    subCategory: 'Formula 1',
+    tags: ['modern', 'f1', 'tech', 'silver'],
+    isPremium: true
+  },
+  {
+    id: 'f1_d',
+    title: 'Pit Stop Vibe',
+    url: '/cabina/F1-D.jpg',
+    category: 'sports',
+    subCategory: 'Formula 1',
+    tags: ['mechanic', 'f1', 'teamwork', 'garage'],
+    isPremium: true
+  },
+  {
+    id: 'bb_a',
+    title: 'The Heisenberg',
+    url: '/cabina/BB-A.jpg',
+    category: 'series',
+    subCategory: 'Breaking Bad',
+    tags: ['drama', 'meth', 'hat', 'cinematic']
+  },
+  {
+    id: 'bb_b',
+    title: 'Desert Cook',
+    url: '/cabina/BB-B.jpg',
+    category: 'series',
+    subCategory: 'Breaking Bad',
+    tags: ['rv', 'desert', 'yellow', 'gasmask']
+  },
+  {
+    id: 'bb_c',
+    title: 'Better Call Saul',
+    url: '/cabina/BB-C.jpg',
+    category: 'series',
+    subCategory: 'Breaking Bad',
+    tags: ['lawyer', 'suit', 'colorful', 'office']
+  },
+  {
+    id: 'bb_d',
+    title: 'Los Pollos Hermanos',
+    url: '/cabina/BB-D.jpg',
+    category: 'series',
+    subCategory: 'Breaking Bad',
+    tags: ['chicken', 'fried', 'restaurant', 'yellow']
+  },
+  {
+    id: 'suit_a',
+    title: 'Harvey Specter',
+    url: '/cabina/SUIT-A.jpg',
+    category: 'series',
+    subCategory: 'La Ley de los Audaces',
+    tags: ['law', 'executive', 'expensive', 'classy']
+  },
+  {
+    id: 'suit_b',
+    title: 'Mike Ross Style',
+    url: '/cabina/SUIT-B.jpg',
+    category: 'series',
+    subCategory: 'La Ley de los Audaces',
+    tags: ['law', 'young', 'genius', 'bicycle']
+  },
+  {
+    id: 'suit_c',
+    title: 'Donna Paulsen',
+    url: '/cabina/SUIT-C.jpg',
+    category: 'series',
+    subCategory: 'La Ley de los Audaces',
+    tags: ['secretary', 'powerful', 'fashion', 'redhead']
+  },
+  {
+    id: 'suit_d',
+    title: 'Pearson Hardman',
+    url: '/cabina/SUIT-D.jpg',
+    category: 'series',
+    subCategory: 'La Ley de los Audaces',
+    tags: ['firm', 'luxury', 'office', 'success']
+  },
+  {
+    id: 'pb_a',
+    title: 'Thomas Shelby',
+    url: '/cabina/PB-A.jpg',
+    category: 'series',
+    subCategory: 'Peaky Blinders',
+    tags: ['gangster', 'vintage', 'cap', 'whiskey'],
+    isPremium: true
+  },
+  {
+    id: 'pb_b',
+    title: 'Birmingham Streets',
+    url: '/cabina/PB-B.jpg',
+    category: 'series',
+    subCategory: 'Peaky Blinders',
+    tags: ['industrial', 'smoke', 'horse', 'family'],
+    isPremium: true
+  },
+  {
+    id: 'pb_c',
+    title: 'Garrison Pub',
+    url: '/cabina/PB-C.jpg',
+    category: 'series',
+    subCategory: 'Peaky Blinders',
+    tags: ['bar', 'drink', 'meeting', 'gentlemen'],
+    isPremium: true
+  },
+  {
+    id: 'pb_d',
+    title: 'The Razor Edge',
+    url: '/cabina/PB-D.jpg',
+    category: 'series',
+    subCategory: 'Peaky Blinders',
+    tags: ['razor', 'fight', 'strategy', 'british'],
+    isPremium: true
+  },
+  {
+    id: 'ph_a',
+    title: 'Urban Explorer',
+    url: '/cabina/PH-A.jpg',
+    category: 'urban',
+    subCategory: 'Urbano',
+    tags: ['street', 'hoodie', 'city', 'night']
+  },
+  {
+    id: 'ph_b',
+    title: 'Studio Portrait',
+    url: '/cabina/PH-B.jpg',
+    category: 'urban',
+    subCategory: 'Urbano',
+    tags: ['clean', 'lighting', 'vogue', 'model']
+  },
+  {
+    id: 'ph_c',
+    title: 'Neon Life',
+    url: '/cabina/PH-C.jpg',
+    category: 'urban',
+    subCategory: 'Urbano',
+    tags: ['color', 'neon', 'asia', 'cyberpunk']
+  },
+  {
+    id: 'ph_d',
+    title: 'Vintage Film',
+    url: '/cabina/PH-D.jpg',
+    category: 'urban',
+    subCategory: 'Urbano',
+    tags: ['analog', 'grainy', 'retro', '90s']
+  }
+];
+
+const CATEGORIES = [
+  { id: 'all', label: 'Todo', icon: Sparkles },
+  { id: 'series', label: 'Series', icon: Monitor },
+  { id: 'sports', label: 'Deportes', icon: Zap },
+  { id: 'urban', label: 'Urbano', icon: Camera }
 ];
 
 const App: React.FC = () => {
@@ -64,6 +219,7 @@ const App: React.FC = () => {
   const [loadingGenerations, setLoadingGenerations] = useState(false);
   const [showPricing, setShowPricing] = useState(false);
   const [processingPayment, setProcessingPayment] = useState<string | null>(null);
+  const [activeCategory, setActiveCategory] = useState('all');
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -691,16 +847,56 @@ const App: React.FC = () => {
               <span className="inline-block px-4 py-1 rounded-full bg-white/5 border border-white/10 text-white/40 text-[10px] font-black tracking-[3px] uppercase mb-6">Paso 03</span>
               <h2 className="text-2xl font-black tracking-[0.2em] uppercase mb-12">Elige el Estilo</h2>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 justify-items-center">
-                {IDENTITIES.map((identity) => (
-                  <UploadCard
-                    key={identity.id}
-                    type="character"
-                    title={identity.title}
-                    sampleImageUrl={identity.url}
-                    isSelected={formData.selectedIdentity === identity.id}
-                    onSelect={() => setFormData(p => ({ ...p, selectedIdentity: identity.id }))}
-                  />
+              {/* Category Selector */}
+              <div className="flex flex-wrap justify-center gap-4 mb-16">
+                {CATEGORIES.map((cat) => (
+                  <button
+                    key={cat.id}
+                    onClick={() => setActiveCategory(cat.id)}
+                    className={`flex items-center gap-3 px-8 py-4 rounded-2xl border-2 transition-all duration-500
+                      ${activeCategory === cat.id
+                        ? 'bg-accent border-accent text-white shadow-[0_0_30px_rgba(255,85,0,0.3)] scale-105'
+                        : 'bg-white/5 border-white/5 text-white/40 hover:border-white/20'}`}
+                  >
+                    <cat.icon className={`w-5 h-5 ${activeCategory === cat.id ? 'animate-pulse' : ''}`} />
+                    <span className="font-black tracking-[2px] uppercase text-xs">{cat.label}</span>
+                  </button>
+                ))}
+              </div>
+
+              {/* Grouped Identities */}
+              <div className="space-y-20">
+                {Array.from(new Set(
+                  IDENTITIES
+                    .filter(id => activeCategory === 'all' || id.category === activeCategory)
+                    .map(id => id.subCategory)
+                )).map(subCat => (
+                  <div key={subCat} className="animate-[fadeIn_0.5s_ease-out]">
+                    <div className="flex items-center gap-4 mb-8">
+                      <div className="h-[2px] w-8 bg-accent" />
+                      <h3 className="text-sm font-black tracking-[4px] uppercase text-white/60 italic">
+                        {subCat}
+                      </h3>
+                      <div className="flex-grow h-[1px] bg-white/5" />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 justify-items-center">
+                      {IDENTITIES
+                        .filter(id => id.subCategory === subCat && (activeCategory === 'all' || id.category === activeCategory))
+                        .map((identity) => (
+                          <UploadCard
+                            key={identity.id}
+                            type="character"
+                            title={identity.title}
+                            sampleImageUrl={identity.url}
+                            isSelected={formData.selectedIdentity === identity.id}
+                            isPremium={identity.isPremium}
+                            tags={identity.tags}
+                            onSelect={() => setFormData(p => ({ ...p, selectedIdentity: identity.id }))}
+                          />
+                        ))}
+                    </div>
+                  </div>
                 ))}
               </div>
             </div>

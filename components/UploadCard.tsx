@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, AlertCircle } from 'lucide-react';
+import { User, AlertCircle, Sparkles } from 'lucide-react';
 import { UploadType } from '../types';
 
 interface UploadCardProps {
@@ -8,10 +8,12 @@ interface UploadCardProps {
   title: string;
   sampleImageUrl: string;
   isSelected: boolean;
+  isPremium?: boolean;
+  tags?: string[];
   onSelect: () => void;
 }
 
-const UploadCard: React.FC<UploadCardProps> = ({ title, sampleImageUrl, isSelected, onSelect }) => {
+const UploadCard: React.FC<UploadCardProps> = ({ title, sampleImageUrl, isSelected, onSelect, isPremium, tags }) => {
   const [imageError, setImageError] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
 
@@ -60,6 +62,13 @@ const UploadCard: React.FC<UploadCardProps> = ({ title, sampleImageUrl, isSelect
           : 'border-white/5 hover:border-white/20 bg-[#121215]'}`}
       onClick={onSelect}
     >
+      {/* Premium Badge */}
+      {isPremium && (
+        <div className="absolute top-6 left-6 z-[20] flex items-center gap-2 px-3 py-1 bg-gradient-to-r from-amber-500 to-yellow-300 rounded-full shadow-[0_0_20px_rgba(245,158,11,0.4)] animate-pulse">
+          <Sparkles className="w-3 h-3 text-white" />
+          <span className="text-[8px] font-black text-white uppercase tracking-[1px]">Premium</span>
+        </div>
+      )}
       {/* Dynamic Scan Line Animation */}
       <div className={`absolute top-0 left-0 w-full h-[2px] bg-accent/60 blur-[2px] z-[10] pointer-events-none transition-opacity duration-500
         ${isSelected ? 'opacity-100 animate-[scan_3s_linear_infinite]' : 'opacity-0'}`} />
@@ -126,8 +135,19 @@ const UploadCard: React.FC<UploadCardProps> = ({ title, sampleImageUrl, isSelect
             ${isSelected
               ? 'bg-accent text-white border-accent shadow-[0_0_20px_rgba(255,85,0,0.4)]'
               : 'bg-black/60 text-white/40 border-white/10'}`}>
-            {isSelected ? 'ACTIVO' : 'SELECCIONAR'}
+            {isSelected ? 'ACTIVO' : isPremium ? 'DESBLOQUEAR' : 'SELECCIONAR'}
           </div>
+
+          {/* Tags */}
+          {tags && tags.length > 0 && (
+            <div className={`flex flex-wrap justify-center gap-1.5 mt-4 transition-opacity duration-500 ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-60'}`}>
+              {tags.slice(0, 3).map(tag => (
+                <span key={tag} className="text-[7px] font-black uppercase tracking-[1px] px-2 py-0.5 bg-white/5 rounded-md text-white/40">
+                  #{tag}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
