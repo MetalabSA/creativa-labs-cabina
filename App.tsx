@@ -639,7 +639,16 @@ const App: React.FC = () => {
   const handlePayment = async (pack: any) => {
     try {
       setProcessingPayment(pack.name);
+      // Simulación temporal hasta tener las llaves definitivas
+      setTimeout(() => {
+        setErrorMessage("¡Próximamente! Estamos configurando los métodos de pago. Contactanos para obtener créditos anticipados.");
+        setIsSuccess(true);
+        setShowPricing(false);
+        setProcessingPayment(null);
+      }, 1000);
 
+      /* 
+      // Código de pago real comentado
       const { data, error } = await supabase.functions.invoke('mercadopago-payment', {
         body: {
           user_id: session.user.id,
@@ -649,22 +658,15 @@ const App: React.FC = () => {
           redirect_url: window.location.origin
         }
       });
-
       if (error) throw error;
-
-      if (data?.error_visible) {
-        setErrorMessage("Lo sentimos, hubo un problema con la plataforma de pago. Por favor, intenta de nuevo en unos minutos.");
-        return;
-      }
-
       const paymentUrl = data?.sandbox_init_point || data?.init_point;
       if (paymentUrl) {
         window.location.href = paymentUrl;
       }
+      */
     } catch (err: any) {
       console.error('Error initiating payment:', err);
-      setErrorMessage("No se pudo iniciar el proceso de pago. Por favor, verifica tu conexión o intenta más tarde.");
-    } finally {
+      setErrorMessage("No se pudo iniciar el proceso de pago.");
       setProcessingPayment(null);
     }
   };
@@ -1196,7 +1198,7 @@ const App: React.FC = () => {
                     {processingPayment === pack.name ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
                     ) : (
-                      'Cargar Ahora'
+                      'Próximamente'
                     )}
                   </button>
                 </div>
