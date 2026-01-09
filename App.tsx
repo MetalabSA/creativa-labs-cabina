@@ -1,8 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Camera, RefreshCw, Check, X, Sparkles, User, ArrowDown, Printer, AlertTriangle, Loader2, Download, QrCode, Smartphone, Layout, Monitor, Instagram } from 'lucide-react';
+import { Camera, RefreshCw, Check, X, Sparkles, User, ArrowDown, Printer, AlertTriangle, Loader2, Download, QrCode, Smartphone, Layout, Monitor, Instagram, LogOut } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import Background3D from './components/Background3D';
 import UploadCard from './components/UploadCard';
+import { Auth } from './components/Auth';
+import { supabase } from './lib/supabaseClient';
 import { FormState } from './types';
 
 const IDENTITIES = [
@@ -51,6 +52,47 @@ const App: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [currentPhraseIndex, setCurrentPhraseIndex] = useState(0);
+
+  // Auth & Profile State
+  const [session, setSession] = useState<any>(null);
+  const [profile, setProfile] = useState<{ credits: number, total_generations: number } | null>(null);
+  const [loadingProfile, setLoadingProfile] = useState(true);
+
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (session?.user) {
+      fetchProfile();
+    }
+  }, [session]);
+
+  const fetchProfile = async () => {
+    try {
+      setLoadingProfile(true);
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('credits, total_generations')
+        .eq('id', session.user.id)
+        .single();
+
+      if (error) throw error;
+      setProfile(data);
+    } catch (error) {
+      console.error('Error fetching profile:', error);
+    } finally {
+      setLoadingProfile(false);
+    }
+  };
 
   const PHRASES = [
     "Invocando a los genios digitales para tu retrato... ✨",
@@ -161,7 +203,36 @@ const App: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.selectedIdentity || !capturedImage) return;
+    if (!formData.selectedIdentity || !capturedImage || !session?.user) return;
+
+    // 1. Check total credits
+    if (!profile || profile.credits <= 0) {
+      setErrorMessage("No tienes créditos suficientes. Por favor, contacta a soporte para recargar.");
+      setIsSuccess(true);
+      return;
+    }
+
+    // 2. Check daily limit (2 per day)
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      const { count, error: countError } = await supabase
+        .from('generations')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', session.user.id)
+        .gte('created_at', today.toISOString());
+
+      if (countError) throw countError;
+
+      if (count !== null && count >= 2) {
+        setErrorMessage("Has alcanzado el límite diario de 2 fotos. ¡Vuelve mañana por más!");
+        setIsSuccess(true);
+        return;
+      }
+    } catch (err) {
+      console.error('Error checking daily limit:', err);
+    }
 
     setIsSubmitting(true);
     setResultImage(null);
@@ -183,6 +254,26 @@ const App: React.FC = () => {
 
       if (result.image_url) {
         setResultImage(result.image_url);
+
+        // Deduct credit and save generation
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({
+            credits: profile.credits - 1,
+            total_generations: (profile.total_generations || 0) + 1
+          })
+          .eq('id', session.user.id);
+
+        await supabase.from('generations').insert({
+          user_id: session.user.id,
+          style_id: formData.selectedIdentity,
+          image_url: result.image_url,
+          aspect_ratio: formData.aspectRatio
+        });
+
+        if (profileError) console.error('Error updating credits:', profileError);
+
+        fetchProfile();
         setIsSuccess(true);
       } else if (result.error) {
         setErrorMessage(result.error);
@@ -264,9 +355,38 @@ const App: React.FC = () => {
 
   const isReady = capturedImage && formData.selectedIdentity;
 
+  if (!session) {
+    return <Auth />;
+  }
+
   return (
     <div className="relative w-full min-h-screen font-sans text-white bg-primary overflow-x-hidden">
       <Background3D />
+
+      {/* Profile/Credits/Logout Header */}
+      <div className="fixed top-0 left-0 w-full z-[150] p-6 pointer-events-none">
+        <div className="max-w-[1400px] mx-auto flex justify-between items-center">
+          <div className="flex items-center gap-4 bg-black/40 backdrop-blur-xl border border-white/5 p-2 pr-6 rounded-full pointer-events-auto">
+            <div className="w-10 h-10 bg-accent rounded-full flex items-center justify-center text-white">
+              <Sparkles className="w-5 h-5 animate-pulse" />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[8px] font-black uppercase tracking-[2px] text-white/40">Créditos IA</span>
+              <span className="text-sm font-black italic text-accent leading-none">
+                {loadingProfile ? '...' : (profile?.credits || 0)} DISPONIBLES
+              </span>
+            </div>
+          </div>
+
+          <button
+            onClick={() => supabase.auth.signOut()}
+            className="group flex items-center gap-3 bg-white/5 hover:bg-red-500/10 border border-white/10 hover:border-red-500/20 px-6 py-3 rounded-full transition-all duration-500 group pointer-events-auto"
+          >
+            <span className="text-[10px] font-black uppercase tracking-[2px] text-white/40 group-hover:text-red-400">Cerrar Sesión</span>
+            <LogOut className="w-4 h-4 text-white/20 group-hover:text-red-400 rotate-180" />
+          </button>
+        </div>
+      </div>
 
       {/* Loading Overlay */}
       {isSubmitting && (
@@ -299,8 +419,8 @@ const App: React.FC = () => {
                   className="h-full bg-accent transition-all duration-1000 ease-out shadow-[0_0_15px_rgba(255,85,0,0.5)]"
                   style={{
                     width: `${elapsedSeconds <= 67.5
-                        ? (elapsedSeconds / 75) * 100
-                        : 90 + (Math.min(9, (elapsedSeconds - 67.5) * 0.2))
+                      ? (elapsedSeconds / 75) * 100
+                      : 90 + (Math.min(9, (elapsedSeconds - 67.5) * 0.2))
                       }%`
                   }}
                 />
