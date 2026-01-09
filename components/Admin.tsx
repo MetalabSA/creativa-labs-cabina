@@ -207,7 +207,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                                     </span>
                                                     <button
                                                         disabled={updatingId === p.id || p.is_master}
-                                                        onClick={() => updateCredits(p.id, p.credits, 500)}
+                                                        onClick={() => updateCredits(p.id, p.credits, 100)}
                                                         className="w-8 h-8 rounded-lg bg-accent/10 border border-accent/20 flex items-center justify-center hover:bg-accent/20 disabled:opacity-20 transition-all group/plus"
                                                     >
                                                         <Plus className="w-3 h-3 text-accent group-hover:scale-110 transition-transform" />
