@@ -212,7 +212,7 @@ const App: React.FC = () => {
 
   // Auth & Profile State
   const [session, setSession] = useState<any>(null);
-  const [profile, setProfile] = useState<{ credits: number, total_generations: number, is_master?: boolean } | null>(null);
+  const [profile, setProfile] = useState<{ credits: number, total_generations: number, is_master?: boolean, unlocked_packs?: string[] } | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [showAdmin, setShowAdmin] = useState(false);
   const [userGenerations, setUserGenerations] = useState<any[]>([]);
@@ -220,6 +220,10 @@ const App: React.FC = () => {
   const [showPricing, setShowPricing] = useState(false);
   const [processingPayment, setProcessingPayment] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState('all');
+  const [packToUnlock, setPackToUnlock] = useState<any>(null);
+  const [isUnlocking, setIsUnlocking] = useState(false);
+
+  const PREMIUM_PACK_PRICE = 3000;
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -245,7 +249,7 @@ const App: React.FC = () => {
       setLoadingProfile(true);
       const { data, error } = await supabase
         .from('profiles')
-        .select('credits, total_generations, is_master')
+        .select('credits, total_generations, is_master, unlocked_packs')
         .eq('id', session.user.id)
         .single();
 
@@ -274,6 +278,46 @@ const App: React.FC = () => {
       console.error('Error fetching generations:', error);
     } finally {
       setLoadingGenerations(false);
+    }
+  };
+
+  const handleUnlockPack = async (subCategory: string) => {
+    if (!profile || !session?.user) return;
+
+    try {
+      setIsUnlocking(true);
+
+      // 1. Verificar saldo
+      if (profile.credits < PREMIUM_PACK_PRICE) {
+        setPackToUnlock(null);
+        setShowPricing(true);
+        return;
+      }
+
+      // 2. Actualizar en Supabase
+      const newUnlockedPacks = [...(profile.unlocked_packs || []), subCategory];
+      const newCredits = profile.credits - PREMIUM_PACK_PRICE;
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          credits: newCredits,
+          unlocked_packs: newUnlockedPacks
+        })
+        .eq('id', session.user.id);
+
+      if (error) throw error;
+
+      // 3. Actualizar estado local
+      setProfile(prev => prev ? { ...prev, credits: newCredits, unlocked_packs: newUnlockedPacks } : null);
+      setPackToUnlock(null);
+      setErrorMessage(null);
+
+    } catch (error) {
+      console.error('Error unlocking pack:', error);
+      setErrorMessage('No se pudo desbloquear el pack. Reintenta.');
+    } finally {
+      setIsUnlocking(false);
     }
   };
 
@@ -890,11 +934,16 @@ const App: React.FC = () => {
                             title={identity.title}
                             sampleImageUrl={identity.url}
                             isSelected={formData.selectedIdentity === identity.id}
-                            isPremium={identity.isPremium}
+                            isPremium={identity.isPremium && !profile?.unlocked_packs?.includes(identity.subCategory) && !profile?.is_master}
                             tags={identity.tags}
                             onSelect={() => {
-                              if (identity.isPremium) {
-                                setShowPricing(true);
+                              const isActuallyPremium = identity.isPremium && !profile?.unlocked_packs?.includes(identity.subCategory) && !profile?.is_master;
+                              if (isActuallyPremium) {
+                                if (profile && profile.credits >= PREMIUM_PACK_PRICE) {
+                                  setPackToUnlock(identity);
+                                } else {
+                                  setShowPricing(true);
+                                }
                               } else {
                                 setFormData(p => ({ ...p, selectedIdentity: identity.id }));
                               }
@@ -1150,6 +1199,51 @@ const App: React.FC = () => {
 
             <p className="mt-12 text-[8px] font-black tracking-[4px] uppercase text-white/20">
               Pagos protegidos por Mercado Pago
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Confirmación de Desbloqueo */}
+      {packToUnlock && (
+        <div className="fixed inset-0 z-[400] bg-black/90 backdrop-blur-2xl flex items-center justify-center p-6 animate-[fadeIn_0.3s_ease-out]">
+          <div className="relative w-full max-w-md bg-[#0a0a0c] rounded-[40px] p-10 border border-white/10 text-center shadow-2xl">
+            <div className="w-16 h-16 bg-accent/20 rounded-full flex items-center justify-center mb-8 mx-auto">
+              <Zap className="w-8 h-8 text-accent animate-pulse" />
+            </div>
+
+            <h3 className="text-2xl font-black mb-2 uppercase italic">Desbloquear Pack</h3>
+            <p className="text-white/40 text-[10px] uppercase tracking-[2px] mb-8">
+              ¿Quieres desbloquear el pack <span className="text-white font-bold">{packToUnlock.subCategory}</span> por <span className="text-accent font-bold">{PREMIUM_PACK_PRICE} créditos</span>?
+            </p>
+
+            <div className="space-y-4">
+              <button
+                disabled={isUnlocking}
+                onClick={() => handleUnlockPack(packToUnlock.subCategory)}
+                className="w-full h-16 bg-accent text-white rounded-2xl font-black uppercase tracking-[4px] text-xs hover:bg-white hover:text-black transition-all flex items-center justify-center gap-3"
+              >
+                {isUnlocking ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <>
+                    Confirmar Compra
+                    <Sparkles className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+
+              <button
+                disabled={isUnlocking}
+                onClick={() => setPackToUnlock(null)}
+                className="w-full py-4 text-[10px] font-black uppercase tracking-[3px] text-white/20 hover:text-white transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+
+            <p className="mt-8 text-[8px] font-black tracking-[3px] text-white/10 uppercase">
+              Tu saldo actual: {profile?.credits} créditos
             </p>
           </div>
         </div>
