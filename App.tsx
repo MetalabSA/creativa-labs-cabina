@@ -1136,7 +1136,7 @@ const App: React.FC = () => {
       {/* Modal de Precios */}
       {showPricing && (
         <div className="fixed inset-0 z-[300] bg-black/95 backdrop-blur-2xl flex items-start sm:items-center justify-center p-4 py-12 md:py-20 overflow-y-auto">
-          <div className="relative w-full max-w-4xl bg-[#0a0a0c] rounded-[40px] p-8 md:p-12 border border-white/10 text-center animate-[fadeIn_0.5s_ease-out]">
+          <div className="relative w-full max-w-6xl bg-[#0a0a0c] rounded-[40px] p-8 md:p-12 border border-white/10 text-center animate-[fadeIn_0.5s_ease-out]">
             <button
               onClick={() => setShowPricing(false)}
               className="absolute top-6 right-6 w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
@@ -1152,11 +1152,12 @@ const App: React.FC = () => {
             <p className="text-accent text-[10px] font-black uppercase tracking-[4px] mb-2 shadow-accent/20 drop-shadow-sm">Desbloquea todos los estilos Premium</p>
             <p className="text-white/40 text-[8px] uppercase tracking-[4px] mb-12">Y obtené créditos para tus retratos con IA</p>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {[
                 { name: 'Starter', price: 4000, credits: 500, bonus: '', color: 'white/5', popular: false },
                 { name: 'Standard', price: 8000, credits: 1100, bonus: '+10% Extra', color: 'accent/5', popular: true },
-                { name: 'Business', price: 10000, credits: 1500, bonus: '+20% Extra', color: 'white/5', popular: false }
+                { name: 'Business', price: 10000, credits: 1500, bonus: '+20% Extra', color: 'white/5', popular: false },
+                { name: 'Unlock Premium', price: 20000, credits: 3000, bonus: 'Pack Completo', color: 'accent/5', premium: true }
               ].map((pack) => (
                 <div
                   key={pack.name}
@@ -1168,18 +1169,23 @@ const App: React.FC = () => {
                       Más Popular
                     </div>
                   )}
+                  {pack.premium && (
+                    <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-amber-500 to-yellow-300 text-[8px] font-black uppercase tracking-[2px] px-4 py-1 rounded-full text-black">
+                      Especial Packs
+                    </div>
+                  )}
                   <span className="text-[10px] font-black uppercase tracking-[3px] text-white/40 mb-6">{pack.name}</span>
                   <div className="flex flex-col items-center mb-8">
-                    <span className="text-5xl font-black italic text-white mb-2">{pack.credits}</span>
+                    <span className={`text-5xl font-black italic mb-2 ${pack.premium ? 'text-amber-400' : 'text-white'}`}>{pack.credits}</span>
                     <span className="text-[10px] font-black uppercase tracking-[2px] text-accent">Créditos</span>
                     {pack.bonus && (
-                      <div className="mt-4 flex items-center gap-2 px-3 py-1 bg-accent/20 rounded-full">
-                        <Zap className="w-3 h-3 text-accent" />
-                        <span className="text-[8px] font-black uppercase tracking-[1px] text-accent">{pack.bonus}</span>
+                      <div className={`mt-4 flex items-center gap-2 px-3 py-1 rounded-full ${pack.premium ? 'bg-amber-500/20' : 'bg-accent/20'}`}>
+                        <Zap className={`w-3 h-3 ${pack.premium ? 'text-amber-400' : 'text-accent'}`} />
+                        <span className={`text-[8px] font-black uppercase tracking-[1px] ${pack.premium ? 'text-amber-400' : 'text-accent'}`}>{pack.bonus}</span>
                       </div>
                     )}
                   </div>
-                  <div className="text-2xl font-black italic mb-8">${pack.price.toLocaleString()}</div>
+                  <div className={`text-2xl font-black italic mb-8 ${pack.premium ? 'text-amber-400' : 'text-white'}`}>${pack.price.toLocaleString()}</div>
                   <button
                     disabled={!!processingPayment}
                     onClick={() => handlePayment(pack)}
