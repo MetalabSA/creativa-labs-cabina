@@ -366,21 +366,55 @@ const App: React.FC = () => {
 
   const handleDownload = async () => {
     if (!resultImage) return;
+
+    // Detectar si es móvil para usar Share API si está disponible
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
     try {
       const response = await fetch(resultImage);
+      if (!response.ok) throw new Error('Error al descargar la imagen');
       const blob = await response.blob();
+
+      // En móviles, compartir es mucho más intuitivo y funcional que descargar un archivo
+      if (isMobile && navigator.share) {
+        const file = new File([blob], `creativa-photo-${Date.now()}.png`, { type: 'image/png' });
+        try {
+          await navigator.share({
+            files: [file],
+            title: 'Mi Foto Creativa',
+            text: '¡Mira mi foto generada con IA!'
+          });
+          return;
+        } catch (shareError: any) {
+          if (shareError.name !== 'AbortError') {
+            console.error('Share failed:', shareError);
+          } else {
+            return; // El usuario canceló la acción de compartir
+          }
+        }
+      }
+
+      // Comportamiento estándar de descarga (Desktop)
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       link.download = `creativa-photo-${Date.now()}.png`;
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
+
+      setTimeout(() => {
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }, 100);
     } catch (error) {
       console.error('Download error:', error);
-      // Fallback: open in new tab
-      window.open(resultImage, '_blank');
+      // Fallback: Si todo falla, abrimos la URL directamente
+      // En móviles, esto permite al usuario guardar la foto dejando presionado
+      if (isMobile) {
+        window.location.href = resultImage;
+      } else {
+        window.open(resultImage, '_blank');
+      }
     }
   };
 
