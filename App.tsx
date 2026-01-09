@@ -1,8 +1,10 @@
-import { Camera, RefreshCw, Check, X, Sparkles, User, ArrowDown, Printer, AlertTriangle, Loader2, Download, QrCode, Smartphone, Layout, Monitor, Instagram, LogOut } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Camera, RefreshCw, Check, X, Sparkles, User, ArrowDown, Printer, AlertTriangle, Loader2, Download, QrCode, Smartphone, Layout, Monitor, Instagram, LogOut, Shield, History as LucideHistory, CreditCard, Zap, Plus } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import Background3D from './components/Background3D';
 import UploadCard from './components/UploadCard';
 import { Auth } from './components/Auth';
+import { Admin } from './components/Admin';
 import { supabase } from './lib/supabaseClient';
 import { FormState } from './types';
 
@@ -55,8 +57,13 @@ const App: React.FC = () => {
 
   // Auth & Profile State
   const [session, setSession] = useState<any>(null);
-  const [profile, setProfile] = useState<{ credits: number, total_generations: number } | null>(null);
+  const [profile, setProfile] = useState<{ credits: number, total_generations: number, is_master?: boolean } | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
+  const [showAdmin, setShowAdmin] = useState(false);
+  const [userGenerations, setUserGenerations] = useState<any[]>([]);
+  const [loadingGenerations, setLoadingGenerations] = useState(false);
+  const [showPricing, setShowPricing] = useState(false);
+  const [processingPayment, setProcessingPayment] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -73,6 +80,7 @@ const App: React.FC = () => {
   useEffect(() => {
     if (session?.user) {
       fetchProfile();
+      fetchGenerations();
     }
   }, [session]);
 
@@ -81,7 +89,7 @@ const App: React.FC = () => {
       setLoadingProfile(true);
       const { data, error } = await supabase
         .from('profiles')
-        .select('credits, total_generations')
+        .select('credits, total_generations, is_master')
         .eq('id', session.user.id)
         .single();
 
@@ -91,6 +99,25 @@ const App: React.FC = () => {
       console.error('Error fetching profile:', error);
     } finally {
       setLoadingProfile(false);
+    }
+  };
+
+  const fetchGenerations = async () => {
+    try {
+      setLoadingGenerations(true);
+      const { data, error } = await supabase
+        .from('generations')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      if (error) throw error;
+      setUserGenerations(data || []);
+    } catch (error) {
+      console.error('Error fetching generations:', error);
+    } finally {
+      setLoadingGenerations(false);
     }
   };
 
@@ -205,33 +232,40 @@ const App: React.FC = () => {
     e.preventDefault();
     if (!formData.selectedIdentity || !capturedImage || !session?.user) return;
 
-    // 1. Check total credits
-    if (!profile || profile.credits <= 0) {
-      setErrorMessage("No tienes créditos suficientes. Por favor, contacta a soporte para recargar.");
+    // 1. Check total credits (skip if master)
+    const isMaster = profile?.is_master;
+    if (!isMaster && (!profile || profile.credits < 100)) {
+      if (profile && profile.total_generations >= 5) {
+        setErrorMessage("Ya gastaste tus 500 créditos.");
+      } else {
+        setErrorMessage("Saldo insuficiente.");
+      }
       setIsSuccess(true);
       return;
     }
 
-    // 2. Check daily limit (2 per day)
-    try {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
+    // 2. Check daily limit (2 per day) - Skip if Master
+    if (!isMaster) {
+      try {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
 
-      const { count, error: countError } = await supabase
-        .from('generations')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', session.user.id)
-        .gte('created_at', today.toISOString());
+        const { count, error: countError } = await supabase
+          .from('generations')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', session.user.id)
+          .gte('created_at', today.toISOString());
 
-      if (countError) throw countError;
+        if (countError) throw countError;
 
-      if (count !== null && count >= 2) {
-        setErrorMessage("Has alcanzado el límite diario de 2 fotos. ¡Vuelve mañana por más!");
-        setIsSuccess(true);
-        return;
+        if (count !== null && count >= 2) {
+          setErrorMessage("Máximo de impresiones del día alcanzado.");
+          setIsSuccess(true);
+          return;
+        }
+      } catch (err) {
+        console.error('Error checking daily limit:', err);
       }
-    } catch (err) {
-      console.error('Error checking daily limit:', err);
     }
 
     setIsSubmitting(true);
@@ -255,14 +289,27 @@ const App: React.FC = () => {
       if (result.image_url) {
         setResultImage(result.image_url);
 
-        // Deduct credit and save generation
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update({
-            credits: profile.credits - 1,
-            total_generations: (profile.total_generations || 0) + 1
-          })
-          .eq('id', session.user.id);
+        // Deduct credit and save generation (Skip deduction if Master)
+        if (!isMaster) {
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .update({
+              credits: profile.credits - 100,
+              total_generations: (profile.total_generations || 0) + 1
+            })
+            .eq('id', session.user.id);
+
+          if (profileError) console.error('Error updating credits:', profileError);
+        } else {
+          // Master still updates total_generations for stats
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .update({
+              total_generations: (profile.total_generations || 0) + 1
+            })
+            .eq('id', session.user.id);
+          if (profileError) console.error('Error updating total_generations for master:', profileError);
+        }
 
         await supabase.from('generations').insert({
           user_id: session.user.id,
@@ -271,9 +318,9 @@ const App: React.FC = () => {
           aspect_ratio: formData.aspectRatio
         });
 
-        if (profileError) console.error('Error updating credits:', profileError);
 
         fetchProfile();
+        fetchGenerations();
         setIsSuccess(true);
       } else if (result.error) {
         setErrorMessage(result.error);
@@ -355,8 +402,45 @@ const App: React.FC = () => {
 
   const isReady = capturedImage && formData.selectedIdentity;
 
+  const handlePayment = async (pack: any) => {
+    try {
+      setProcessingPayment(pack.name);
+
+      const { data, error } = await supabase.functions.invoke('mercadopago-payment', {
+        body: {
+          user_id: session.user.id,
+          credits: pack.credits,
+          price: pack.price,
+          pack_name: pack.name,
+          redirect_url: window.location.origin
+        }
+      });
+
+      if (error) throw error;
+
+      if (data?.error_visible) {
+        setErrorMessage("Lo sentimos, hubo un problema con la plataforma de pago. Por favor, intenta de nuevo en unos minutos.");
+        return;
+      }
+
+      const paymentUrl = data?.sandbox_init_point || data?.init_point;
+      if (paymentUrl) {
+        window.location.href = paymentUrl;
+      }
+    } catch (err: any) {
+      console.error('Error initiating payment:', err);
+      setErrorMessage("No se pudo iniciar el proceso de pago. Por favor, verifica tu conexión o intenta más tarde.");
+    } finally {
+      setProcessingPayment(null);
+    }
+  };
+
   if (!session) {
     return <Auth />;
+  }
+
+  if (showAdmin && profile?.is_master) {
+    return <Admin onBack={() => setShowAdmin(false)} />;
   }
 
   return (
@@ -373,18 +457,41 @@ const App: React.FC = () => {
             <div className="flex flex-col">
               <span className="text-[8px] font-black uppercase tracking-[2px] text-white/40">Créditos IA</span>
               <span className="text-sm font-black italic text-accent leading-none">
-                {loadingProfile ? '...' : (profile?.credits || 0)} DISPONIBLES
+                {loadingProfile ? '...' : (profile?.is_master ? 'INFINITOS' : `${profile?.credits || 0} DISPONIBLES`)}
               </span>
             </div>
+            {!profile?.is_master && (
+              <button
+                onClick={() => setShowPricing(true)}
+                className="ml-4 w-8 h-8 bg-accent/20 hover:bg-accent text-accent hover:text-white rounded-full flex items-center justify-center transition-all group/plus pointer-events-auto"
+              >
+                <Plus className="w-4 h-4 group-hover:scale-110 transition-transform" />
+              </button>
+            )}
           </div>
 
-          <button
-            onClick={() => supabase.auth.signOut()}
-            className="group flex items-center gap-3 bg-white/5 hover:bg-red-500/10 border border-white/10 hover:border-red-500/20 px-6 py-3 rounded-full transition-all duration-500 group pointer-events-auto"
-          >
-            <span className="text-[10px] font-black uppercase tracking-[2px] text-white/40 group-hover:text-red-400">Cerrar Sesión</span>
-            <LogOut className="w-4 h-4 text-white/20 group-hover:text-red-400 rotate-180" />
-          </button>
+          <div className="flex items-center gap-4 pointer-events-auto">
+            {profile?.is_master && (
+              <button
+                onClick={() => setShowAdmin(!showAdmin)}
+                className={`flex items-center gap-3 px-6 py-3 rounded-full transition-all duration-500 border ${showAdmin
+                  ? 'bg-accent text-white border-accent'
+                  : 'bg-white/5 text-white/40 border-white/10 hover:border-accent hover:text-accent'
+                  }`}
+              >
+                <Shield className="w-4 h-4" />
+                <span className="text-[10px] font-black uppercase tracking-[2px]">{showAdmin ? 'Cerrar Panel' : 'Panel Admin'}</span>
+              </button>
+            )}
+
+            <button
+              onClick={() => supabase.auth.signOut()}
+              className="group flex items-center gap-3 bg-white/5 hover:bg-red-500/10 border border-white/10 hover:border-red-500/20 px-6 py-3 rounded-full transition-all duration-500 group pointer-events-auto"
+            >
+              <span className="text-[10px] font-black uppercase tracking-[2px] text-white/40 group-hover:text-red-400">Cerrar Sesión</span>
+              <LogOut className="w-4 h-4 text-white/20 group-hover:text-red-400 rotate-180" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -741,10 +848,141 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {/* Modal de Precios */}
+      {showPricing && (
+        <div className="fixed inset-0 z-[300] bg-black/95 backdrop-blur-2xl flex items-start sm:items-center justify-center p-4 py-12 md:py-20 overflow-y-auto">
+          <div className="relative w-full max-w-4xl bg-[#0a0a0c] rounded-[40px] p-8 md:p-12 border border-white/10 text-center animate-[fadeIn_0.5s_ease-out]">
+            <button
+              onClick={() => setShowPricing(false)}
+              className="absolute top-6 right-6 w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="w-16 h-16 bg-accent/20 rounded-full flex items-center justify-center mb-8 mx-auto">
+              <CreditCard className="w-8 h-8 text-accent" />
+            </div>
+
+            <h3 className="text-3xl md:text-4xl font-black mb-2 uppercase italic tracking-tight">Elegí tu Pack</h3>
+            <p className="text-white/40 text-[10px] uppercase tracking-[4px] mb-12">Impulsá tus retratos con IA</p>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {[
+                { name: 'Starter', price: 4000, credits: 500, bonus: '', color: 'white/5', popular: false },
+                { name: 'Standard', price: 8000, credits: 1100, bonus: '+10% Extra', color: 'accent/5', popular: true },
+                { name: 'Business', price: 10000, credits: 1500, bonus: '+20% Extra', color: 'white/5', popular: false }
+              ].map((pack) => (
+                <div
+                  key={pack.name}
+                  className={`relative p-8 rounded-[32px] border transition-all duration-500 flex flex-col items-center group
+                    ${pack.popular ? 'bg-accent/5 border-accent shadow-[0_0_40px_rgba(255,85,0,0.2)]' : 'bg-white/2 border-white/5 hover:border-white/20'}`}
+                >
+                  {pack.popular && (
+                    <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-accent text-[8px] font-black uppercase tracking-[2px] px-4 py-1 rounded-full">
+                      Más Popular
+                    </div>
+                  )}
+                  <span className="text-[10px] font-black uppercase tracking-[3px] text-white/40 mb-6">{pack.name}</span>
+                  <div className="flex flex-col items-center mb-8">
+                    <span className="text-5xl font-black italic text-white mb-2">{pack.credits}</span>
+                    <span className="text-[10px] font-black uppercase tracking-[2px] text-accent">Créditos</span>
+                    {pack.bonus && (
+                      <div className="mt-4 flex items-center gap-2 px-3 py-1 bg-accent/20 rounded-full">
+                        <Zap className="w-3 h-3 text-accent" />
+                        <span className="text-[8px] font-black uppercase tracking-[1px] text-accent">{pack.bonus}</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-2xl font-black italic mb-8">${pack.price.toLocaleString()}</div>
+                  <button
+                    disabled={!!processingPayment}
+                    onClick={() => handlePayment(pack)}
+                    className={`w-full py-4 rounded-xl text-xs font-black uppercase tracking-[2px] transition-all duration-300 flex items-center justify-center gap-2
+                      ${pack.popular ? 'bg-accent text-white hover:bg-white hover:text-black' : 'bg-white text-black hover:bg-accent hover:text-white'}
+                      ${processingPayment === pack.name ? 'opacity-50' : ''}`}
+                  >
+                    {processingPayment === pack.name ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      'Cargar Ahora'
+                    )}
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <p className="mt-12 text-[8px] font-black tracking-[4px] uppercase text-white/20">
+              Pagos protegidos por Mercado Pago
+            </p>
+          </div>
+        </div>
+      )}
+
       <canvas ref={canvasRef} className="hidden" />
       <footer className="relative py-12 bg-primary border-t border-white/5 text-center z-20">
         <div className="text-white/10 text-[8px] uppercase tracking-[6px] font-bold italic">© 2024 Creativa Labs — Digital Alchemy Studio</div>
       </footer>
+
+      {/* Historial de Imágenes */}
+      {!showAdmin && session && (
+        <section className="relative py-20 px-6 bg-black/50 backdrop-blur-xl border-t border-white/5 z-20">
+          <div className="max-w-[1200px] mx-auto">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-12">
+              <div>
+                <div className="flex items-center gap-3 mb-2">
+                  <LucideHistory className="w-5 h-5 text-accent" />
+                  <h2 className="text-2xl font-black uppercase italic tracking-tight">Mis Fotos</h2>
+                </div>
+                <p className="text-[10px] tracking-[3px] text-white/40 uppercase">Tus últimos retratos generados</p>
+              </div>
+              <div className="px-6 py-2 rounded-full bg-white/5 border border-white/10">
+                <p className="text-[8px] font-black uppercase tracking-[2px] text-white/20">Las imágenes se mantienen en el historial por 20 días</p>
+              </div>
+            </div>
+
+            {loadingGenerations ? (
+              <div className="flex flex-col items-center py-20 opacity-20">
+                <Loader2 className="w-8 h-8 animate-spin mb-4" />
+                <span className="text-[10px] font-black uppercase tracking-[2px]">Cargando historial...</span>
+              </div>
+            ) : userGenerations.length === 0 ? (
+              <div className="text-center py-20 border-2 border-dashed border-white/5 rounded-[40px]">
+                <p className="text-white/20 text-xs font-black uppercase tracking-[3px]">Aún no has generado imágenes</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+                {userGenerations.map((gen) => (
+                  <div key={gen.id} className="group relative aspect-[4/5] rounded-2xl overflow-hidden border border-white/10 bg-[#0a0a0c] hover:border-accent/40 transition-all duration-500">
+                    <img src={gen.image_url} alt="Generación" className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            setResultImage(gen.image_url);
+                            setIsSuccess(true);
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                          }}
+                          className="flex-1 bg-white text-black py-2 rounded-lg text-[8px] font-black uppercase tracking-[1px] hover:bg-accent transition-colors"
+                        >
+                          Ver
+                        </button>
+                        <a
+                          href={gen.image_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="p-2 bg-white/10 rounded-lg text-white hover:text-accent transition-colors"
+                        >
+                          <Download className="w-3 h-3" />
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
     </div>
   );
 };

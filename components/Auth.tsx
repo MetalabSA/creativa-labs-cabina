@@ -36,6 +36,37 @@ export const Auth: React.FC = () => {
         }
     };
 
+    const handleTestAccess = async () => {
+        setLoading(true);
+        setMessage(null);
+        const testEmail = 'test@creativa.com';
+        const testPass = '12345678';
+
+        try {
+            // Intentar Login
+            const { error: signInError } = await supabase.auth.signInWithPassword({
+                email: testEmail,
+                password: testPass,
+            });
+
+            // Si no existe, registrarlo
+            if (signInError && signInError.message.includes('Invalid login credentials')) {
+                const { error: signUpError } = await supabase.auth.signUp({
+                    email: testEmail,
+                    password: testPass,
+                });
+                if (signUpError) throw signUpError;
+                setMessage({ type: 'success', text: 'Usuario de prueba creado. ¡Ya puedes entrar!' });
+            } else if (signInError) {
+                throw signInError;
+            }
+        } catch (error: any) {
+            setMessage({ type: 'error', text: error.message });
+        } finally {
+            setLoading(false);
+        }
+    };
+
     return (
         <div className="min-h-screen flex items-center justify-center p-6 bg-primary relative overflow-hidden">
             {/* Background patterns */}
@@ -109,6 +140,25 @@ export const Auth: React.FC = () => {
                                     <Sparkles className="w-4 h-4" />
                                 </>
                             )}
+                        </button>
+
+                        <div className="relative py-4">
+                            <div className="absolute inset-0 flex items-center">
+                                <div className="w-full border-t border-white/5"></div>
+                            </div>
+                            <div className="relative flex justify-center">
+                                <span className="bg-[#0a0a0c] px-4 text-[8px] font-black uppercase tracking-[2px] text-white/20">Acceso Rápido</span>
+                            </div>
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={handleTestAccess}
+                            disabled={loading}
+                            className="w-full bg-white/5 hover:bg-white/10 text-white font-bold uppercase tracking-[2px] py-4 rounded-2xl flex items-center justify-center gap-3 transition-all border border-white/5 text-[10px]"
+                        >
+                            <Sparkles className="w-3 h-3 text-accent" />
+                            Ingresar como Test
                         </button>
 
                         <button
