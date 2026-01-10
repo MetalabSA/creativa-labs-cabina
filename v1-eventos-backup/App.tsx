@@ -224,7 +224,6 @@ const App: React.FC = () => {
   const [packToUnlock, setPackToUnlock] = useState<any>(null);
   const [showPremiumOffer, setShowPremiumOffer] = useState(false);
   const [isUnlocking, setIsUnlocking] = useState(false);
-  const [appStep, setAppStep] = useState<'gallery' | 'setup' | 'processing' | 'result'>('gallery');
 
   const PREMIUM_PACK_PRICE = 3000;
 
@@ -526,19 +525,16 @@ const App: React.FC = () => {
     setIsSubmitting(true);
     setResultImage(null);
     setErrorMessage(null);
-    setAppStep('processing'); // Added this line
 
     try {
       const response = await fetch('https://automatizaciones.metalab30.com/webhook/cabina', {
         method: 'POST',
-        body: data // Changed from 'body' to 'data' to match FormData variable
+        body: data
       });
 
-      if (!response.ok) throw new Error('Error en la generación'); // Added this line
+      const result = await response.json();
 
-      const result = await response.json(); // Renamed from 'data' to 'result' to match original structure
-
-      if (result.image_url) { // Using 'result'
+      if (result.image_url) {
         setResultImage(result.image_url);
 
         // Update total generations stats
@@ -678,13 +674,12 @@ const App: React.FC = () => {
   ];
 
   const handleReset = () => {
-    setCapturedImage(null);
-    setResultImage(null);
     setIsSuccess(false);
-    setIsSubmitting(false);
+    setCapturedImage(null);
     setFormData(p => ({ ...p, selectedIdentity: null }));
-    setAppStep('gallery');
+    setResultImage(null);
     setErrorMessage(null);
+    // Optional: Scroll to top or step 1
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -841,46 +836,114 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Hero - Only show in Gallery */}
-      {appStep === 'gallery' && (
-        <section className="relative h-[40vh] w-full flex flex-col items-center justify-center z-10 px-4">
-          <div className="text-center pointer-events-none">
-            <h1 className="font-black text-[clamp(2.5rem,10vw,10rem)] leading-none tracking-tighter uppercase select-none">
-              Creativa <span className="text-white/20">Labs</span>
-            </h1>
-            <div className="mt-4 flex flex-col items-center gap-2">
-              <div className="h-[1px] w-16 bg-accent" />
-              <div className="text-[10px] tracking-[0.5rem] text-white/40 uppercase">Photo Booth Experience</div>
-            </div>
+      {/* Hero */}
+      <section className="relative h-[40vh] w-full flex flex-col items-center justify-center z-10 px-4">
+        <div className="text-center pointer-events-none">
+          <h1 className="font-black text-[clamp(2.5rem,10vw,10rem)] leading-none tracking-tighter uppercase select-none">
+            Creativa <span className="text-white/20">Labs</span>
+          </h1>
+          <div className="mt-4 flex flex-col items-center gap-2">
+            <div className="h-[1px] w-16 bg-accent" />
+            <div className="text-[10px] tracking-[0.5rem] text-white/40 uppercase">Photo Booth Experience</div>
           </div>
-        </section>
-      )}
-
-      {/* Volver Button - Only show in Setup/Result */}
-      {(appStep === 'setup' || appStep === 'result') && (
-        <div className="fixed top-24 left-6 z-[160] animate-[fadeIn_0.5s_ease-out]">
-          <button
-            onClick={handleReset}
-            className="group flex items-center gap-4 px-6 py-3 bg-black/40 backdrop-blur-xl border border-white/5 rounded-full hover:bg-white/10 transition-all pointer-events-auto shadow-2xl"
-          >
-            <ArrowDown className="w-4 h-4 text-accent rotate-90" />
-            <span className="text-[10px] font-black uppercase tracking-[3px]">Volver a Estilos</span>
-          </button>
         </div>
-      )}
+      </section>
 
       {/* Main Experience */}
       <section className="relative min-h-screen w-full bg-[#050505]/95 backdrop-blur-md border-t border-white/5 py-20 px-6 z-20">
         <div className="max-w-[1200px] mx-auto">
 
-          {/* GALLERY VIEW: Styles Selection */}
-          {appStep === 'gallery' && (
-            <div className="animate-[fadeIn_1s_ease-out]">
-              <div className="text-center mb-16">
-                <span className="inline-block px-4 py-1 rounded-full bg-accent/10 border border-accent/20 text-accent text-[10px] font-black tracking-[3px] uppercase mb-6">Discovery</span>
-                <h2 className="text-4xl font-black tracking-tight uppercase mb-4 italic text-white">Elige tu destino</h2>
-                <p className="text-white/30 text-[10px] uppercase tracking-[4px]">Navega por los universos visuales disponibles</p>
+          {/* STEP 1: Capture */}
+          <div className="text-center mb-16">
+            <span className="inline-block px-4 py-1 rounded-full bg-accent/10 border border-accent/20 text-accent text-[10px] font-black tracking-[3px] uppercase mb-6">Paso 01</span>
+            <h2 className="text-2xl font-black tracking-[0.2em] uppercase mb-8">Tu Rostro</h2>
+
+            <div className="flex flex-col items-center gap-8">
+              {!capturedImage ? (
+                <button
+                  onClick={startCameraAction}
+                  className="group relative flex items-center justify-center gap-4 px-12 py-6 bg-white/5 border-2 border-white/10 rounded-2xl hover:bg-accent hover:border-accent transition-all duration-500 hover:scale-105"
+                >
+                  <Camera className="w-6 h-6 text-accent group-hover:text-white" />
+                  <span className="font-black tracking-[4px] uppercase text-sm">Iniciar Cámara</span>
+                </button>
+              ) : (
+                <div className="relative group">
+                  <div className="w-64 aspect-[4/5] rounded-3xl overflow-hidden border-2 border-accent shadow-[0_0_40px_rgba(255,85,0,0.3)] relative">
+                    <img src={capturedImage} className="w-full h-full object-cover" alt="Tu foto" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                    <div className="absolute top-0 left-0 w-full h-[1px] bg-accent/50 animate-[scan_2s_linear_infinite]" />
+                  </div>
+                  <button
+                    onClick={() => setCapturedImage(null)}
+                    className="absolute -top-3 -right-3 w-10 h-10 bg-white text-black rounded-full flex items-center justify-center hover:bg-accent hover:text-white transition-all shadow-xl z-30"
+                  >
+                    <RefreshCw className="w-5 h-5" />
+                  </button>
+                  <p className="mt-4 text-[9px] font-black tracking-[3px] text-accent uppercase">Foto Capturada</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* DIVIDER */}
+          <div className="relative py-20 flex items-center justify-center">
+            <div className="absolute w-full h-[1px] bg-white/5" />
+            <div className="relative px-8 bg-[#050505] flex flex-col items-center">
+              <ArrowDown className={`w-5 h-5 transition-colors duration-500 ${capturedImage ? 'text-accent' : 'text-white/10'}`} />
+            </div>
+          </div>
+
+          {/* STEP 1.5: Aspect Ratio */}
+          <div className={`transition-all duration-700 ${capturedImage ? 'opacity-100' : 'opacity-20 pointer-events-none grayscale'}`}>
+            <div className="text-center mb-16">
+              <span className="inline-block px-4 py-1 rounded-full bg-white/5 border border-white/10 text-white/40 text-[10px] font-black tracking-[3px] uppercase mb-6">Paso 02</span>
+              <h2 className="text-2xl font-black tracking-[0.2em] uppercase mb-12">Formato de Imagen</h2>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 max-w-3xl mx-auto">
+                {ASPECT_RATIOS.map((ratio) => (
+                  <button
+                    key={ratio.id}
+                    onClick={() => setFormData(p => ({ ...p, aspectRatio: ratio.id }))}
+                    className={`relative group flex flex-col items-center p-8 rounded-[32px] border-2 transition-all duration-500
+                      ${formData.aspectRatio === ratio.id
+                        ? 'border-accent bg-accent/5 shadow-[0_0_40px_rgba(255,85,0,0.2)]'
+                        : 'border-white/5 bg-white/2 bg-[#121215] hover:border-white/20'}`}
+                  >
+                    <div className={`mb-6 p-4 rounded-2xl transition-all duration-500
+                      ${formData.aspectRatio === ratio.id ? 'bg-accent text-white' : 'bg-white/5 text-white/40 group-hover:text-white'}`}>
+                      <ratio.icon className="w-8 h-8" />
+                    </div>
+                    <span className={`text-xl font-black tracking-[4px] mb-2 ${formData.aspectRatio === ratio.id ? 'text-white' : 'text-white/40'}`}>
+                      {ratio.label}
+                    </span>
+                    <span className="text-[10px] font-black tracking-[2px] uppercase opacity-40">
+                      {ratio.desc}
+                    </span>
+                    {formData.aspectRatio === ratio.id && (
+                      <div className="absolute top-4 right-4">
+                        <Check className="w-5 h-5 text-accent" />
+                      </div>
+                    )}
+                  </button>
+                ))}
               </div>
+            </div>
+          </div>
+
+          {/* DIVIDER */}
+          <div className="relative py-20 flex items-center justify-center">
+            <div className="absolute w-full h-[1px] bg-white/5" />
+            <div className="relative px-8 bg-[#050505] flex flex-col items-center">
+              <ArrowDown className={`w-5 h-5 transition-colors duration-500 ${formData.aspectRatio ? 'text-accent' : 'text-white/10'}`} />
+            </div>
+          </div>
+
+          {/* STEP 2: Identities */}
+          <div className={`transition-all duration-700 ${capturedImage && formData.aspectRatio ? 'opacity-100' : 'opacity-20 pointer-events-none grayscale'}`}>
+            <div className="text-center mb-16">
+              <span className="inline-block px-4 py-1 rounded-full bg-white/5 border border-white/10 text-white/40 text-[10px] font-black tracking-[3px] uppercase mb-6">Paso 03</span>
+              <h2 className="text-2xl font-black tracking-[0.2em] uppercase mb-12">Elige el Estilo</h2>
 
               {/* Smart Search (Lupa) */}
               <div className="max-w-xl mx-auto mb-12 relative group">
@@ -907,7 +970,7 @@ const App: React.FC = () => {
                 </div>
               </div>
 
-              {/* Styles Grids and Categories (Existing Logic) */}
+              {/* SECTION: Para Vos */}
               {!searchQuery && (
                 <div className="mb-20 animate-[fadeIn_0.8s_ease-out]">
                   <div className="flex items-center justify-center gap-3 mb-8">
@@ -915,6 +978,7 @@ const App: React.FC = () => {
                     <h3 className="text-[10px] font-black tracking-[4px] uppercase text-white/40">Recomendados para vos</h3>
                     <Sparkles className="w-4 h-4 text-amber-500 animate-pulse" />
                   </div>
+
                   <div className="flex flex-nowrap overflow-x-auto pb-8 gap-4 px-4 no-scrollbar justify-center">
                     {recommendedIdentities.map((identity) => (
                       <div key={`rec-${identity.id}`} className="min-w-[140px] transform hover:scale-105 transition-transform duration-500">
@@ -924,7 +988,7 @@ const App: React.FC = () => {
                           sampleImageUrl={identity.url}
                           isSelected={formData.selectedIdentity === identity.id}
                           isPremium={identity.isPremium && !profile?.unlocked_packs?.includes(identity.subCategory) && !profile?.is_master}
-                          tags={[]}
+                          tags={[]} // Hide tags in recommendations to keep it clean
                           onSelect={() => {
                             const isActuallyPremium = identity.isPremium && !profile?.unlocked_packs?.includes(identity.subCategory) && !profile?.is_master;
                             if (isActuallyPremium) {
@@ -935,13 +999,17 @@ const App: React.FC = () => {
                               }
                             } else {
                               setFormData(p => ({ ...p, selectedIdentity: identity.id }));
-                              setAppStep('setup');
-                              window.scrollTo({ top: 0, behavior: 'smooth' });
                             }
                           }}
                         />
                       </div>
                     ))}
+                  </div>
+
+                  <div className="mt-8 flex items-center justify-center gap-2">
+                    <div className="h-[1px] w-12 bg-gradient-to-r from-transparent to-white/10" />
+                    <span className="text-[8px] font-bold text-white/20 uppercase tracking-[2px]">Elegidos por la IA</span>
+                    <div className="h-[1px] w-12 bg-gradient-to-l from-transparent to-white/10" />
                   </div>
                 </div>
               )}
@@ -981,19 +1049,22 @@ const App: React.FC = () => {
                   <div key={subCat} className="animate-[fadeIn_0.5s_ease-out]">
                     <div className="flex items-center gap-4 mb-8">
                       <div className="h-[2px] w-8 bg-accent" />
-                      <h3 className="text-sm font-black tracking-[4px] uppercase text-white/60 italic">{subCat}</h3>
+                      <h3 className="text-sm font-black tracking-[4px] uppercase text-white/60 italic">
+                        {subCat}
+                      </h3>
                       <div className="flex-grow h-[1px] bg-white/5" />
                     </div>
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 justify-items-center">
                       {IDENTITIES
                         .filter(id => {
                           const matchesCategory = activeCategory === 'all' || id.category === activeCategory;
                           const q = searchQuery.toLowerCase();
-                          return id.subCategory === subCat && matchesCategory && (
+                          const matchesSearch =
                             id.title.toLowerCase().includes(q) ||
                             id.subCategory.toLowerCase().includes(q) ||
-                            id.tags.some(tag => tag.toLowerCase().includes(q))
-                          );
+                            id.tags.some(tag => tag.toLowerCase().includes(q));
+                          return id.subCategory === subCat && matchesCategory && matchesSearch;
                         })
                         .map((identity) => (
                           <UploadCard
@@ -1014,8 +1085,6 @@ const App: React.FC = () => {
                                 }
                               } else {
                                 setFormData(p => ({ ...p, selectedIdentity: identity.id }));
-                                setAppStep('setup');
-                                window.scrollTo({ top: 0, behavior: 'smooth' });
                               }
                             }}
                           />
@@ -1049,134 +1118,65 @@ const App: React.FC = () => {
                   )}
               </div>
             </div>
-          )}
+          </div>
 
-          {/* SETUP VIEW: Camera & Aspect Ratio */}
-          {appStep === 'setup' && (
-            <div className="animate-[fadeInDown_0.8s_ease-out]">
-              {/* Selected Style Preview Header */}
-              {formData.selectedIdentity && (
-                <div className="flex flex-col items-center mb-16">
-                  <div className="w-32 h-32 rounded-3xl overflow-hidden border-2 border-accent mb-6 shadow-[0_0_30px_rgba(255,85,0,0.3)]">
-                    <img
-                      src={IDENTITIES.find(i => i.id === formData.selectedIdentity)?.url}
-                      className="w-full h-full object-cover"
-                      alt="Estilo"
-                    />
-                  </div>
-                  <div className="text-center">
-                    <span className="text-accent text-[8px] font-black uppercase tracking-[4px]">Transformación Elegida</span>
-                    <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white">
-                      {IDENTITIES.find(i => i.id === formData.selectedIdentity)?.title}
-                    </h2>
-                  </div>
-                </div>
-              )}
-
-              {/* Paso 1: Foto */}
-              <div className="text-center mb-16">
-                <span className="inline-block px-4 py-1 rounded-full bg-accent/10 border border-accent/20 text-accent text-[10px] font-black tracking-[3px] uppercase mb-6">Paso 01</span>
-                <h2 className="text-2xl font-black tracking-[0.2em] uppercase mb-8">Captura tu Rostro</h2>
-                <p className="text-white/30 text-[9px] uppercase tracking-[3px] mb-12">Ubica tu cara en el centro para mejores resultados</p>
-
-                <div className="flex flex-col items-center gap-8">
-                  {!capturedImage ? (
-                    <button
-                      onClick={startCameraAction}
-                      className="group relative flex items-center justify-center gap-4 px-12 py-6 bg-white/5 border-2 border-white/10 rounded-2xl hover:bg-accent hover:border-accent transition-all duration-500 hover:scale-105"
-                    >
-                      <Camera className="w-6 h-6 text-accent group-hover:text-white" />
-                      <span className="font-black tracking-[4px] uppercase text-sm text-white">Iniciar Cámara</span>
-                    </button>
-                  ) : (
-                    <div className="relative group">
-                      <div className="w-64 aspect-[4/5] rounded-3xl overflow-hidden border-2 border-accent shadow-[0_0_40px_rgba(255,85,0,0.3)] relative">
-                        <img src={capturedImage} className="w-full h-full object-cover" alt="Tu foto" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                        <div className="absolute top-0 left-0 w-full h-[1px] bg-accent/50 animate-[scan_2s_linear_infinite]" />
-                      </div>
-                      <button
-                        onClick={() => setCapturedImage(null)}
-                        className="absolute -top-3 -right-3 w-10 h-10 bg-white text-black rounded-full flex items-center justify-center hover:bg-accent hover:text-white transition-all shadow-xl z-30"
-                      >
-                        <RefreshCw className="w-5 h-5" />
-                      </button>
-                      <p className="mt-4 text-[9px] font-black tracking-[3px] text-accent uppercase">Foto Capturada</p>
+          {/* STEP 3: Submit or Result */}
+          {!isSuccess ? (
+            <div className={`mt-32 max-w-sm mx-auto transition-all duration-700 ${isReady ? 'opacity-100 scale-100' : 'opacity-30 scale-95 pointer-events-none'}`}>
+              <button
+                onClick={handleSubmit}
+                disabled={isSubmitting || !isReady}
+                className="group relative w-full h-20 rounded-2xl overflow-hidden transition-all duration-500 shadow-2xl"
+              >
+                <div className={`absolute inset-0 transition-all duration-500 ${isReady ? 'bg-accent' : 'bg-white/10'}`} />
+                <div className="relative flex items-center justify-center gap-4 font-black text-sm uppercase tracking-[6px]">
+                  {isSubmitting ? (
+                    <div className="flex flex-col items-center leading-none">
+                      <span>PROCESANDO... {elapsedSeconds}s</span>
                     </div>
+                  ) : (
+                    <>
+                      <span>GENERAR MI FOTO</span>
+                      {isReady && <Sparkles className="w-5 h-5 animate-pulse" />}
+                    </>
                   )}
                 </div>
-              </div>
-
-              {/* DIVIDER */}
-              <div className="relative py-20 flex items-center justify-center">
-                <div className="absolute w-full h-[1px] bg-white/5" />
-                <ArrowDown className={`relative px-4 bg-[#050505] w-12 h-5 transition-colors duration-500 ${capturedImage ? 'text-accent' : 'text-white/10'}`} />
-              </div>
-
-              {/* Paso 2: Aspect Ratio */}
-              <div className={`transition-all duration-700 ${capturedImage ? 'opacity-100' : 'opacity-20 pointer-events-none grayscale'}`}>
-                <div className="text-center mb-16">
-                  <span className="inline-block px-4 py-1 rounded-full bg-white/5 border border-white/10 text-white/40 text-[10px] font-black tracking-[3px] uppercase mb-6">Paso 02</span>
-                  <h2 className="text-2xl font-black tracking-[0.2em] uppercase mb-12">Formato de Imagen</h2>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 max-w-3xl mx-auto">
-                    {ASPECT_RATIOS.map((ratio) => (
-                      <button
-                        key={ratio.id}
-                        onClick={() => setFormData(p => ({ ...p, aspectRatio: ratio.id }))}
-                        className={`relative group flex flex-col items-center p-8 rounded-[32px] border-2 transition-all duration-500
-                          ${formData.aspectRatio === ratio.id
-                            ? 'border-accent bg-accent/5 shadow-[0_0_40px_rgba(255,85,0,0.2)]'
-                            : 'border-white/5 bg-white/2 bg-[#121215] hover:border-white/20'}`}
-                      >
-                        <div className={`mb-6 p-4 rounded-2xl transition-all duration-500
-                          ${formData.aspectRatio === ratio.id ? 'bg-accent text-white' : 'bg-white/5 text-white/40 group-hover:text-white'}`}>
-                          <ratio.icon className="w-8 h-8" />
-                        </div>
-                        <span className={`text-xl font-black tracking-[4px] mb-2 ${formData.aspectRatio === ratio.id ? 'text-white' : 'text-white/40'}`}>
-                          {ratio.label}
-                        </span>
-                        {formData.aspectRatio === ratio.id && <Check className="absolute top-4 right-4 w-5 h-5 text-accent" />}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Submit Button */}
-              <div className={`mt-32 max-w-sm mx-auto transition-all duration-700 ${isReady ? 'opacity-100 scale-100' : 'opacity-30 scale-95 pointer-events-none'}`}>
-                <button
-                  onClick={handleSubmit}
-                  disabled={isSubmitting || !isReady}
-                  className="group relative w-full h-20 rounded-2xl overflow-hidden transition-all duration-500 shadow-2xl"
-                >
-                  <div className={`absolute inset-0 transition-all duration-500 ${isReady ? 'bg-accent' : 'bg-white/10'}`} />
-                  <div className="relative flex items-center justify-center gap-4 font-black text-sm uppercase tracking-[6px] text-white">
-                    {isSubmitting ? <span>PROCESANDO...</span> : (
-                      <>
-                        <span>GENERAR ALQUIMIA</span>
-                        <Sparkles className="w-5 h-5" />
-                      </>
-                    )}
-                  </div>
-                </button>
-              </div>
+              </button>
+              {isSubmitting && (
+                <p className="text-center mt-6 text-[10px] uppercase tracking-[3px] text-accent font-bold animate-pulse">
+                  Por favor espera, el alquinista está trabajando...
+                </p>
+              )}
+              {!isSubmitting && (
+                <p className="text-center mt-6 text-[8px] uppercase tracking-[3px] text-white/20 font-bold">
+                  {!capturedImage ? "* FALTA TU FOTO" : !formData.selectedIdentity ? "* ELIGE UN ESTILO" : "LISTO PARA LA ALQUIMIA"}
+                </p>
+              )}
             </div>
-          )}
+          ) : (
+            <div className="mt-32 p-12 bg-accent/5 border border-accent/20 rounded-[40px] text-center max-w-2xl mx-auto backdrop-blur-3xl animate-[fadeIn_0.5s_ease-out] flex flex-col items-center">
 
-          {/* RESULT VIEW */}
-          {appStep === 'result' && (
-            <div className="mt-8 p-12 bg-accent/5 border border-accent/20 rounded-[40px] text-center max-w-2xl mx-auto backdrop-blur-3xl animate-[fadeIn_0.5s_ease-out] flex flex-col items-center">
               {errorMessage ? (
                 <>
-                  <div className="w-16 h-16 bg-red-500 rounded-full flex items-center justify-center mb-8"><AlertTriangle className="w-8 h-8 text-white" /></div>
+                  <div className="w-16 h-16 bg-red-500 rounded-full flex items-center justify-center mb-8 shadow-[0_0_30px_rgba(239,68,68,0.4)]">
+                    <AlertTriangle className="w-8 h-8 text-white" />
+                  </div>
                   <h3 className="text-3xl font-black mb-4 uppercase italic text-red-500">Error</h3>
-                  <p className="text-white/70 text-xs font-bold uppercase tracking-[2px] leading-relaxed">{errorMessage}</p>
+                  <p className="text-white/70 text-xs font-bold uppercase tracking-[2px] leading-relaxed max-w-md">
+                    {errorMessage}
+                  </p>
+                  <p className="text-white/40 text-[10px] uppercase tracking-[2px] mt-4">
+                    Por favor, intenta nuevamente el proceso.
+                  </p>
                 </>
               ) : resultImage ? (
                 <>
-                  <div className="w-16 h-16 bg-accent rounded-full flex items-center justify-center mb-8 shadow-[0_0_30px_rgba(255,85,0,0.4)]"><Check className="w-8 h-8 text-white" /></div>
-                  <h3 className="text-3xl font-black mb-10 uppercase italic text-white">¡Tu Alquimia está Lista!</h3>
-                  <div className="w-64 aspect-[4/5] rounded-3xl overflow-hidden border-2 border-accent shadow-[0_0_40px_rgba(255,85,0,0.3)] mb-10 bg-black">
+                  <div className="w-16 h-16 bg-accent rounded-full flex items-center justify-center mb-8 shadow-[0_0_30px_rgba(255,85,0,0.4)]">
+                    <Check className="w-8 h-8 text-white" />
+                  </div>
+                  <h3 className="text-3xl font-black mb-8 uppercase italic">¡Tu Foto Está Lista!</h3>
+
+                  <div className="w-64 aspect-[4/5] rounded-3xl overflow-hidden border-2 border-accent shadow-[0_0_40px_rgba(255,85,0,0.3)] mb-8 bg-black relative">
                     <img src={resultImage} alt="Resultado" className="w-full h-full object-cover" crossOrigin="anonymous" />
                   </div>
 
@@ -1516,7 +1516,6 @@ const App: React.FC = () => {
                           onClick={() => {
                             setResultImage(gen.image_url);
                             setIsSuccess(true);
-                            setAppStep('result');
                             window.scrollTo({ top: 0, behavior: 'smooth' });
                           }}
                           className="flex-1 bg-white text-black py-2 rounded-lg text-[8px] font-black uppercase tracking-[1px] hover:bg-accent transition-colors"
