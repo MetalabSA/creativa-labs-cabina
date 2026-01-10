@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Camera, RefreshCw, Check, X, Sparkles, User, ArrowDown, Printer, AlertTriangle, Loader2, Download, QrCode, Smartphone, Layout, Monitor, Instagram, LogOut, Shield, History as LucideHistory, CreditCard, Zap, Plus } from 'lucide-react';
+import { Camera, RefreshCw, Check, X, Search, Sparkles, User, ArrowDown, Printer, AlertTriangle, Loader2, Download, QrCode, Smartphone, Layout, Monitor, Instagram, LogOut, Shield, History as LucideHistory, CreditCard, Zap, Plus } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import Background3D from './components/Background3D';
 import UploadCard from './components/UploadCard';
