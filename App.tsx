@@ -1277,45 +1277,41 @@ const App: React.FC = () => {
         </div>
       )}
 
-      {/* Modal de Oferta Premium Exclusiva */}
+      {/* Modal de Oferta Premium Exclusiva - Más delicado y pequeño */}
       {showPremiumOffer && (
-        <div className="fixed inset-0 z-[400] bg-black/95 backdrop-blur-2xl flex items-center justify-center p-4 py-12 overflow-y-auto animate-[fadeIn_0.5s_ease-out]">
-          <div className="relative w-full max-w-xl bg-gradient-to-b from-[#1a1a1f] to-[#0a0a0c] rounded-[40px] p-10 border border-amber-500/30 text-center shadow-[0_0_100px_rgba(251,191,36,0.1)]">
+        <div className="fixed inset-0 z-[400] bg-black/90 backdrop-blur-2xl flex items-center justify-center p-6 animate-[fadeIn_0.5s_ease-out]">
+          <div className="relative w-full max-w-sm bg-gradient-to-b from-[#1a1a1f] to-[#0a0a0c] rounded-[32px] p-8 border border-amber-500/20 text-center shadow-[0_0_80px_rgba(251,191,36,0.05)]">
             <button
               onClick={() => setShowPremiumOffer(false)}
-              className="absolute top-6 right-6 w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4 text-white/40" />
             </button>
 
-            <div className="w-20 h-20 bg-gradient-to-br from-amber-500 to-yellow-300 rounded-3xl flex items-center justify-center mb-8 mx-auto rotate-12 shadow-2xl shadow-amber-500/20">
-              <Sparkles className="w-10 h-10 text-black" />
+            <div className="w-14 h-14 bg-gradient-to-br from-amber-500 to-yellow-300 rounded-2xl flex items-center justify-center mb-6 mx-auto rotate-6 shadow-xl shadow-amber-500/10">
+              <Sparkles className="w-7 h-7 text-black" />
             </div>
 
-            <h3 className="text-4xl font-black mb-4 uppercase italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-200">
+            <h3 className="text-2xl font-black mb-3 uppercase italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-200">
               Pack Premium
             </h3>
 
-            <div className="bg-white/5 border border-white/10 rounded-3xl p-6 mb-8">
-              <div className="text-sm font-black text-white/60 uppercase tracking-[4px] mb-2">Acceso Total</div>
-              <div className="text-[10px] text-white/30 uppercase tracking-[2px] mb-6 leading-relaxed">
-                Desbloquea todos los estilos VIP y recibí un boost de créditos para tus fotos.
+            <div className="bg-white/5 border border-white/5 rounded-2xl p-5 mb-6">
+              <div className="text-[8px] font-black text-white/40 uppercase tracking-[3px] mb-4 leading-relaxed">
+                Desbloquea estilos VIP + 3000 créditos
               </div>
 
-              <div className="flex flex-col items-center py-4">
-                <div className="flex items-baseline gap-2">
-                  <span className="text-6xl font-black italic text-white leading-none">3000</span>
-                  <span className="text-xs font-black uppercase text-amber-500">Créditos</span>
-                </div>
-                <div className="mt-4 px-4 py-1 bg-amber-500 text-black text-[9px] font-black uppercase tracking-[2px] rounded-full">
-                  Ideal para Desbloqueo de Packs
+              <div className="flex flex-col items-center">
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-4xl font-black italic text-white leading-none">3000</span>
+                  <span className="text-[8px] font-black uppercase text-amber-500 tracking-widest">Créditos</span>
                 </div>
               </div>
             </div>
 
-            <div className="mb-10">
-              <div className="text-4xl font-black italic mb-2">$20.000</div>
-              <div className="text-[10px] font-black uppercase tracking-[3px] text-white/20">Pago Único • Sin suscripciones</div>
+            <div className="mb-8">
+              <div className="text-3xl font-black italic mb-1">$20.000</div>
+              <div className="text-[7px] font-black uppercase tracking-[2px] text-white/15">Pago Único</div>
             </div>
 
             <button
@@ -1324,19 +1320,15 @@ const App: React.FC = () => {
                 handlePayment({ name: 'Unlock Premium', price: 20000, credits: 3000 });
                 setShowPremiumOffer(false);
               }}
-              className="w-full h-20 bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-white hover:to-white text-black font-black uppercase tracking-[6px] text-sm rounded-2xl transition-all duration-500 shadow-[0_20px_40px_rgba(245,158,11,0.3)] hover:shadow-white/10 active:scale-95 flex items-center justify-center gap-4"
+              className="w-full h-14 bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-white hover:to-white text-black font-black uppercase tracking-[4px] text-[10px] rounded-xl transition-all duration-500 shadow-[0_10px_20px_rgba(245,158,11,0.2)] active:scale-95 flex items-center justify-center gap-3"
             >
-              {processingPayment ? <Loader2 className="w-6 h-6 animate-spin" /> : (
+              {processingPayment ? <Loader2 className="w-5 h-5 animate-spin" /> : (
                 <>
-                  QUIERO MI PACK
-                  <Zap className="w-5 h-5 fill-black" />
+                  DESBLOQUEAR AHORA
+                  <Zap className="w-3.5 h-3.5 fill-black" />
                 </>
               )}
             </button>
-
-            <p className="mt-8 text-[8px] font-black tracking-[4px] uppercase text-white/10">
-              La Alquimia Digital te espera
-            </p>
           </div>
         </div>
       )}
