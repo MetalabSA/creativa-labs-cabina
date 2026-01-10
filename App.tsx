@@ -221,6 +221,7 @@ const App: React.FC = () => {
   const [processingPayment, setProcessingPayment] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState('all');
   const [packToUnlock, setPackToUnlock] = useState<any>(null);
+  const [showPremiumOffer, setShowPremiumOffer] = useState(false);
   const [isUnlocking, setIsUnlocking] = useState(false);
 
   const PREMIUM_PACK_PRICE = 3000;
@@ -468,15 +469,33 @@ const App: React.FC = () => {
       }
     }
 
-    setIsSubmitting(true);
-    setResultImage(null);
-    setErrorMessage(null);
-
     const data = new FormData();
     data.append('user_photo', capturedImage);
     data.append('model_id', formData.selectedIdentity);
     data.append('aspect_ratio', formData.aspectRatio);
     data.append('timestamp', new Date().toISOString());
+
+    // DASHBOARD UPDATE: Deduct credit before starting (unless master)
+    if (!isMaster) {
+      try {
+        const { error: deductError } = await supabase
+          .from('profiles')
+          .update({ credits: profile.credits - 100 })
+          .eq('id', session.user.id);
+        if (deductError) throw deductError;
+        // Optimization: update local state so UI reflects it immediately
+        setProfile(prev => prev ? { ...prev, credits: prev.credits - 100 } : null);
+      } catch (err) {
+        console.error('Error early deducting credit:', err);
+        setErrorMessage("Error al procesar créditos. Intenta de nuevo.");
+        setIsSubmitting(false);
+        return;
+      }
+    }
+
+    setIsSubmitting(true);
+    setResultImage(null);
+    setErrorMessage(null);
 
     try {
       const response = await fetch('https://automatizaciones.metalab30.com/webhook/cabina', {
@@ -489,27 +508,15 @@ const App: React.FC = () => {
       if (result.image_url) {
         setResultImage(result.image_url);
 
-        // Deduct credit and save generation (Skip deduction if Master)
-        if (!isMaster) {
-          const { error: profileError } = await supabase
-            .from('profiles')
-            .update({
-              credits: profile.credits - 100,
-              total_generations: (profile.total_generations || 0) + 1
-            })
-            .eq('id', session.user.id);
+        // Update total generations stats
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update({
+            total_generations: (profile.total_generations || 0) + 1
+          })
+          .eq('id', session.user.id);
 
-          if (profileError) console.error('Error updating credits:', profileError);
-        } else {
-          // Master still updates total_generations for stats
-          const { error: profileError } = await supabase
-            .from('profiles')
-            .update({
-              total_generations: (profile.total_generations || 0) + 1
-            })
-            .eq('id', session.user.id);
-          if (profileError) console.error('Error updating total_generations for master:', profileError);
-        }
+        if (profileError) console.error('Error updating stats:', profileError);
 
         await supabase.from('generations').insert({
           user_id: session.user.id,
@@ -522,16 +529,29 @@ const App: React.FC = () => {
         fetchProfile();
         fetchGenerations();
         setIsSuccess(true);
-      } else if (result.error) {
-        setErrorMessage(result.error);
-        setIsSuccess(true);
       } else {
-        setErrorMessage("Respuesta desconocida del servidor.");
+        // REFUND: If webhook returns error or unknown response
+        if (!isMaster) {
+          await supabase
+            .from('profiles')
+            .update({ credits: profile.credits }) // Refund to original value
+            .eq('id', session.user.id);
+          setProfile(prev => prev ? { ...prev, credits: profile.credits } : null);
+        }
+        setErrorMessage(result.error || "Respuesta desconocida del servidor.");
         setIsSuccess(true);
       }
     } catch (error) {
       console.error('Submission error:', error);
-      setErrorMessage("Error de conexión. Inténtalo de nuevo.");
+      // REFUND: On connection error
+      if (!isMaster && profile) {
+        await supabase
+          .from('profiles')
+          .update({ credits: profile.credits }) // Refund to original value
+          .eq('id', session.user.id);
+        setProfile(prev => prev ? { ...prev, credits: profile.credits } : null);
+      }
+      setErrorMessage("Error de conexión. Créditos devueltos.");
       setIsSuccess(true);
     } finally {
       setIsSubmitting(false);
@@ -944,7 +964,7 @@ const App: React.FC = () => {
                                 if (profile && profile.credits >= PREMIUM_PACK_PRICE) {
                                   setPackToUnlock(identity);
                                 } else {
-                                  setShowPricing(true);
+                                  setShowPremiumOffer(true);
                                 }
                               } else {
                                 setFormData(p => ({ ...p, selectedIdentity: identity.id }));
@@ -1252,6 +1272,70 @@ const App: React.FC = () => {
 
             <p className="mt-8 text-[8px] font-black tracking-[3px] text-white/10 uppercase">
               Tu saldo actual: {profile?.credits} créditos
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Oferta Premium Exclusiva */}
+      {showPremiumOffer && (
+        <div className="fixed inset-0 z-[400] bg-black/95 backdrop-blur-2xl flex items-center justify-center p-4 py-12 overflow-y-auto animate-[fadeIn_0.5s_ease-out]">
+          <div className="relative w-full max-w-xl bg-gradient-to-b from-[#1a1a1f] to-[#0a0a0c] rounded-[40px] p-10 border border-amber-500/30 text-center shadow-[0_0_100px_rgba(251,191,36,0.1)]">
+            <button
+              onClick={() => setShowPremiumOffer(false)}
+              className="absolute top-6 right-6 w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="w-20 h-20 bg-gradient-to-br from-amber-500 to-yellow-300 rounded-3xl flex items-center justify-center mb-8 mx-auto rotate-12 shadow-2xl shadow-amber-500/20">
+              <Sparkles className="w-10 h-10 text-black" />
+            </div>
+
+            <h3 className="text-4xl font-black mb-4 uppercase italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-200">
+              Pack Premium
+            </h3>
+
+            <div className="bg-white/5 border border-white/10 rounded-3xl p-6 mb-8">
+              <div className="text-sm font-black text-white/60 uppercase tracking-[4px] mb-2">Acceso Total</div>
+              <div className="text-[10px] text-white/30 uppercase tracking-[2px] mb-6 leading-relaxed">
+                Desbloquea todos los estilos VIP y recibí un boost de créditos para tus fotos.
+              </div>
+
+              <div className="flex flex-col items-center py-4">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-6xl font-black italic text-white leading-none">3000</span>
+                  <span className="text-xs font-black uppercase text-amber-500">Créditos</span>
+                </div>
+                <div className="mt-4 px-4 py-1 bg-amber-500 text-black text-[9px] font-black uppercase tracking-[2px] rounded-full">
+                  Ideal para Desbloqueo de Packs
+                </div>
+              </div>
+            </div>
+
+            <div className="mb-10">
+              <div className="text-4xl font-black italic mb-2">$20.000</div>
+              <div className="text-[10px] font-black uppercase tracking-[3px] text-white/20">Pago Único • Sin suscripciones</div>
+            </div>
+
+            <button
+              disabled={!!processingPayment}
+              onClick={() => {
+                handlePayment({ name: 'Unlock Premium', price: 20000, credits: 3000 });
+                setShowPremiumOffer(false);
+              }}
+              className="w-full h-20 bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-white hover:to-white text-black font-black uppercase tracking-[6px] text-sm rounded-2xl transition-all duration-500 shadow-[0_20px_40px_rgba(245,158,11,0.3)] hover:shadow-white/10 active:scale-95 flex items-center justify-center gap-4"
+            >
+              {processingPayment ? <Loader2 className="w-6 h-6 animate-spin" /> : (
+                <>
+                  QUIERO MI PACK
+                  <Zap className="w-5 h-5 fill-black" />
+                </>
+              )}
+            </button>
+
+            <p className="mt-8 text-[8px] font-black tracking-[4px] uppercase text-white/10">
+              La Alquimia Digital te espera
             </p>
           </div>
         </div>
