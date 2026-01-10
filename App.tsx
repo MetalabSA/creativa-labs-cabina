@@ -220,6 +220,7 @@ const App: React.FC = () => {
   const [showPricing, setShowPricing] = useState(false);
   const [processingPayment, setProcessingPayment] = useState<string | null>(null);
   const [activeCategory, setActiveCategory] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [packToUnlock, setPackToUnlock] = useState<any>(null);
   const [showPremiumOffer, setShowPremiumOffer] = useState(false);
   const [isUnlocking, setIsUnlocking] = useState(false);
@@ -913,6 +914,31 @@ const App: React.FC = () => {
               <span className="inline-block px-4 py-1 rounded-full bg-white/5 border border-white/10 text-white/40 text-[10px] font-black tracking-[3px] uppercase mb-6">Paso 03</span>
               <h2 className="text-2xl font-black tracking-[0.2em] uppercase mb-12">Elige el Estilo</h2>
 
+              {/* Smart Search (Lupa) */}
+              <div className="max-w-xl mx-auto mb-12 relative group">
+                <div className="absolute inset-0 bg-accent/5 blur-2xl rounded-full opacity-0 group-focus-within:opacity-100 transition-opacity duration-700" />
+                <div className="relative flex items-center bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden focus-within:border-accent/50 transition-all duration-300">
+                  <div className="pl-6 pointer-events-none">
+                    <Search className={`w-5 h-5 transition-colors ${searchQuery ? 'text-accent' : 'text-white/20'}`} />
+                  </div>
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Busca por estilo, pack o tags (ej: f1, traje, neon)..."
+                    className="w-full bg-transparent border-none px-6 py-5 text-sm font-bold placeholder:text-white/10 focus:outline-none focus:ring-0 text-white"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="pr-6 text-white/20 hover:text-white transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              </div>
+
               {/* Category Selector */}
               <div className="flex flex-wrap justify-center gap-4 mb-16">
                 {CATEGORIES.map((cat) => (
@@ -934,7 +960,15 @@ const App: React.FC = () => {
               <div className="space-y-20">
                 {Array.from(new Set(
                   IDENTITIES
-                    .filter(id => activeCategory === 'all' || id.category === activeCategory)
+                    .filter(id => {
+                      const matchesCategory = activeCategory === 'all' || id.category === activeCategory;
+                      const q = searchQuery.toLowerCase();
+                      const matchesSearch =
+                        id.title.toLowerCase().includes(q) ||
+                        id.subCategory.toLowerCase().includes(q) ||
+                        id.tags.some(tag => tag.toLowerCase().includes(q));
+                      return matchesCategory && matchesSearch;
+                    })
                     .map(id => id.subCategory)
                 )).map(subCat => (
                   <div key={subCat} className="animate-[fadeIn_0.5s_ease-out]">
@@ -948,7 +982,15 @@ const App: React.FC = () => {
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 justify-items-center">
                       {IDENTITIES
-                        .filter(id => id.subCategory === subCat && (activeCategory === 'all' || id.category === activeCategory))
+                        .filter(id => {
+                          const matchesCategory = activeCategory === 'all' || id.category === activeCategory;
+                          const q = searchQuery.toLowerCase();
+                          const matchesSearch =
+                            id.title.toLowerCase().includes(q) ||
+                            id.subCategory.toLowerCase().includes(q) ||
+                            id.tags.some(tag => tag.toLowerCase().includes(q));
+                          return id.subCategory === subCat && matchesCategory && matchesSearch;
+                        })
                         .map((identity) => (
                           <UploadCard
                             key={identity.id}
@@ -975,6 +1017,30 @@ const App: React.FC = () => {
                     </div>
                   </div>
                 ))}
+
+                {/* No results message */}
+                {searchQuery && IDENTITIES.filter(id => {
+                  const matchesCategory = activeCategory === 'all' || id.category === activeCategory;
+                  const q = searchQuery.toLowerCase();
+                  return matchesCategory && (
+                    id.title.toLowerCase().includes(q) ||
+                    id.subCategory.toLowerCase().includes(q) ||
+                    id.tags.some(tag => tag.toLowerCase().includes(q))
+                  );
+                }).length === 0 && (
+                    <div className="py-20 text-center animate-pulse">
+                      <Search className="w-12 h-12 text-white/5 mx-auto mb-4" />
+                      <p className="text-white/20 text-[10px] font-black uppercase tracking-[4px]">
+                        No hay resultados para "{searchQuery}"
+                      </p>
+                      <button
+                        onClick={() => setSearchQuery('')}
+                        className="mt-6 text-accent text-[8px] font-black uppercase tracking-[2px] hover:underline"
+                      >
+                        Limpiar búsqueda
+                      </button>
+                    </div>
+                  )}
               </div>
             </div>
           </div>
