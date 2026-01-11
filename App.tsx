@@ -1245,7 +1245,7 @@ const App: React.FC = () => {
                   </div>
                   <div className="flex flex-nowrap overflow-x-auto pb-8 gap-3 px-4 no-scrollbar justify-center">
                     {recommendedIdentities.map((identity) => (
-                      <div key={`rec-${identity.id}`} className="min-w-[130px] sm:min-w-[140px] transform hover:scale-110 transition-all duration-500">
+                      <div key={`rec-${identity.id}`} className="min-w-[110px] sm:min-w-[120px] transform hover:scale-110 transition-all duration-500">
                         <UploadCard
                           type="character"
                           title={identity.title}
@@ -1313,7 +1313,7 @@ const App: React.FC = () => {
                       <div className="flex-grow h-[1px] bg-white/5" />
                     </div>
                     <div className="relative group/carousel">
-                      <div className="flex overflow-x-auto pb-12 gap-6 snap-x snap-mandatory no-scrollbar scroll-smooth px-4">
+                      <div className="flex flex-nowrap overflow-x-auto pb-12 gap-6 snap-x snap-mandatory no-scrollbar scroll-smooth px-4">
                         {mergedIdentities
                           .filter(id => {
                             const matchesCategory = activeCategory === 'all' || id.category === activeCategory;
@@ -1325,7 +1325,7 @@ const App: React.FC = () => {
                             );
                           })
                           .map((identity) => (
-                            <div key={identity.id} className="min-w-[140px] sm:min-w-[160px] lg:min-w-[180px] snap-center transform hover:scale-[1.08] transition-all duration-500">
+                            <div key={identity.id} className="min-w-[130px] sm:min-w-[140px] lg:min-w-[150px] snap-center transform hover:scale-[1.08] transition-all duration-500">
                               <UploadCard
                                 type="character"
                                 title={identity.title}

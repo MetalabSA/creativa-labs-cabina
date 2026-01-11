@@ -54,7 +54,7 @@ const UploadCard: React.FC<UploadCardProps> = ({ title, sampleImageUrl, isSelect
 
   return (
     <div
-      className={`relative w-full max-w-[320px] aspect-[4/5] rounded-[24px] overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] group
+      className={`relative w-full max-w-[200px] aspect-[4/5] rounded-[24px] overflow-hidden transition-all duration-700 ease-[cubic-bezier(0.23,1,0.32,1)] group
                   backdrop-blur-xl border-2 cursor-pointer
                   hover:-translate-y-4 hover:shadow-[0_40px_80px_rgba(0,0,0,0.9)]
                   ${isSelected
