@@ -13,7 +13,7 @@ const IDENTITIES = [
   {
     id: 'f1_a',
     title: 'Red Bull Racing',
-    url: 'F1-A.jpg',
+    url: '/cabina/F1-A.jpg',
     category: 'sports',
     subCategory: 'Formula 1',
     tags: ['speed', 'f1', 'action', 'professional', 'carrera', 'deporte', 'rojo', 'velocidad', 'auto', 'monaco'],
@@ -22,7 +22,7 @@ const IDENTITIES = [
   {
     id: 'f1_b',
     title: 'Ferrari Team',
-    url: 'F1-B.jpg',
+    url: '/cabina/F1-B.jpg',
     category: 'sports',
     subCategory: 'Formula 1',
     tags: ['speed', 'f1', 'classic', 'racing', 'italia', 'rojo', 'leyenda', 'historico', 'caballino'],
@@ -31,7 +31,7 @@ const IDENTITIES = [
   {
     id: 'f1_c',
     title: 'Mercedes AMG',
-    url: 'F1-C.jpg',
+    url: '/cabina/F1-C.jpg',
     category: 'sports',
     subCategory: 'Formula 1',
     tags: ['modern', 'f1', 'tech', 'silver', 'flecha', 'alemania', 'pro', 'campeon', 'plata'],
@@ -40,7 +40,7 @@ const IDENTITIES = [
   {
     id: 'f1_d',
     title: 'Pit Stop Vibe',
-    url: 'F1-D.jpg',
+    url: '/cabina/F1-D.jpg',
     category: 'sports',
     subCategory: 'Formula 1',
     tags: ['mechanic', 'f1', 'teamwork', 'garage', 'trabajo', 'boxes', 'mecanico', 'equipo'],
@@ -49,7 +49,7 @@ const IDENTITIES = [
   {
     id: 'bb_a',
     title: 'The Heisenberg',
-    url: 'BB-A.jpg',
+    url: '/cabina/BB-A.jpg',
     category: 'series',
     subCategory: 'Breaking Bad',
     tags: ['drama', 'meth', 'hat', 'cinematic', 'pelado', 'quimica', 'drogas', 'sombrero', 'lentes']
@@ -57,7 +57,7 @@ const IDENTITIES = [
   {
     id: 'bb_b',
     title: 'Desert Cook',
-    url: 'BB-B.jpg',
+    url: '/cabina/BB-B.jpg',
     category: 'series',
     subCategory: 'Breaking Bad',
     tags: ['rv', 'desert', 'yellow', 'gasmask', 'careta', 'cocina', 'arena', 'desierto', 'amarillo']
@@ -65,7 +65,7 @@ const IDENTITIES = [
   {
     id: 'bb_c',
     title: 'Better Call Saul',
-    url: 'BB-C.jpg',
+    url: '/cabina/BB-C.jpg',
     category: 'series',
     subCategory: 'Breaking Bad',
     tags: ['lawyer', 'suit', 'colorful', 'office', 'abogado', 'traje', 'comedia', 'estafador', 'carcel']
@@ -73,7 +73,7 @@ const IDENTITIES = [
   {
     id: 'bb_d',
     title: 'Los Pollos Hermanos',
-    url: 'BB-D.jpg',
+    url: '/cabina/BB-D.jpg',
     category: 'series',
     subCategory: 'Breaking Bad',
     tags: ['chicken', 'fried', 'restaurant', 'yellow', 'empleado', 'delantal', 'comida', 'fastfood']
@@ -81,7 +81,7 @@ const IDENTITIES = [
   {
     id: 'suit_a',
     title: 'Harvey Specter',
-    url: 'SUIT-A.jpg',
+    url: '/cabina/SUIT-A.jpg',
     category: 'series',
     subCategory: 'La Ley de los Audaces',
     tags: ['law', 'executive', 'expensive', 'classy', 'traje', 'corbata', 'lujo', 'abogado', 'exito']
@@ -89,7 +89,7 @@ const IDENTITIES = [
   {
     id: 'suit_b',
     title: 'Mike Ross Style',
-    url: 'SUIT-B.jpg',
+    url: '/cabina/SUIT-B.jpg',
     category: 'series',
     subCategory: 'La Ley de los Audaces',
     tags: ['law', 'young', 'genius', 'bicycle', 'bici', 'mochila', 'bolso', 'joven', 'mensajero']
@@ -97,7 +97,7 @@ const IDENTITIES = [
   {
     id: 'suit_c',
     title: 'Donna Paulsen',
-    url: 'SUIT-C.jpg',
+    url: '/cabina/SUIT-C.jpg',
     category: 'series',
     subCategory: 'La Ley de los Audaces',
     tags: ['secretary', 'powerful', 'fashion', 'redhead', 'vestido', 'pelirroja', 'secretaria', 'mujer']
@@ -105,7 +105,7 @@ const IDENTITIES = [
   {
     id: 'suit_d',
     title: 'Pearson Hardman',
-    url: 'SUIT-D.jpg',
+    url: '/cabina/SUIT-D.jpg',
     category: 'series',
     subCategory: 'La Ley de los Audaces',
     tags: ['firm', 'luxury', 'office', 'success', 'oficina', 'socios', 'empresa', 'corporativo']
@@ -113,7 +113,7 @@ const IDENTITIES = [
   {
     id: 'pb_a',
     title: 'Thomas Shelby',
-    url: 'PB-A.jpg',
+    url: '/cabina/PB-A.jpg',
     category: 'series',
     subCategory: 'Peaky Blinders',
     tags: ['gangster', 'vintage', 'cap', 'whiskey', 'boina', 'fuego', 'mafia', 'fumar', 'antiguo'],
@@ -122,7 +122,7 @@ const IDENTITIES = [
   {
     id: 'pb_b',
     title: 'Birmingham Streets',
-    url: 'PB-B.jpg',
+    url: '/cabina/PB-B.jpg',
     category: 'series',
     subCategory: 'Peaky Blinders',
     tags: ['industrial', 'smoke', 'horse', 'family', 'caballo', 'niebla', 'calle', 'oscuro', 'frio'],
@@ -131,7 +131,7 @@ const IDENTITIES = [
   {
     id: 'pb_c',
     title: 'Garrison Pub',
-    url: 'PB-C.jpg',
+    url: '/cabina/PB-C.jpg',
     category: 'series',
     subCategory: 'Peaky Blinders',
     tags: ['bar', 'drink', 'meeting', 'gentlemen', 'trago', 'reunion', 'poker', 'londres', 'taberna'],
@@ -140,7 +140,7 @@ const IDENTITIES = [
   {
     id: 'pb_d',
     title: 'The Razor Edge',
-    url: 'PB-D.jpg',
+    url: '/cabina/PB-D.jpg',
     category: 'series',
     subCategory: 'Peaky Blinders',
     tags: ['razor', 'fight', 'strategy', 'british', 'navaja', 'pelea', 'sangre', 'inglaterra'],
@@ -149,7 +149,7 @@ const IDENTITIES = [
   {
     id: 'ph_a',
     title: 'Urban Explorer',
-    url: 'PH-A.jpg',
+    url: '/cabina/PH-A.jpg',
     category: 'urban',
     subCategory: 'Urbano',
     tags: ['street', 'hoodie', 'city', 'night', 'buchon', 'noche', 'grafiti', 'ciudad', 'capucha']
@@ -157,7 +157,7 @@ const IDENTITIES = [
   {
     id: 'ph_b',
     title: 'Studio Portrait',
-    url: 'PH-B.jpg',
+    url: '/cabina/PH-B.jpg',
     category: 'urban',
     subCategory: 'Urbano',
     tags: ['clean', 'lighting', 'vogue', 'model', 'estudio', 'flash', 'limpio', 'retrato', 'blanco']
@@ -165,7 +165,7 @@ const IDENTITIES = [
   {
     id: 'ph_c',
     title: 'Neon Life',
-    url: 'PH-C.jpg',
+    url: '/cabina/PH-C.jpg',
     category: 'urban',
     subCategory: 'Urbano',
     tags: ['color', 'neon', 'asia', 'cyberpunk', 'futuro', 'luces', 'noche', 'tokyo', 'led']
@@ -173,7 +173,7 @@ const IDENTITIES = [
   {
     id: 'ph_d',
     title: 'Vintage Film',
-    url: 'PH-D.jpg',
+    url: '/cabina/PH-D.jpg',
     category: 'urban',
     subCategory: 'Urbano',
     tags: ['analog', 'grainy', 'retro', '90s', 'rollo', 'sepia', 'viejo', 'fotografia', 'vhs']
@@ -181,7 +181,7 @@ const IDENTITIES = [
   {
     id: 'jhonw_a',
     title: 'Baba Yaga',
-    url: 'jhonw_a.jpg',
+    url: '/cabina/jhonw_a.jpg',
     category: 'cinema',
     subCategory: 'John Wick',
     tags: ['john wick', 'accion', 'suit', 'weapons', 'venganza', 'traje', 'asesino', 'perro'],
@@ -190,7 +190,7 @@ const IDENTITIES = [
   {
     id: 'jhonw_b',
     title: 'The Continental',
-    url: 'jhonw_b.jpg',
+    url: '/cabina/jhonw_b.jpg',
     category: 'cinema',
     subCategory: 'John Wick',
     tags: ['john wick', 'hotel', 'neon', 'mercy', 'noche', 'monedas', 'lujo', 'accion'],
@@ -199,7 +199,7 @@ const IDENTITIES = [
   {
     id: 'jhonw_c',
     title: 'High Table Legacy',
-    url: 'jhonw_c.jpg',
+    url: '/cabina/jhonw_c.jpg',
     category: 'cinema',
     subCategory: 'John Wick',
     tags: ['john wick', 'trama', 'poder', 'oro', 'consejo', 'elegante', 'noir'],
@@ -208,7 +208,7 @@ const IDENTITIES = [
   {
     id: 'jhonw_d',
     title: 'Excommunicado',
-    url: 'jhonw_d.jpg',
+    url: '/cabina/jhonw_d.jpg',
     category: 'cinema',
     subCategory: 'John Wick',
     tags: ['john wick', 'escape', 'lluvia', 'recompensa', 'reloj', 'correr', 'persecucion'],
@@ -217,7 +217,7 @@ const IDENTITIES = [
   {
     id: 'jhonw_e',
     title: 'Desert Assassin',
-    url: 'jhonw_e.jpg',
+    url: '/cabina/jhonw_e.jpg',
     category: 'cinema',
     subCategory: 'John Wick',
     tags: ['john wick', 'desierto', 'arena', 'casablanca', 'calor', 'caballo'],
@@ -226,7 +226,7 @@ const IDENTITIES = [
   {
     id: 'jhonw_f',
     title: 'Ballerina Soul',
-    url: 'jhonw_f.jpg',
+    url: '/cabina/jhonw_f.jpg',
     category: 'cinema',
     subCategory: 'John Wick',
     tags: ['john wick', 'danza', 'pelea', 'ballet', 'teatro', 'elegancia'],
@@ -235,7 +235,7 @@ const IDENTITIES = [
   {
     id: 'jhonw_g',
     title: 'Osaka Night',
-    url: 'jhonw_g.jpg',
+    url: '/cabina/jhonw_g.jpg',
     category: 'cinema',
     subCategory: 'John Wick',
     tags: ['john wick', 'japon', 'katana', 'neon', 'rojo', 'samurai'],
@@ -244,7 +244,7 @@ const IDENTITIES = [
   {
     id: 'jhonw_h',
     title: 'Last Stand',
-    url: 'jhonw_h.jpg',
+    url: '/cabina/jhonw_h.jpg',
     category: 'cinema',
     subCategory: 'John Wick',
     tags: ['john wick', 'final', 'amanecer', 'escaleras', 'paris', 'sacrificio'],
@@ -253,7 +253,7 @@ const IDENTITIES = [
   {
     id: 'magic_a',
     title: 'El Gran Mago',
-    url: 'magic_a.jpg',
+    url: '/cabina/magic_a.jpg',
     category: 'fantasy',
     subCategory: 'Magia',
     tags: ['magia', 'magos', 'cartas', 'ilusion', 'truco', 'chistera', 'misterio', 'humo'],
@@ -262,7 +262,7 @@ const IDENTITIES = [
   {
     id: 'magic_b',
     title: 'Ilusión Real',
-    url: 'magic_b.jpg',
+    url: '/cabina/magic_b.jpg',
     category: 'fantasy',
     subCategory: 'Magia',
     tags: ['magia', 'cartas', 'fuego', 'levitacion', 'misterio', 'show', 'escenario', 'magico'],
@@ -271,7 +271,7 @@ const IDENTITIES = [
   {
     id: 'magic_c',
     title: 'Arcane Master',
-    url: 'magic_c.jpg',
+    url: '/cabina/magic_c.jpg',
     category: 'fantasy',
     subCategory: 'Magia',
     tags: ['magia', 'hechizo', 'runas', 'libro', 'poder', 'energia', 'azul'],
@@ -280,7 +280,7 @@ const IDENTITIES = [
   {
     id: 'magic_d',
     title: 'Dark Illusion',
-    url: 'magic_d.jpg',
+    url: '/cabina/magic_d.jpg',
     category: 'fantasy',
     subCategory: 'Magia',
     tags: ['magia', 'oscuro', 'sombras', 'vudu', 'miedo', 'cuervo'],
@@ -289,7 +289,7 @@ const IDENTITIES = [
   {
     id: 'magic_e',
     title: 'Street Magic',
-    url: 'magic_e.jpg',
+    url: '/cabina/magic_e.jpg',
     category: 'fantasy',
     subCategory: 'Magia',
     tags: ['magia', 'calle', 'moneda', 'mano', 'close up', 'asombro'],
@@ -298,7 +298,7 @@ const IDENTITIES = [
   {
     id: 'sup_a',
     title: 'The Avenger',
-    url: 'sup_a.jpg',
+    url: '/cabina/sup_a.jpg',
     category: 'cinema',
     subCategory: 'Superhéroes',
     tags: ['superheroes', 'ironman', 'avengers', 'tech', 'poder', 'vengadores', 'heroe', 'vuelo'],
@@ -307,7 +307,7 @@ const IDENTITIES = [
   {
     id: 'sup_b',
     title: 'Legacy of Thor',
-    url: 'sup_b.jpg',
+    url: '/cabina/sup_b.jpg',
     category: 'cinema',
     subCategory: 'Superhéroes',
     tags: ['superheroes', 'thor', 'hulk', 'god', 'trueno', 'fuerza', 'martillo', 'epico'],
@@ -316,7 +316,7 @@ const IDENTITIES = [
   {
     id: 'sup_c',
     title: 'Cosmic Guardian',
-    url: 'sup_c.jpg',
+    url: '/cabina/sup_c.jpg',
     category: 'cinema',
     subCategory: 'Superhéroes',
     tags: ['superheroes', 'guardian', 'galaxia', 'estrellas', 'vuelo', 'fuerza'],
@@ -325,7 +325,7 @@ const IDENTITIES = [
   {
     id: 'sup_d',
     title: 'Emerald Might',
-    url: 'sup_d.jpg',
+    url: '/cabina/sup_d.jpg',
     category: 'cinema',
     subCategory: 'Superhéroes',
     tags: ['superheroes', 'hulk', 'fuerza', 'verde', 'destruccion', 'enojo'],
@@ -334,7 +334,7 @@ const IDENTITIES = [
   {
     id: 'sup_e',
     title: 'Justice Knight',
-    url: 'sup_e.jpg',
+    url: '/cabina/sup_e.jpg',
     category: 'cinema',
     subCategory: 'Superhéroes',
     tags: ['superheroes', 'batman', 'noche', 'capa', 'justicia', 'murcielago'],
@@ -343,7 +343,7 @@ const IDENTITIES = [
   {
     id: 'sup_f',
     title: 'Knight Alt I',
-    url: 'sup_f.jpg',
+    url: '/cabina/sup_f.jpg',
     category: 'cinema',
     subCategory: 'Superhéroes',
     tags: ['superheroes', 'variante', 'oscuro', 'armadura'],
@@ -352,7 +352,7 @@ const IDENTITIES = [
   {
     id: 'sup_g',
     title: 'Knight Alt II',
-    url: 'sup_g.jpg',
+    url: '/cabina/sup_g.jpg',
     category: 'cinema',
     subCategory: 'Superhéroes',
     tags: ['superheroes', 'variante', 'tecnologico', 'azul'],
@@ -1243,9 +1243,9 @@ const App: React.FC = () => {
                     <h3 className="text-[10px] font-black tracking-[4px] uppercase text-white/40">Recomendados para vos</h3>
                     <Sparkles className="w-4 h-4 text-amber-500 animate-pulse" />
                   </div>
-                  <div className="flex flex-nowrap overflow-x-auto pb-8 gap-4 px-4 no-scrollbar justify-center">
+                  <div className="flex flex-nowrap overflow-x-auto pb-8 gap-3 px-4 no-scrollbar justify-center">
                     {recommendedIdentities.map((identity) => (
-                      <div key={`rec-${identity.id}`} className="min-w-[140px] transform hover:scale-105 transition-transform duration-500">
+                      <div key={`rec-${identity.id}`} className="min-w-[130px] sm:min-w-[140px] transform hover:scale-110 transition-all duration-500">
                         <UploadCard
                           type="character"
                           title={identity.title}
@@ -1325,7 +1325,7 @@ const App: React.FC = () => {
                             );
                           })
                           .map((identity) => (
-                            <div key={identity.id} className="min-w-[280px] sm:min-w-[320px] snap-center transform hover:scale-[1.02] transition-transform duration-500">
+                            <div key={identity.id} className="min-w-[140px] sm:min-w-[160px] lg:min-w-[180px] snap-center transform hover:scale-[1.08] transition-all duration-500">
                               <UploadCard
                                 type="character"
                                 title={identity.title}

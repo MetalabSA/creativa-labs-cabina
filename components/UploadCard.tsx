@@ -101,7 +101,7 @@ const UploadCard: React.FC<UploadCardProps> = ({ title, sampleImageUrl, isSelect
             <AlertCircle className="w-12 h-12 text-accent/40 mb-4" />
             <div className="text-[8px] tracking-[4px] text-white/40 font-black uppercase leading-relaxed">
               Error de Archivo<br />
-              <span className="text-accent/60 mt-2 block">{sampleImageUrl}</span>
+              <span className="text-accent/60 mt-2 block lowercase font-mono opacity-80">{sampleImageUrl}</span>
             </div>
             <p className="text-[6px] text-white/20 uppercase tracking-[2px] mt-4 max-w-[150px]">
               Asegúrate de que el archivo esté en la raíz con este nombre exacto.
