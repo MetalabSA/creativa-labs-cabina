@@ -520,8 +520,13 @@ const App: React.FC = () => {
         setErrorMessage("Saldo insuficiente.");
       }
       setIsSuccess(true);
+      setAppStep('result');
       return;
     }
+
+    setIsSubmitting(true);
+    setResultImage(null);
+    setErrorMessage(null);
 
     // 2. Check daily limit (2 per day) - Skip if Master
     if (!isMaster) {
@@ -540,6 +545,7 @@ const App: React.FC = () => {
         if (count !== null && count >= 2) {
           setErrorMessage("Máximo de impresiones del día alcanzado.");
           setIsSuccess(true);
+          setAppStep('result');
           return;
         }
       } catch (err) {
@@ -551,6 +557,8 @@ const App: React.FC = () => {
     data.append('user_photo', capturedImage);
     data.append('model_id', formData.selectedIdentity);
     data.append('aspect_ratio', formData.aspectRatio);
+    data.append('email', session.user.email);
+    data.append('user_id', session.user.id);
     data.append('timestamp', new Date().toISOString());
 
     // DASHBOARD UPDATE: Deduct credit before starting (unless master)
@@ -571,9 +579,6 @@ const App: React.FC = () => {
       }
     }
 
-    setIsSubmitting(true);
-    setResultImage(null);
-    setErrorMessage(null);
     setAppStep('processing'); // Added this line
 
     try {
@@ -632,6 +637,7 @@ const App: React.FC = () => {
         }
         setErrorMessage(result.error || "Respuesta desconocida del servidor.");
         setIsSuccess(true);
+        setAppStep('result');
       }
     } catch (error) {
       console.error('Submission error:', error);
@@ -645,6 +651,7 @@ const App: React.FC = () => {
       }
       setErrorMessage("Error de conexión. Créditos devueltos.");
       setIsSuccess(true);
+      setAppStep('result');
     } finally {
       setIsSubmitting(false);
       setBackgroundJob(null);
