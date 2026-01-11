@@ -341,18 +341,18 @@ const IDENTITIES = [
     isPremium: true
   },
   {
-    id: 'sup_e1',
+    id: 'sup_f',
     title: 'Knight Alt I',
-    url: '/cabina/sup_e-1.jpg',
+    url: '/cabina/sup_f.jpg',
     category: 'cinema',
     subCategory: 'Superhéroes',
     tags: ['superheroes', 'variante', 'oscuro', 'armadura'],
     isPremium: true
   },
   {
-    id: 'sup_e2',
+    id: 'sup_g',
     title: 'Knight Alt II',
-    url: '/cabina/sup_e-2.jpg',
+    url: '/cabina/sup_g.jpg',
     category: 'cinema',
     subCategory: 'Superhéroes',
     tags: ['superheroes', 'variante', 'tecnologico', 'azul'],
