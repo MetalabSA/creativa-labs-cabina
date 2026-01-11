@@ -689,31 +689,40 @@ export const Admin: React.FC<AdminProps> = ({ onBack, IDENTITIES }) => {
                             <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="border-b border-white/5 bg-white/[0.02]">
-                                        <th className="px-8 py-6 text-[10px] font-black uppercase tracking-[3px] text-white/40">Estilo / Personaje</th>
-                                        <th className="px-8 py-6 text-[10px] font-black uppercase tracking-[3px] text-white/40 text-center">Categoría</th>
+                                        <th className="px-8 py-6 text-[10px] font-black uppercase tracking-[3px] text-white/40">Pack / Categoría</th>
+                                        <th className="px-8 py-6 text-[10px] font-black uppercase tracking-[3px] text-white/40 text-center">Ejemplos</th>
                                         <th className="px-8 py-6 text-[10px] font-black uppercase tracking-[3px] text-white/40 text-center">Status Premium</th>
                                         <th className="px-8 py-6 text-[10px] font-black uppercase tracking-[3px] text-white/40 text-right">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-white/5">
-                                    {IDENTITIES.map((style) => {
-                                        const meta = stylesMetadata.find(m => m.id === style.id);
-                                        const isPremium = meta ? meta.is_premium : style.isPremium;
+                                    {validPacks.map((packName) => {
+                                        const stylesInPack = IDENTITIES.filter(i => i.subCategory === packName);
+                                        const meta = stylesMetadata.find(m => m.id === packName);
+                                        // A category is premium if metadata says so, or if all its default styles are premium (fallback)
+                                        const isPremium = meta ? meta.is_premium : stylesInPack.some(s => s.isPremium);
+
                                         return (
-                                            <tr key={style.id} className="hover:bg-white/[0.01] transition-colors group/row">
+                                            <tr key={packName} className="hover:bg-white/[0.01] transition-colors group/row">
                                                 <td className="px-8 py-6">
-                                                    <div className="flex items-center gap-4">
-                                                        <div className="w-12 h-12 rounded-xl overflow-hidden border border-white/10 group-hover/row:border-accent transition-colors">
-                                                            <img src={style.url} alt="" className="w-full h-full object-cover" />
-                                                        </div>
-                                                        <div className="flex flex-col">
-                                                            <span className="text-sm font-bold text-white mb-1">{style.title}</span>
-                                                            <span className="text-[9px] text-white/20 font-mono uppercase">{style.id}</span>
-                                                        </div>
+                                                    <div className="flex flex-col">
+                                                        <span className="text-sm font-bold text-white mb-1 uppercase tracking-tight italic">{packName}</span>
+                                                        <span className="text-[9px] text-white/20 font-mono uppercase">{stylesInPack.length} ESTILOS INCLUIDOS</span>
                                                     </div>
                                                 </td>
-                                                <td className="px-8 py-6 text-center">
-                                                    <span className="text-[10px] font-black uppercase tracking-[2px] text-white/40">{style.subCategory}</span>
+                                                <td className="px-8 py-6">
+                                                    <div className="flex justify-center -space-x-3">
+                                                        {stylesInPack.slice(0, 3).map((s, idx) => (
+                                                            <div key={idx} className="w-10 h-10 rounded-full border-2 border-[#0a0a0c] overflow-hidden bg-white/5">
+                                                                <img src={s.url} alt="" className="w-full h-full object-cover" />
+                                                            </div>
+                                                        ))}
+                                                        {stylesInPack.length > 3 && (
+                                                            <div className="w-10 h-10 rounded-full border-2 border-[#0a0a0c] bg-white/5 flex items-center justify-center text-[8px] font-black text-white/40">
+                                                                +{stylesInPack.length - 3}
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </td>
                                                 <td className="px-8 py-6 text-center">
                                                     <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-[2px] border ${isPremium ? 'bg-accent/10 border-accent/20 text-accent' : 'bg-white/5 border-white/10 text-white/40'}`}>
@@ -722,7 +731,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack, IDENTITIES }) => {
                                                 </td>
                                                 <td className="px-8 py-6 text-right">
                                                     <button
-                                                        onClick={() => updateStylePremium(style.id, !isPremium)}
+                                                        onClick={() => updateStylePremium(packName, !isPremium)}
                                                         className={`px-4 py-2 rounded-xl border transition-all text-[9px] font-black uppercase tracking-[2px] ${isPremium
                                                             ? 'bg-white/5 border-white/10 text-white hover:bg-white/10'
                                                             : 'bg-accent border-accent text-white hover:bg-white hover:text-black hover:border-white shadow-lg shadow-accent/20'

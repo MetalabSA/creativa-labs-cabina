@@ -232,7 +232,8 @@ const App: React.FC = () => {
   // Merge static identities with DB metadata
   const mergedIdentities = React.useMemo(() => {
     return IDENTITIES.map(style => {
-      const meta = stylesMetadata.find(m => m.id === style.id);
+      // Check for individual override OR category-level override
+      const meta = stylesMetadata.find(m => m.id === style.id || m.id === style.subCategory);
       return {
         ...style,
         isPremium: meta ? meta.is_premium : style.isPremium
