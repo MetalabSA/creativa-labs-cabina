@@ -1353,6 +1353,18 @@ const App: React.FC = () => {
                         }
                       };
 
+                      const subCatIdentities = mergedIdentities.filter(id => {
+                        const matchesCategory = activeCategory === 'all' || id.category === activeCategory;
+                        const q = searchQuery.toLowerCase();
+                        return id.subCategory === subCat && matchesCategory && (
+                          id.title.toLowerCase().includes(q) ||
+                          id.subCategory.toLowerCase().includes(q) ||
+                          id.tags.some(tag => tag.toLowerCase().includes(q))
+                        );
+                      });
+
+                      const itemCount = subCatIdentities.length;
+
                       return (
                         <div key={subCat} className="animate-[fadeIn_0.5s_ease-out]">
                           <div className="flex items-center gap-4 mb-8">
@@ -1361,63 +1373,57 @@ const App: React.FC = () => {
                             <div className="flex-grow h-[1px] bg-white/5" />
                           </div>
                           <div className="relative group/carousel">
-                            {/* Navigation Arrows */}
-                            <button
-                              onClick={() => scroll('left')}
-                              className={`absolute -left-4 top-1/2 -translate-y-1/2 z-30 p-3 rounded-full bg-black/80 border border-accent/30 shadow-[0_0_20px_rgba(255,85,0,0.2)] backdrop-blur-xl transition-all duration-300 hover:scale-110 active:scale-95
-                                ${canScrollLeft ? 'opacity-100' : 'opacity-20 pointer-events-none'}`}
-                            >
-                              <ChevronLeft className="w-5 h-5 text-accent" />
-                            </button>
-                            <button
-                              onClick={() => scroll('right')}
-                              className={`absolute -right-4 top-1/2 -translate-y-1/2 z-30 p-3 rounded-full bg-black/80 border border-accent/30 shadow-[0_0_20px_rgba(255,85,0,0.2)] backdrop-blur-xl transition-all duration-300 hover:scale-110 active:scale-95
-                                ${canScrollRight ? 'opacity-100' : 'opacity-20 pointer-events-none'}`}
-                            >
-                              <ChevronRight className="w-5 h-5 text-accent" />
-                            </button>
+                            {/* Navigation Arrows - Only show if more than 4 items */}
+                            {itemCount > 4 && (
+                              <>
+                                <button
+                                  onClick={() => scroll('left')}
+                                  className={`absolute -left-4 top-1/2 -translate-y-1/2 z-30 p-3 rounded-full bg-black/80 border border-accent/30 shadow-[0_0_20px_rgba(255,85,0,0.2)] backdrop-blur-xl transition-all duration-300 hover:scale-110 active:scale-95
+                                    ${canScrollLeft ? 'opacity-100' : 'opacity-20 pointer-events-none'}`}
+                                >
+                                  <ChevronLeft className="w-5 h-5 text-accent" />
+                                </button>
+                                <button
+                                  onClick={() => scroll('right')}
+                                  className={`absolute -right-4 top-1/2 -translate-y-1/2 z-30 p-3 rounded-full bg-black/80 border border-accent/30 shadow-[0_0_20px_rgba(255,85,0,0.2)] backdrop-blur-xl transition-all duration-300 hover:scale-110 active:scale-95
+                                    ${canScrollRight ? 'opacity-100' : 'opacity-20 pointer-events-none'}`}
+                                >
+                                  <ChevronRight className="w-5 h-5 text-accent" />
+                                </button>
+                              </>
+                            )}
 
                             <div
                               ref={scrollRef}
                               onScroll={checkScroll}
-                              className="flex flex-nowrap overflow-x-auto pb-12 gap-6 snap-x snap-mandatory no-scrollbar scroll-smooth px-4"
+                              className={`flex flex-nowrap overflow-x-auto pt-8 pb-12 gap-6 snap-x snap-mandatory no-scrollbar scroll-smooth px-4 ${itemCount <= 4 ? 'justify-center' : ''}`}
                             >
-                              {mergedIdentities
-                                .filter(id => {
-                                  const matchesCategory = activeCategory === 'all' || id.category === activeCategory;
-                                  const q = searchQuery.toLowerCase();
-                                  return id.subCategory === subCat && matchesCategory && (
-                                    id.title.toLowerCase().includes(q) ||
-                                    id.subCategory.toLowerCase().includes(q) ||
-                                    id.tags.some(tag => tag.toLowerCase().includes(q))
-                                  );
-                                })
-                                .map((identity) => (
-                                  <div key={identity.id} className="min-w-[130px] sm:min-w-[140px] lg:min-w-[150px] snap-center transform hover:scale-[1.08] transition-all duration-500">
-                                    <UploadCard
-                                      type="character"
-                                      title={identity.title}
-                                      sampleImageUrl={identity.url}
-                                      isSelected={formData.selectedIdentity === identity.id}
-                                      isPremium={identity.isPremium && !profile?.unlocked_packs?.includes(identity.subCategory) && !profile?.is_master}
-                                      tags={identity.tags}
-                                      onSelect={() => {
-                                        const isActuallyPremium = identity.isPremium && !profile?.unlocked_packs?.includes(identity.subCategory) && !profile?.is_master;
-                                        if (isActuallyPremium) {
-                                          if (profile && profile.credits >= PREMIUM_PACK_PRICE) {
-                                            setPackToUnlock(identity);
-                                          } else {
-                                            setShowPremiumOffer(true);
-                                          }
+                              {subCatIdentities.map((identity) => (
+                                <div key={identity.id} className="min-w-[130px] sm:min-w-[140px] lg:min-w-[150px] snap-center transform hover:scale-[1.08] transition-all duration-500">
+                                  <UploadCard
+                                    type="character"
+                                    title={identity.title}
+                                    sampleImageUrl={identity.url}
+                                    isSelected={formData.selectedIdentity === identity.id}
+                                    isPremium={identity.isPremium && !profile?.unlocked_packs?.includes(identity.subCategory) && !profile?.is_master}
+                                    tags={identity.tags}
+                                    onSelect={() => {
+                                      const isActuallyPremium = identity.isPremium && !profile?.unlocked_packs?.includes(identity.subCategory) && !profile?.is_master;
+                                      if (isActuallyPremium) {
+                                        if (profile && profile.credits >= PREMIUM_PACK_PRICE) {
+                                          setPackToUnlock(identity);
                                         } else {
-                                          setFormData(p => ({ ...p, selectedIdentity: identity.id }));
-                                          setAppStep('setup');
-                                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                                          setShowPremiumOffer(true);
                                         }
-                                      }}
-                                    />
-                                  </div>
-                                ))}
+                                      } else {
+                                        setFormData(p => ({ ...p, selectedIdentity: identity.id }));
+                                        setAppStep('setup');
+                                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                                      }
+                                    }}
+                                  />
+                                </div>
+                              ))}
                             </div>
 
                             {/* Carousel Fade Edges */}

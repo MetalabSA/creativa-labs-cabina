@@ -91,7 +91,7 @@ const UploadCard: React.FC<UploadCardProps> = ({ title, sampleImageUrl, isSelect
             alt={title}
             className={`w-full h-full object-cover transition-all duration-1000 ease-in-out
               ${imageLoaded ? 'opacity-100' : 'opacity-0'}
-              ${isSelected ? 'scale-110 brightness-110 saturate-[1.1]' : 'scale-100 brightness-[0.7] saturate-[0.8] group-hover:brightness-90 group-hover:scale-105'}`}
+              ${isSelected ? 'scale-105 brightness-110 saturate-[1.1]' : 'scale-100 brightness-[0.7] saturate-[0.8] group-hover:brightness-90 group-hover:scale-102'}`}
             onLoad={() => setImageLoaded(true)}
             onError={() => setImageError(true)}
             crossOrigin="anonymous"
@@ -122,11 +122,11 @@ const UploadCard: React.FC<UploadCardProps> = ({ title, sampleImageUrl, isSelect
       </div>
 
       {/* Selection Badge / Content */}
-      <div className="relative z-[15] flex flex-col items-center justify-end w-full h-full p-8">
+      <div className="relative z-[15] flex flex-col items-center justify-end w-full h-full px-4 py-8">
         <div className={`flex flex-col items-center transition-all duration-500 transform
           ${isSelected ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-70 group-hover:translate-y-0 group-hover:opacity-100'}`}>
 
-          <div className={`text-[10px] font-black tracking-[5px] uppercase mb-4 transition-colors duration-300
+          <div className={`text-[9px] font-black tracking-[2px] uppercase mb-4 transition-colors duration-300 text-center leading-tight
             ${isSelected ? 'text-accent' : 'text-white/60'}`}>
             {title}
           </div>
