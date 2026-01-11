@@ -89,9 +89,9 @@ const UploadCard: React.FC<UploadCardProps> = ({ title, sampleImageUrl, isSelect
           <img
             src={sampleImageUrl}
             alt={title}
-            className={`w-full h-full object-cover transition-all duration-1000 ease-out
+            className={`w-full h-full object-cover transition-all duration-1000 ease-in-out
               ${imageLoaded ? 'opacity-100' : 'opacity-0'}
-              ${isSelected ? 'scale-110 brightness-110 saturate-[1.1]' : 'scale-100 brightness-[0.6] saturate-[0.7] group-hover:brightness-90 group-hover:scale-105'}`}
+              ${isSelected ? 'scale-110 brightness-110 saturate-[1.1]' : 'scale-100 brightness-[0.7] saturate-[0.8] group-hover:brightness-90 group-hover:scale-105'}`}
             onLoad={() => setImageLoaded(true)}
             onError={() => setImageError(true)}
             crossOrigin="anonymous"

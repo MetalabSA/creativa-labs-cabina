@@ -193,6 +193,33 @@ export const Admin: React.FC<AdminProps> = ({ onBack, IDENTITIES }) => {
         }
     };
 
+    const updateStyleOrder = async (styleId: string, order: number) => {
+        try {
+            setStyleUpdatingId(styleId + '_order');
+            const { error } = await supabase
+                .from('styles_metadata')
+                .upsert({
+                    id: styleId,
+                    sort_order: order,
+                    updated_at: new Date().toISOString()
+                });
+
+            if (error) throw error;
+
+            setStylesMetadata(prev => {
+                const existing = prev.find(s => s.id === styleId);
+                if (existing) {
+                    return prev.map(s => s.id === styleId ? { ...s, sort_order: order } : s);
+                }
+                return [...prev, { id: styleId, sort_order: order }];
+            });
+        } catch (error: any) {
+            console.error('Error updating style order:', error);
+        } finally {
+            setStyleUpdatingId(null);
+        }
+    };
+
     const deleteUser = async (id: string, email: string) => {
         if (!confirm(`¿Estás seguro de eliminar el perfil de ${email}? Sus fotos y datos se mantendrán en la base pero no podrá acceder.`)) return;
 
@@ -702,6 +729,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack, IDENTITIES }) => {
                                     <tr className="border-b border-white/5 bg-white/[0.02]">
                                         <th className="px-8 py-6 text-[10px] font-black uppercase tracking-[3px] text-white/40">Pack / Categoría</th>
                                         <th className="px-8 py-6 text-[10px] font-black uppercase tracking-[3px] text-white/40 text-center">Ejemplos</th>
+                                        <th className="px-8 py-6 text-[10px] font-black uppercase tracking-[3px] text-white/40 text-center">Orden</th>
                                         <th className="px-8 py-6 text-[10px] font-black uppercase tracking-[3px] text-white/40 text-center">Status Premium</th>
                                         <th className="px-8 py-6 text-[10px] font-black uppercase tracking-[3px] text-white/40 text-right">Acciones</th>
                                     </tr>
@@ -733,6 +761,17 @@ export const Admin: React.FC<AdminProps> = ({ onBack, IDENTITIES }) => {
                                                                 +{stylesInPack.length - 3}
                                                             </div>
                                                         )}
+                                                    </div>
+                                                </td>
+                                                <td className="px-8 py-6 text-center">
+                                                    <div className="flex items-center justify-center gap-2">
+                                                        <input
+                                                            type="number"
+                                                            value={meta?.sort_order || 0}
+                                                            onChange={(e) => updateStyleOrder(packName, parseInt(e.target.value) || 0)}
+                                                            className="w-16 bg-white/5 border border-white/10 rounded-xl py-2 px-3 text-center text-xs text-white focus:outline-none focus:border-accent transition-all"
+                                                        />
+                                                        {styleUpdatingId === packName + '_order' && <Loader2 className="w-3 h-3 text-accent animate-spin" />}
                                                     </div>
                                                 </td>
                                                 <td className="px-8 py-6 text-center">

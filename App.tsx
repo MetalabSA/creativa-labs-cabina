@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Camera, RefreshCw, Check, X, Search, Sparkles, User, ArrowDown, Printer, AlertTriangle, Loader2, Download, QrCode, Smartphone, Layout, Monitor, Instagram, LogOut, Shield, History as LucideHistory, CreditCard, Zap, Plus } from 'lucide-react';
+import { Camera, RefreshCw, Check, X, Search, Sparkles, User, ArrowDown, Printer, AlertTriangle, Loader2, Download, QrCode, Smartphone, Layout, Monitor, Instagram, LogOut, Shield, History as LucideHistory, CreditCard, Zap, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import Background3D from './components/Background3D';
 import UploadCard from './components/UploadCard';
@@ -8,6 +8,16 @@ import { Admin } from './components/Admin';
 import { supabase } from './lib/supabaseClient';
 import { FormState } from './types';
 import confetti from 'canvas-confetti';
+
+const PREFERRED_PACK_ORDER = [
+  'La Ley de los Audaces',
+  'John Wick',
+  'Superhéroes',
+  'Peaky Blinders',
+  'Breaking Bad',
+  'Urbano',
+  'Magia'
+];
 
 const IDENTITIES = [
   {
@@ -972,11 +982,10 @@ const App: React.FC = () => {
   }
 
   if (showAdmin && profile?.is_master) {
-    // Render Admin but keep the header accessible to go back
     return (
-      <div className="relative w-full min-h-screen bg-primary">
-        <Background3D />
-        <div className="fixed top-0 left-0 w-full z-[150] p-6">
+      <div className="relative w-full min-h-screen bg-primary z-[200]">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[-1]" />
+        <div className="fixed top-0 left-0 w-full z-[250] p-6">
           <div className="max-w-[1400px] mx-auto flex justify-end items-center">
             <button
               onClick={() => setShowAdmin(false)}
@@ -987,7 +996,9 @@ const App: React.FC = () => {
             </button>
           </div>
         </div>
-        <Admin onBack={() => setShowAdmin(false)} IDENTITIES={mergedIdentities} />
+        <div className="relative z-[210]">
+          <Admin onBack={() => setShowAdmin(false)} IDENTITIES={mergedIdentities} />
+        </div>
       </div>
     );
   }
@@ -1305,59 +1316,119 @@ const App: React.FC = () => {
                       return matchesCategory && matchesSearch;
                     })
                     .map(id => id.subCategory)
-                )).map(subCat => (
-                  <div key={subCat} className="animate-[fadeIn_0.5s_ease-out]">
-                    <div className="flex items-center gap-4 mb-8">
-                      <div className="h-[2px] w-8 bg-accent" />
-                      <h3 className="text-sm font-black tracking-[4px] uppercase text-white/60 italic">{subCat}</h3>
-                      <div className="flex-grow h-[1px] bg-white/5" />
-                    </div>
-                    <div className="relative group/carousel">
-                      <div className="flex flex-nowrap overflow-x-auto pb-12 gap-6 snap-x snap-mandatory no-scrollbar scroll-smooth px-4">
-                        {mergedIdentities
-                          .filter(id => {
-                            const matchesCategory = activeCategory === 'all' || id.category === activeCategory;
-                            const q = searchQuery.toLowerCase();
-                            return id.subCategory === subCat && matchesCategory && (
-                              id.title.toLowerCase().includes(q) ||
-                              id.subCategory.toLowerCase().includes(q) ||
-                              id.tags.some(tag => tag.toLowerCase().includes(q))
-                            );
-                          })
-                          .map((identity) => (
-                            <div key={identity.id} className="min-w-[130px] sm:min-w-[140px] lg:min-w-[150px] snap-center transform hover:scale-[1.08] transition-all duration-500">
-                              <UploadCard
-                                type="character"
-                                title={identity.title}
-                                sampleImageUrl={identity.url}
-                                isSelected={formData.selectedIdentity === identity.id}
-                                isPremium={identity.isPremium && !profile?.unlocked_packs?.includes(identity.subCategory) && !profile?.is_master}
-                                tags={identity.tags}
-                                onSelect={() => {
-                                  const isActuallyPremium = identity.isPremium && !profile?.unlocked_packs?.includes(identity.subCategory) && !profile?.is_master;
-                                  if (isActuallyPremium) {
-                                    if (profile && profile.credits >= PREMIUM_PACK_PRICE) {
-                                      setPackToUnlock(identity);
-                                    } else {
-                                      setShowPremiumOffer(true);
-                                    }
-                                  } else {
-                                    setFormData(p => ({ ...p, selectedIdentity: identity.id }));
-                                    setAppStep('setup');
-                                    window.scrollTo({ top: 0, behavior: 'smooth' });
-                                  }
-                                }}
-                              />
-                            </div>
-                          ))}
-                      </div>
+                ))
+                  .sort((a, b) => {
+                    const metaA = stylesMetadata.find(m => m.id === a);
+                    const metaB = stylesMetadata.find(m => m.id === b);
+                    const orderA = metaA?.sort_order ?? 999;
+                    const orderB = metaB?.sort_order ?? 999;
+                    if (orderA !== orderB) return orderA - orderB;
+                    return a.localeCompare(b);
+                  })
+                  .map(subCat => {
+                    const CarouselWrapper = () => {
+                      const scrollRef = useRef<HTMLDivElement>(null);
+                      const [canScrollLeft, setCanScrollLeft] = useState(false);
+                      const [canScrollRight, setCanScrollRight] = useState(true);
 
-                      {/* Carousel Fade Edges */}
-                      <div className="absolute left-0 top-0 bottom-12 w-20 bg-gradient-to-r from-[#050505]/80 to-transparent pointer-events-none z-[10] opacity-0 group-hover/carousel:opacity-100 transition-opacity" />
-                      <div className="absolute right-0 top-0 bottom-12 w-20 bg-gradient-to-l from-[#050505]/80 to-transparent pointer-events-none z-[10] opacity-0 group-hover/carousel:opacity-100 transition-opacity" />
-                    </div>
-                  </div>
-                ))}
+                      const checkScroll = () => {
+                        if (scrollRef.current) {
+                          const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
+                          setCanScrollLeft(scrollLeft > 10);
+                          setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 10);
+                        }
+                      };
+
+                      useEffect(() => {
+                        checkScroll();
+                        const timer = setTimeout(checkScroll, 500); // Re-check after images load
+                        return () => clearTimeout(timer);
+                      }, []);
+
+                      const scroll = (direction: 'left' | 'right') => {
+                        if (scrollRef.current) {
+                          const { clientWidth } = scrollRef.current;
+                          const scrollAmount = direction === 'left' ? -clientWidth * 0.8 : clientWidth * 0.8;
+                          scrollRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+                        }
+                      };
+
+                      return (
+                        <div key={subCat} className="animate-[fadeIn_0.5s_ease-out]">
+                          <div className="flex items-center gap-4 mb-8">
+                            <div className="h-[2px] w-8 bg-accent" />
+                            <h3 className="text-sm font-black tracking-[4px] uppercase text-white/60 italic">{subCat}</h3>
+                            <div className="flex-grow h-[1px] bg-white/5" />
+                          </div>
+                          <div className="relative group/carousel">
+                            {/* Navigation Arrows */}
+                            <button
+                              onClick={() => scroll('left')}
+                              className={`absolute -left-4 top-1/2 -translate-y-1/2 z-30 p-3 rounded-full bg-black/80 border border-accent/30 shadow-[0_0_20px_rgba(255,85,0,0.2)] backdrop-blur-xl transition-all duration-300 hover:scale-110 active:scale-95
+                                ${canScrollLeft ? 'opacity-100' : 'opacity-20 pointer-events-none'}`}
+                            >
+                              <ChevronLeft className="w-5 h-5 text-accent" />
+                            </button>
+                            <button
+                              onClick={() => scroll('right')}
+                              className={`absolute -right-4 top-1/2 -translate-y-1/2 z-30 p-3 rounded-full bg-black/80 border border-accent/30 shadow-[0_0_20px_rgba(255,85,0,0.2)] backdrop-blur-xl transition-all duration-300 hover:scale-110 active:scale-95
+                                ${canScrollRight ? 'opacity-100' : 'opacity-20 pointer-events-none'}`}
+                            >
+                              <ChevronRight className="w-5 h-5 text-accent" />
+                            </button>
+
+                            <div
+                              ref={scrollRef}
+                              onScroll={checkScroll}
+                              className="flex flex-nowrap overflow-x-auto pb-12 gap-6 snap-x snap-mandatory no-scrollbar scroll-smooth px-4"
+                            >
+                              {mergedIdentities
+                                .filter(id => {
+                                  const matchesCategory = activeCategory === 'all' || id.category === activeCategory;
+                                  const q = searchQuery.toLowerCase();
+                                  return id.subCategory === subCat && matchesCategory && (
+                                    id.title.toLowerCase().includes(q) ||
+                                    id.subCategory.toLowerCase().includes(q) ||
+                                    id.tags.some(tag => tag.toLowerCase().includes(q))
+                                  );
+                                })
+                                .map((identity) => (
+                                  <div key={identity.id} className="min-w-[130px] sm:min-w-[140px] lg:min-w-[150px] snap-center transform hover:scale-[1.08] transition-all duration-500">
+                                    <UploadCard
+                                      type="character"
+                                      title={identity.title}
+                                      sampleImageUrl={identity.url}
+                                      isSelected={formData.selectedIdentity === identity.id}
+                                      isPremium={identity.isPremium && !profile?.unlocked_packs?.includes(identity.subCategory) && !profile?.is_master}
+                                      tags={identity.tags}
+                                      onSelect={() => {
+                                        const isActuallyPremium = identity.isPremium && !profile?.unlocked_packs?.includes(identity.subCategory) && !profile?.is_master;
+                                        if (isActuallyPremium) {
+                                          if (profile && profile.credits >= PREMIUM_PACK_PRICE) {
+                                            setPackToUnlock(identity);
+                                          } else {
+                                            setShowPremiumOffer(true);
+                                          }
+                                        } else {
+                                          setFormData(p => ({ ...p, selectedIdentity: identity.id }));
+                                          setAppStep('setup');
+                                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                                        }
+                                      }}
+                                    />
+                                  </div>
+                                ))}
+                            </div>
+
+                            {/* Carousel Fade Edges */}
+                            <div className="absolute left-0 top-0 bottom-12 w-20 bg-gradient-to-r from-[#050505]/80 to-transparent pointer-events-none z-[10] opacity-0 group-hover/carousel:opacity-100 transition-opacity" />
+                            <div className="absolute right-0 top-0 bottom-12 w-20 bg-gradient-to-l from-[#050505]/80 to-transparent pointer-events-none z-[10] opacity-0 group-hover/carousel:opacity-100 transition-opacity" />
+                          </div>
+                        </div>
+                      );
+                    };
+                    return <CarouselWrapper key={subCat} />;
+                  })}
 
                 {/* No results message */}
                 {searchQuery && mergedIdentities.filter(id => {

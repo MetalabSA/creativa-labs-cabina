@@ -5,7 +5,7 @@ import * as THREE from 'three';
 const ParticleSwarm = () => {
   const { mouse, camera } = useThree();
   const count = 5000;
-  
+
   // Initialize particles
   const [positions, velocities] = useMemo(() => {
     const pos = new Float32Array(count * 3);
@@ -18,7 +18,7 @@ const ParticleSwarm = () => {
   }, []);
 
   const particlesRef = useRef<THREE.Points>(null);
-  
+
   // Reusing vectors to avoid garbage collection
   const mouseWorldPos = useRef(new THREE.Vector3());
   const plane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 0, 1), 0), []);
@@ -43,7 +43,7 @@ const ParticleSwarm = () => {
       const dx = mouseWorldPos.current.x - px;
       const dy = mouseWorldPos.current.y - py;
       const dz = mouseWorldPos.current.z - pz;
-      
+
       const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
 
       // Vortex Physics
@@ -143,7 +143,7 @@ const RotatingTorus = () => {
 
 const Background3D: React.FC = () => {
   return (
-    <div className="fixed inset-0 z-[1] pointer-events-none">
+    <div className="fixed inset-0 z-[-1] pointer-events-none">
       <Canvas
         camera={{ position: [0, 0, 6], fov: 75 }}
         gl={{ antialias: true, alpha: true }}
@@ -153,7 +153,7 @@ const Background3D: React.FC = () => {
         <ambientLight intensity={3} color={0x333333} />
         <spotLight position={[10, 10, 10]} angle={Math.PI / 6} penumbra={1} intensity={10} />
         <pointLight position={[-5, -2, 5]} color={0xaaccff} intensity={5} distance={50} />
-        
+
         <RotatingTorus />
         <ParticleSwarm />
       </Canvas>
