@@ -227,6 +227,8 @@ const App: React.FC = () => {
   const [isUnlocking, setIsUnlocking] = useState(false);
   const [stylesMetadata, setStylesMetadata] = useState<any[]>([]);
   const [appStep, setAppStep] = useState<'gallery' | 'setup' | 'processing' | 'result'>('gallery');
+  const [notifications, setNotifications] = useState<{ id: string, message: string, type: 'success' | 'error', action?: () => void }[]>([]);
+  const [backgroundJob, setBackgroundJob] = useState<{ active: boolean, id: string | null, startTime: number } | null>(null);
 
   const PREMIUM_PACK_PRICE = 3000;
 
@@ -608,6 +610,17 @@ const App: React.FC = () => {
         fetchProfile();
         fetchGenerations();
         setIsSuccess(true);
+        setAppStep('result');
+        setBackgroundJob(null);
+        setNotifications(prev => [...prev, {
+          id: Date.now().toString(),
+          message: '🪄 ¡Tu foto está lista!',
+          type: 'success',
+          action: () => {
+            setAppStep('result');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }
+        }]);
       } else {
         // REFUND: If webhook returns error or unknown response
         if (!isMaster) {
@@ -634,6 +647,7 @@ const App: React.FC = () => {
       setIsSuccess(true);
     } finally {
       setIsSubmitting(false);
+      setBackgroundJob(null);
     }
   };
 
@@ -770,7 +784,24 @@ const App: React.FC = () => {
   }
 
   if (showAdmin && profile?.is_master) {
-    return <Admin onBack={() => setShowAdmin(false)} IDENTITIES={mergedIdentities} />;
+    // Render Admin but keep the header accessible to go back
+    return (
+      <div className="relative w-full min-h-screen bg-primary">
+        <Background3D />
+        <div className="fixed top-0 left-0 w-full z-[150] p-6">
+          <div className="max-w-[1400px] mx-auto flex justify-end items-center">
+            <button
+              onClick={() => setShowAdmin(false)}
+              className="flex items-center gap-3 px-6 py-3 rounded-full bg-accent text-white border border-accent shadow-lg shadow-accent/20"
+            >
+              <Shield className="w-4 h-4" />
+              <span className="text-[10px] font-black uppercase tracking-[2px]">Volver a la App</span>
+            </button>
+          </div>
+        </div>
+        <Admin onBack={() => setShowAdmin(false)} IDENTITIES={mergedIdentities} />
+      </div>
+    );
   }
 
   return (
@@ -828,8 +859,60 @@ const App: React.FC = () => {
         </div>
       </div>
 
+      {/* Floating Notifications */}
+      <div className="fixed bottom-10 right-10 z-[500] flex flex-col gap-4">
+        {notifications.map(notif => (
+          <div
+            key={notif.id}
+            onClick={notif.action}
+            className={`flex items-center gap-4 px-8 py-4 rounded-2xl border backdrop-blur-2xl animate-[fadeInRight_0.5s_ease-out] shadow-2xl cursor-pointer hover:scale-105 transition-all
+              ${notif.type === 'success' ? 'bg-accent/20 border-accent/40 text-white' : 'bg-red-500/20 border-red-500/40 text-red-100'}`}
+          >
+            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${notif.type === 'success' ? 'bg-accent' : 'bg-red-500'}`}>
+              {notif.type === 'success' ? <Check className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
+            </div>
+            <div className="flex flex-col">
+              <span className="font-black text-[10px] uppercase tracking-[2px]">{notif.message}</span>
+              {notif.action && <span className="text-[7px] font-bold text-accent uppercase tracking-[1px]">Clic para ver</span>}
+            </div>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setNotifications(prev => prev.filter(n => n.id !== notif.id));
+              }}
+              className="ml-4 opacity-40 hover:opacity-100"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        ))}
+
+        {/* Active Job Bottom Bar */}
+        {isSubmitting && backgroundJob?.active && (
+          <div className="bg-black/80 backdrop-blur-xl border border-white/10 p-6 rounded-[24px] shadow-2xl flex items-center gap-6 animate-[fadeInUp_0.5s_ease-out]">
+            <div className="relative w-12 h-12 flex items-center justify-center">
+              <div className="absolute inset-0 border-[1px] border-accent/20 rounded-full animate-spin" />
+              <span className="text-[8px] font-black">{elapsedSeconds}s</span>
+            </div>
+            <div className="flex flex-col text-left">
+              <span className="text-white text-[10px] font-black uppercase tracking-[2px]">Alquimia en progreso...</span>
+              <span className="text-white/40 text-[7px] uppercase tracking-[1px]">Podés seguir usando la app</span>
+            </div>
+            <button
+              onClick={() => {
+                setAppStep('gallery');
+                setBackgroundJob({ active: false, id: null, startTime: Date.now() });
+              }}
+              className="px-4 py-2 bg-accent text-white rounded-lg text-[8px] font-black uppercase tracking-[1px] hover:bg-white transition-colors"
+            >
+              Cerrar
+            </button>
+          </div>
+        )}
+      </div>
+
       {/* Loading Overlay */}
-      {isSubmitting && (
+      {isSubmitting && !backgroundJob?.active && (
         <div className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-2xl flex flex-col items-center justify-center p-6 text-center animate-[fadeIn_0.3s_ease-out]">
           <div className="relative mb-12">
             {/* Pulsing Glow Background */}
@@ -879,45 +962,52 @@ const App: React.FC = () => {
                 {elapsedSeconds > 30 ? "Finalizando detalles finales..." : "Sincronizando con el servidor"}
               </p>
             </div>
-          </div>
 
-          {/* Background Text Elements */}
-          <div className="absolute bottom-10 left-10 text-[100px] font-black opacity-[0.02] pointer-events-none select-none italic">
-            CREATIVE
-          </div>
-          <div className="absolute top-10 right-10 text-[100px] font-black opacity-[0.02] pointer-events-none select-none italic">
-            ALCHEMIST
+            <button
+              onClick={() => {
+                setBackgroundJob({ active: true, id: null, startTime: Date.now() });
+                setAppStep('gallery');
+              }}
+              className="px-8 py-4 mt-8 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-[2px] hover:bg-white/10 transition-all flex items-center gap-3 group"
+            >
+              <Smartphone className="w-4 h-4 text-accent group-hover:scale-110 transition-transform" />
+              Procesar en Segundo Plano
+            </button>
           </div>
         </div>
       )}
 
       {/* Hero - Only show in Gallery */}
-      {appStep === 'gallery' && (
-        <section className="relative h-[40vh] w-full flex flex-col items-center justify-center z-10 px-4">
-          <div className="text-center pointer-events-none">
-            <h1 className="font-black text-[clamp(2.5rem,10vw,10rem)] leading-none tracking-tighter uppercase select-none">
-              Creativa <span className="text-white/20">Labs</span>
-            </h1>
-            <div className="mt-4 flex flex-col items-center gap-2">
-              <div className="h-[1px] w-16 bg-accent" />
-              <div className="text-[10px] tracking-[0.5rem] text-white/40 uppercase">Photo Booth Experience</div>
+      {
+        appStep === 'gallery' && (
+          <section className="relative h-[40vh] w-full flex flex-col items-center justify-center z-10 px-4">
+            <div className="text-center pointer-events-none">
+              <h1 className="font-black text-[clamp(2.5rem,10vw,10rem)] leading-none tracking-tighter uppercase select-none">
+                Creativa <span className="text-white/20">Labs</span>
+              </h1>
+              <div className="mt-4 flex flex-col items-center gap-2">
+                <div className="h-[1px] w-16 bg-accent" />
+                <div className="text-[10px] tracking-[0.5rem] text-white/40 uppercase">Photo Booth Experience</div>
+              </div>
             </div>
-          </div>
-        </section>
-      )}
+          </section>
+        )
+      }
 
       {/* Volver Button - Only show in Setup/Result */}
-      {(appStep === 'setup' || appStep === 'result') && (
-        <div className="fixed top-24 left-6 z-[160] animate-[fadeIn_0.5s_ease-out]">
-          <button
-            onClick={handleReset}
-            className="group flex items-center gap-4 px-6 py-3 bg-black/40 backdrop-blur-xl border border-white/5 rounded-full hover:bg-white/10 transition-all pointer-events-auto shadow-2xl"
-          >
-            <ArrowDown className="w-4 h-4 text-accent rotate-90" />
-            <span className="text-[10px] font-black uppercase tracking-[3px]">Volver a Estilos</span>
-          </button>
-        </div>
-      )}
+      {
+        (appStep === 'setup' || appStep === 'result') && (
+          <div className="fixed top-24 left-6 z-[160] animate-[fadeIn_0.5s_ease-out]">
+            <button
+              onClick={handleReset}
+              className="group flex items-center gap-4 px-6 py-3 bg-black/40 backdrop-blur-xl border border-white/5 rounded-full hover:bg-white/10 transition-all pointer-events-auto shadow-2xl"
+            >
+              <ArrowDown className="w-4 h-4 text-accent rotate-90" />
+              <span className="text-[10px] font-black uppercase tracking-[3px]">Volver a Estilos</span>
+            </button>
+          </div>
+        )
+      }
 
       {/* Main Experience */}
       <section className="relative min-h-screen w-full bg-[#050505]/95 backdrop-blur-md border-t border-white/5 py-20 px-6 z-20">
@@ -1275,254 +1365,264 @@ const App: React.FC = () => {
       </section>
 
       {/* Camera Modal */}
-      {showCamera && (
-        <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-xl flex items-center justify-center p-4">
-          <div className="relative w-full max-w-md aspect-[3/4] bg-primary rounded-[40px] overflow-hidden border border-white/10">
-            <div className="absolute inset-0 bg-black">
-              {isCapturing ? (
-                <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover scale-x-[-1]" />
-              ) : (
-                <img src={capturedImage || ''} className="w-full h-full object-cover" alt="Previsualización" />
-              )}
-              {/* Overlay Técnico */}
-              <div className="absolute inset-0 border-[20px] border-black/40 pointer-events-none">
-                <div className="w-full h-full border border-white/5 relative flex items-center justify-center">
-                  <div className="w-48 h-64 border border-accent/20 rounded-[100px]" />
+      {
+        showCamera && (
+          <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-xl flex items-center justify-center p-4">
+            <div className="relative w-full max-w-md aspect-[3/4] bg-primary rounded-[40px] overflow-hidden border border-white/10">
+              <div className="absolute inset-0 bg-black">
+                {isCapturing ? (
+                  <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover scale-x-[-1]" />
+                ) : (
+                  <img src={capturedImage || ''} className="w-full h-full object-cover" alt="Previsualización" />
+                )}
+                {/* Overlay Técnico */}
+                <div className="absolute inset-0 border-[20px] border-black/40 pointer-events-none">
+                  <div className="w-full h-full border border-white/5 relative flex items-center justify-center">
+                    <div className="w-48 h-64 border border-accent/20 rounded-[100px]" />
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="absolute bottom-10 left-0 w-full px-10 flex items-center justify-between z-20">
-              {isCapturing ? (
-                <>
-                  <button onClick={() => setShowCamera(false)} className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center border border-white/10"><X className="w-5 h-5" /></button>
-                  <button onClick={takePhoto} className="w-20 h-20 rounded-full bg-white p-1 shadow-2xl"><div className="w-full h-full rounded-full border-4 border-black bg-black/5 flex items-center justify-center"><div className="w-4 h-4 bg-black rounded-full" /></div></button>
-                  <div className="w-12" />
-                </>
-              ) : (
-                <>
-                  <button onClick={() => setIsCapturing(true)} className="flex flex-col items-center gap-2 group"><div className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center group-hover:bg-white/10"><RefreshCw className="w-5 h-5" /></div><span className="text-[8px] font-black tracking-[2px] uppercase opacity-40">Reintentar</span></button>
-                  <button onClick={() => setShowCamera(false)} className="flex flex-col items-center gap-2 group"><div className="w-16 h-16 rounded-full bg-accent flex items-center justify-center shadow-lg"><Check className="w-6 h-6" /></div><span className="text-[8px] font-black tracking-[2px] uppercase">Listo</span></button>
-                  <button onClick={() => { setCapturedImage(null); setShowCamera(false); }} className="flex flex-col items-center gap-2 group"><div className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center group-hover:bg-white/10"><X className="w-5 h-5" /></div><span className="text-[8px] font-black tracking-[2px] uppercase opacity-40">Cerrar</span></button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* QR Modal */}
-      {showQR && resultImage && (
-        <div className="fixed inset-0 z-[110] bg-black/95 backdrop-blur-2xl flex items-center justify-center p-4">
-          <div className="relative w-full max-w-sm bg-[#0a0a0c] rounded-[40px] p-12 border border-white/10 text-center flex flex-col items-center">
-            <button
-              onClick={() => setShowQR(false)}
-              className="absolute top-6 right-6 w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-            <div className="w-16 h-16 bg-accent/20 rounded-full flex items-center justify-center mb-8">
-              <QrCode className="w-8 h-8 text-accent" />
-            </div>
-            <h3 className="text-2xl font-black mb-2 uppercase italic">Escanear para Descargar</h3>
-            <p className="text-white/40 text-[10px] uppercase tracking-[2px] mb-8">Escanea con tu cámara para guardar en tu móvil</p>
-
-            <div className="p-4 bg-white rounded-3xl mb-8">
-              <QRCodeCanvas
-                value={resultImage}
-                size={200}
-                level="H"
-                includeMargin={true}
-              />
-            </div>
-
-            <button
-              onClick={() => setShowQR(false)}
-              className="text-[10px] font-black tracking-[4px] uppercase text-accent hover:text-white transition-colors"
-            >
-              Cerrar
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Modal de Precios */}
-      {showPricing && (
-        <div className="fixed inset-0 z-[300] bg-black/95 backdrop-blur-2xl flex items-start sm:items-center justify-center p-4 py-12 md:py-20 overflow-y-auto">
-          <div className="relative w-full max-w-6xl bg-[#0a0a0c] rounded-[40px] p-8 md:p-12 border border-white/10 text-center animate-[fadeIn_0.5s_ease-out]">
-            <button
-              onClick={() => setShowPricing(false)}
-              className="absolute top-6 right-6 w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <div className="w-16 h-16 bg-accent/20 rounded-full flex items-center justify-center mb-8 mx-auto">
-              <CreditCard className="w-8 h-8 text-accent" />
-            </div>
-
-            <h3 className="text-3xl md:text-4xl font-black mb-2 uppercase italic tracking-tight">Elegí tu Pack</h3>
-            <p className="text-accent text-[10px] font-black uppercase tracking-[4px] mb-2 shadow-accent/20 drop-shadow-sm">Desbloquea todos los estilos Premium</p>
-            <p className="text-white/40 text-[8px] uppercase tracking-[4px] mb-12">Y obtené créditos para tus retratos con IA</p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {[
-                { name: 'Starter', price: 4000, credits: 500, bonus: '', color: 'white/5', popular: false },
-                { name: 'Standard', price: 8000, credits: 1100, bonus: '+10% Extra', color: 'accent/5', popular: true },
-                { name: 'Business', price: 10000, credits: 1500, bonus: '+20% Extra', color: 'white/5', popular: false },
-                { name: 'Unlock Premium', price: 20000, credits: 3000, bonus: 'Pack Completo', color: 'accent/5', premium: true }
-              ].map((pack) => (
-                <div
-                  key={pack.name}
-                  className={`relative p-8 rounded-[32px] border transition-all duration-500 flex flex-col items-center group
-                    ${pack.popular ? 'bg-accent/5 border-accent shadow-[0_0_40px_rgba(255,85,0,0.2)]' : 'bg-white/2 border-white/5 hover:border-white/20'}`}
-                >
-                  {pack.popular && (
-                    <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-accent text-[8px] font-black uppercase tracking-[2px] px-4 py-1 rounded-full">
-                      Más Popular
-                    </div>
-                  )}
-                  {pack.premium && (
-                    <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-amber-500 to-yellow-300 text-[8px] font-black uppercase tracking-[2px] px-4 py-1 rounded-full text-black">
-                      Especial Packs
-                    </div>
-                  )}
-                  <span className="text-[10px] font-black uppercase tracking-[3px] text-white/40 mb-6">{pack.name}</span>
-                  <div className="flex flex-col items-center mb-8">
-                    <span className={`text-5xl font-black italic mb-2 ${pack.premium ? 'text-amber-400' : 'text-white'}`}>{pack.credits}</span>
-                    <span className="text-[10px] font-black uppercase tracking-[2px] text-accent">Créditos</span>
-                    {pack.bonus && (
-                      <div className={`mt-4 flex items-center gap-2 px-3 py-1 rounded-full ${pack.premium ? 'bg-amber-500/20' : 'bg-accent/20'}`}>
-                        <Zap className={`w-3 h-3 ${pack.premium ? 'text-amber-400' : 'text-accent'}`} />
-                        <span className={`text-[8px] font-black uppercase tracking-[1px] ${pack.premium ? 'text-amber-400' : 'text-accent'}`}>{pack.bonus}</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className={`text-2xl font-black italic mb-8 ${pack.premium ? 'text-amber-400' : 'text-white'}`}>${pack.price.toLocaleString()}</div>
-                  <button
-                    disabled={!!processingPayment}
-                    onClick={() => handlePayment(pack)}
-                    className={`w-full py-4 rounded-xl text-xs font-black uppercase tracking-[2px] transition-all duration-300 flex items-center justify-center gap-2
-                      ${pack.popular ? 'bg-accent text-white hover:bg-white hover:text-black' : 'bg-white text-black hover:bg-accent hover:text-white'}
-                      ${processingPayment === pack.name ? 'opacity-50' : ''}`}
-                  >
-                    {processingPayment === pack.name ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      'Próximamente'
-                    )}
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            <p className="mt-12 text-[8px] font-black tracking-[4px] uppercase text-white/20">
-              Pagos protegidos por Mercado Pago
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* Modal de Confirmación de Desbloqueo */}
-      {packToUnlock && (
-        <div className="fixed inset-0 z-[400] bg-black/90 backdrop-blur-2xl flex items-center justify-center p-6 animate-[fadeIn_0.3s_ease-out]">
-          <div className="relative w-full max-w-md bg-[#0a0a0c] rounded-[40px] p-10 border border-white/10 text-center shadow-2xl">
-            <div className="w-16 h-16 bg-accent/20 rounded-full flex items-center justify-center mb-8 mx-auto">
-              <Zap className="w-8 h-8 text-accent animate-pulse" />
-            </div>
-
-            <h3 className="text-2xl font-black mb-2 uppercase italic">Desbloquear Pack</h3>
-            <p className="text-white/40 text-[10px] uppercase tracking-[2px] mb-8">
-              ¿Quieres desbloquear el pack <span className="text-white font-bold">{packToUnlock.subCategory}</span> por <span className="text-accent font-bold">{PREMIUM_PACK_PRICE} créditos</span>?
-            </p>
-
-            <div className="space-y-4">
-              <button
-                disabled={isUnlocking}
-                onClick={() => handleUnlockPack(packToUnlock.subCategory)}
-                className="w-full h-16 bg-accent text-white rounded-2xl font-black uppercase tracking-[4px] text-xs hover:bg-white hover:text-black transition-all flex items-center justify-center gap-3"
-              >
-                {isUnlocking ? (
-                  <Loader2 className="w-5 h-5 animate-spin" />
+              <div className="absolute bottom-10 left-0 w-full px-10 flex items-center justify-between z-20">
+                {isCapturing ? (
+                  <>
+                    <button onClick={() => setShowCamera(false)} className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center border border-white/10"><X className="w-5 h-5" /></button>
+                    <button onClick={takePhoto} className="w-20 h-20 rounded-full bg-white p-1 shadow-2xl"><div className="w-full h-full rounded-full border-4 border-black bg-black/5 flex items-center justify-center"><div className="w-4 h-4 bg-black rounded-full" /></div></button>
+                    <div className="w-12" />
+                  </>
                 ) : (
                   <>
-                    Confirmar Compra
-                    <Sparkles className="w-4 h-4" />
+                    <button onClick={() => setIsCapturing(true)} className="flex flex-col items-center gap-2 group"><div className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center group-hover:bg-white/10"><RefreshCw className="w-5 h-5" /></div><span className="text-[8px] font-black tracking-[2px] uppercase opacity-40">Reintentar</span></button>
+                    <button onClick={() => setShowCamera(false)} className="flex flex-col items-center gap-2 group"><div className="w-16 h-16 rounded-full bg-accent flex items-center justify-center shadow-lg"><Check className="w-6 h-6" /></div><span className="text-[8px] font-black tracking-[2px] uppercase">Listo</span></button>
+                    <button onClick={() => { setCapturedImage(null); setShowCamera(false); }} className="flex flex-col items-center gap-2 group"><div className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center group-hover:bg-white/10"><X className="w-5 h-5" /></div><span className="text-[8px] font-black tracking-[2px] uppercase opacity-40">Cerrar</span></button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {/* QR Modal */}
+      {
+        showQR && resultImage && (
+          <div className="fixed inset-0 z-[110] bg-black/95 backdrop-blur-2xl flex items-center justify-center p-4">
+            <div className="relative w-full max-w-sm bg-[#0a0a0c] rounded-[40px] p-12 border border-white/10 text-center flex flex-col items-center">
+              <button
+                onClick={() => setShowQR(false)}
+                className="absolute top-6 right-6 w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <div className="w-16 h-16 bg-accent/20 rounded-full flex items-center justify-center mb-8">
+                <QrCode className="w-8 h-8 text-accent" />
+              </div>
+              <h3 className="text-2xl font-black mb-2 uppercase italic">Escanear para Descargar</h3>
+              <p className="text-white/40 text-[10px] uppercase tracking-[2px] mb-8">Escanea con tu cámara para guardar en tu móvil</p>
+
+              <div className="p-4 bg-white rounded-3xl mb-8">
+                <QRCodeCanvas
+                  value={resultImage}
+                  size={200}
+                  level="H"
+                  includeMargin={true}
+                />
+              </div>
+
+              <button
+                onClick={() => setShowQR(false)}
+                className="text-[10px] font-black tracking-[4px] uppercase text-accent hover:text-white transition-colors"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        )
+      }
+
+      {/* Modal de Precios */}
+      {
+        showPricing && (
+          <div className="fixed inset-0 z-[300] bg-black/95 backdrop-blur-2xl flex items-start sm:items-center justify-center p-4 py-12 md:py-20 overflow-y-auto">
+            <div className="relative w-full max-w-6xl bg-[#0a0a0c] rounded-[40px] p-8 md:p-12 border border-white/10 text-center animate-[fadeIn_0.5s_ease-out]">
+              <button
+                onClick={() => setShowPricing(false)}
+                className="absolute top-6 right-6 w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="w-16 h-16 bg-accent/20 rounded-full flex items-center justify-center mb-8 mx-auto">
+                <CreditCard className="w-8 h-8 text-accent" />
+              </div>
+
+              <h3 className="text-3xl md:text-4xl font-black mb-2 uppercase italic tracking-tight">Elegí tu Pack</h3>
+              <p className="text-accent text-[10px] font-black uppercase tracking-[4px] mb-2 shadow-accent/20 drop-shadow-sm">Desbloquea todos los estilos Premium</p>
+              <p className="text-white/40 text-[8px] uppercase tracking-[4px] mb-12">Y obtené créditos para tus retratos con IA</p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                {[
+                  { name: 'Starter', price: 4000, credits: 500, bonus: '', color: 'white/5', popular: false },
+                  { name: 'Standard', price: 8000, credits: 1100, bonus: '+10% Extra', color: 'accent/5', popular: true },
+                  { name: 'Business', price: 10000, credits: 1500, bonus: '+20% Extra', color: 'white/5', popular: false },
+                  { name: 'Unlock Premium', price: 20000, credits: 3000, bonus: 'Pack Completo', color: 'accent/5', premium: true }
+                ].map((pack) => (
+                  <div
+                    key={pack.name}
+                    className={`relative p-8 rounded-[32px] border transition-all duration-500 flex flex-col items-center group
+                    ${pack.popular ? 'bg-accent/5 border-accent shadow-[0_0_40px_rgba(255,85,0,0.2)]' : 'bg-white/2 border-white/5 hover:border-white/20'}`}
+                  >
+                    {pack.popular && (
+                      <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-accent text-[8px] font-black uppercase tracking-[2px] px-4 py-1 rounded-full">
+                        Más Popular
+                      </div>
+                    )}
+                    {pack.premium && (
+                      <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-amber-500 to-yellow-300 text-[8px] font-black uppercase tracking-[2px] px-4 py-1 rounded-full text-black">
+                        Especial Packs
+                      </div>
+                    )}
+                    <span className="text-[10px] font-black uppercase tracking-[3px] text-white/40 mb-6">{pack.name}</span>
+                    <div className="flex flex-col items-center mb-8">
+                      <span className={`text-5xl font-black italic mb-2 ${pack.premium ? 'text-amber-400' : 'text-white'}`}>{pack.credits}</span>
+                      <span className="text-[10px] font-black uppercase tracking-[2px] text-accent">Créditos</span>
+                      {pack.bonus && (
+                        <div className={`mt-4 flex items-center gap-2 px-3 py-1 rounded-full ${pack.premium ? 'bg-amber-500/20' : 'bg-accent/20'}`}>
+                          <Zap className={`w-3 h-3 ${pack.premium ? 'text-amber-400' : 'text-accent'}`} />
+                          <span className={`text-[8px] font-black uppercase tracking-[1px] ${pack.premium ? 'text-amber-400' : 'text-accent'}`}>{pack.bonus}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className={`text-2xl font-black italic mb-8 ${pack.premium ? 'text-amber-400' : 'text-white'}`}>${pack.price.toLocaleString()}</div>
+                    <button
+                      disabled={!!processingPayment}
+                      onClick={() => handlePayment(pack)}
+                      className={`w-full py-4 rounded-xl text-xs font-black uppercase tracking-[2px] transition-all duration-300 flex items-center justify-center gap-2
+                      ${pack.popular ? 'bg-accent text-white hover:bg-white hover:text-black' : 'bg-white text-black hover:bg-accent hover:text-white'}
+                      ${processingPayment === pack.name ? 'opacity-50' : ''}`}
+                    >
+                      {processingPayment === pack.name ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        'Próximamente'
+                      )}
+                    </button>
+                  </div>
+                ))}
+              </div>
+
+              <p className="mt-12 text-[8px] font-black tracking-[4px] uppercase text-white/20">
+                Pagos protegidos por Mercado Pago
+              </p>
+            </div>
+          </div>
+        )
+      }
+
+      {/* Modal de Confirmación de Desbloqueo */}
+      {
+        packToUnlock && (
+          <div className="fixed inset-0 z-[400] bg-black/90 backdrop-blur-2xl flex items-center justify-center p-6 animate-[fadeIn_0.3s_ease-out]">
+            <div className="relative w-full max-w-md bg-[#0a0a0c] rounded-[40px] p-10 border border-white/10 text-center shadow-2xl">
+              <div className="w-16 h-16 bg-accent/20 rounded-full flex items-center justify-center mb-8 mx-auto">
+                <Zap className="w-8 h-8 text-accent animate-pulse" />
+              </div>
+
+              <h3 className="text-2xl font-black mb-2 uppercase italic">Desbloquear Pack</h3>
+              <p className="text-white/40 text-[10px] uppercase tracking-[2px] mb-8">
+                ¿Quieres desbloquear el pack <span className="text-white font-bold">{packToUnlock.subCategory}</span> por <span className="text-accent font-bold">{PREMIUM_PACK_PRICE} créditos</span>?
+              </p>
+
+              <div className="space-y-4">
+                <button
+                  disabled={isUnlocking}
+                  onClick={() => handleUnlockPack(packToUnlock.subCategory)}
+                  className="w-full h-16 bg-accent text-white rounded-2xl font-black uppercase tracking-[4px] text-xs hover:bg-white hover:text-black transition-all flex items-center justify-center gap-3"
+                >
+                  {isUnlocking ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <>
+                      Confirmar Compra
+                      <Sparkles className="w-4 h-4" />
+                    </>
+                  )}
+                </button>
+
+                <button
+                  disabled={isUnlocking}
+                  onClick={() => setPackToUnlock(null)}
+                  className="w-full py-4 text-[10px] font-black uppercase tracking-[3px] text-white/20 hover:text-white transition-colors"
+                >
+                  Cancelar
+                </button>
+              </div>
+
+              <p className="mt-8 text-[8px] font-black tracking-[3px] text-white/10 uppercase">
+                Tu saldo actual: {profile?.credits} créditos
+              </p>
+            </div>
+          </div>
+        )
+      }
+
+      {/* Modal de Oferta Premium Exclusiva - Más delicado y pequeño */}
+      {
+        showPremiumOffer && (
+          <div className="fixed inset-0 z-[400] bg-black/90 backdrop-blur-2xl flex items-center justify-center p-6 animate-[fadeIn_0.5s_ease-out]">
+            <div className="relative w-full max-w-sm bg-gradient-to-b from-[#1a1a1f] to-[#0a0a0c] rounded-[32px] p-8 border border-amber-500/20 text-center shadow-[0_0_80px_rgba(251,191,36,0.05)]">
+              <button
+                onClick={() => setShowPremiumOffer(false)}
+                className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
+              >
+                <X className="w-4 h-4 text-white/40" />
+              </button>
+
+              <div className="w-14 h-14 bg-gradient-to-br from-amber-500 to-yellow-300 rounded-2xl flex items-center justify-center mb-6 mx-auto rotate-6 shadow-xl shadow-amber-500/10">
+                <Sparkles className="w-7 h-7 text-black" />
+              </div>
+
+              <h3 className="text-2xl font-black mb-3 uppercase italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-200">
+                Pack Premium
+              </h3>
+
+              <div className="bg-white/5 border border-white/5 rounded-2xl p-5 mb-6">
+                <div className="text-[8px] font-black text-white/40 uppercase tracking-[3px] mb-4 leading-relaxed">
+                  Desbloquea estilos VIP + 3000 créditos
+                </div>
+
+                <div className="flex flex-col items-center">
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-4xl font-black italic text-white leading-none">3000</span>
+                    <span className="text-[8px] font-black uppercase text-amber-500 tracking-widest">Créditos</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mb-8">
+                <div className="text-3xl font-black italic mb-1">$20.000</div>
+                <div className="text-[7px] font-black uppercase tracking-[2px] text-white/15">Pago Único</div>
+              </div>
+
+              <button
+                disabled={!!processingPayment}
+                onClick={() => {
+                  handlePayment({ name: 'Unlock Premium', price: 20000, credits: 3000 });
+                  setShowPremiumOffer(false);
+                }}
+                className="w-full h-14 bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-white hover:to-white text-black font-black uppercase tracking-[4px] text-[10px] rounded-xl transition-all duration-500 shadow-[0_10px_20px_rgba(245,158,11,0.2)] active:scale-95 flex items-center justify-center gap-3"
+              >
+                {processingPayment ? <Loader2 className="w-5 h-5 animate-spin" /> : (
+                  <>
+                    DESBLOQUEAR AHORA
+                    <Zap className="w-3.5 h-3.5 fill-black" />
                   </>
                 )}
               </button>
-
-              <button
-                disabled={isUnlocking}
-                onClick={() => setPackToUnlock(null)}
-                className="w-full py-4 text-[10px] font-black uppercase tracking-[3px] text-white/20 hover:text-white transition-colors"
-              >
-                Cancelar
-              </button>
             </div>
-
-            <p className="mt-8 text-[8px] font-black tracking-[3px] text-white/10 uppercase">
-              Tu saldo actual: {profile?.credits} créditos
-            </p>
           </div>
-        </div>
-      )}
-
-      {/* Modal de Oferta Premium Exclusiva - Más delicado y pequeño */}
-      {showPremiumOffer && (
-        <div className="fixed inset-0 z-[400] bg-black/90 backdrop-blur-2xl flex items-center justify-center p-6 animate-[fadeIn_0.5s_ease-out]">
-          <div className="relative w-full max-w-sm bg-gradient-to-b from-[#1a1a1f] to-[#0a0a0c] rounded-[32px] p-8 border border-amber-500/20 text-center shadow-[0_0_80px_rgba(251,191,36,0.05)]">
-            <button
-              onClick={() => setShowPremiumOffer(false)}
-              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
-            >
-              <X className="w-4 h-4 text-white/40" />
-            </button>
-
-            <div className="w-14 h-14 bg-gradient-to-br from-amber-500 to-yellow-300 rounded-2xl flex items-center justify-center mb-6 mx-auto rotate-6 shadow-xl shadow-amber-500/10">
-              <Sparkles className="w-7 h-7 text-black" />
-            </div>
-
-            <h3 className="text-2xl font-black mb-3 uppercase italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-200">
-              Pack Premium
-            </h3>
-
-            <div className="bg-white/5 border border-white/5 rounded-2xl p-5 mb-6">
-              <div className="text-[8px] font-black text-white/40 uppercase tracking-[3px] mb-4 leading-relaxed">
-                Desbloquea estilos VIP + 3000 créditos
-              </div>
-
-              <div className="flex flex-col items-center">
-                <div className="flex items-baseline gap-1.5">
-                  <span className="text-4xl font-black italic text-white leading-none">3000</span>
-                  <span className="text-[8px] font-black uppercase text-amber-500 tracking-widest">Créditos</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="mb-8">
-              <div className="text-3xl font-black italic mb-1">$20.000</div>
-              <div className="text-[7px] font-black uppercase tracking-[2px] text-white/15">Pago Único</div>
-            </div>
-
-            <button
-              disabled={!!processingPayment}
-              onClick={() => {
-                handlePayment({ name: 'Unlock Premium', price: 20000, credits: 3000 });
-                setShowPremiumOffer(false);
-              }}
-              className="w-full h-14 bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-white hover:to-white text-black font-black uppercase tracking-[4px] text-[10px] rounded-xl transition-all duration-500 shadow-[0_10px_20px_rgba(245,158,11,0.2)] active:scale-95 flex items-center justify-center gap-3"
-            >
-              {processingPayment ? <Loader2 className="w-5 h-5 animate-spin" /> : (
-                <>
-                  DESBLOQUEAR AHORA
-                  <Zap className="w-3.5 h-3.5 fill-black" />
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      )}
+        )
+      }
 
       <canvas ref={canvasRef} className="hidden" />
       <footer className="relative py-12 bg-primary border-t border-white/5 text-center z-20">
@@ -1530,67 +1630,69 @@ const App: React.FC = () => {
       </footer>
 
       {/* Historial de Imágenes */}
-      {!showAdmin && session && (
-        <section className="relative py-20 px-6 bg-black/50 backdrop-blur-xl border-t border-white/5 z-20">
-          <div className="max-w-[1200px] mx-auto">
-            <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-12">
-              <div>
-                <div className="flex items-center gap-3 mb-2">
-                  <LucideHistory className="w-5 h-5 text-accent" />
-                  <h2 className="text-2xl font-black uppercase italic tracking-tight">Mis Fotos</h2>
+      {
+        !showAdmin && session && (
+          <section className="relative py-20 px-6 bg-black/50 backdrop-blur-xl border-t border-white/5 z-20">
+            <div className="max-w-[1200px] mx-auto">
+              <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-12">
+                <div>
+                  <div className="flex items-center gap-3 mb-2">
+                    <LucideHistory className="w-5 h-5 text-accent" />
+                    <h2 className="text-2xl font-black uppercase italic tracking-tight">Mis Fotos</h2>
+                  </div>
+                  <p className="text-[10px] tracking-[3px] text-white/40 uppercase">Tus últimos retratos generados</p>
                 </div>
-                <p className="text-[10px] tracking-[3px] text-white/40 uppercase">Tus últimos retratos generados</p>
+                <div className="px-6 py-2 rounded-full bg-white/5 border border-white/10">
+                  <p className="text-[8px] font-black uppercase tracking-[2px] text-white/20">Las imágenes se mantienen en el historial por 20 días</p>
+                </div>
               </div>
-              <div className="px-6 py-2 rounded-full bg-white/5 border border-white/10">
-                <p className="text-[8px] font-black uppercase tracking-[2px] text-white/20">Las imágenes se mantienen en el historial por 20 días</p>
-              </div>
-            </div>
 
-            {loadingGenerations ? (
-              <div className="flex flex-col items-center py-20 opacity-20">
-                <Loader2 className="w-8 h-8 animate-spin mb-4" />
-                <span className="text-[10px] font-black uppercase tracking-[2px]">Cargando historial...</span>
-              </div>
-            ) : userGenerations.length === 0 ? (
-              <div className="text-center py-20 border-2 border-dashed border-white/5 rounded-[40px]">
-                <p className="text-white/20 text-xs font-black uppercase tracking-[3px]">Aún no has generado imágenes</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
-                {userGenerations.map((gen) => (
-                  <div key={gen.id} className="group relative aspect-[4/5] rounded-2xl overflow-hidden border border-white/10 bg-[#0a0a0c] hover:border-accent/40 transition-all duration-500">
-                    <img src={gen.image_url} alt="Generación" className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => {
-                            setResultImage(gen.image_url);
-                            setIsSuccess(true);
-                            setAppStep('result');
-                            window.scrollTo({ top: 0, behavior: 'smooth' });
-                          }}
-                          className="flex-1 bg-white text-black py-2 rounded-lg text-[8px] font-black uppercase tracking-[1px] hover:bg-accent transition-colors"
-                        >
-                          Ver
-                        </button>
-                        <a
-                          href={gen.image_url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="p-2 bg-white/10 rounded-lg text-white hover:text-accent transition-colors"
-                        >
-                          <Download className="w-3 h-3" />
-                        </a>
+              {loadingGenerations ? (
+                <div className="flex flex-col items-center py-20 opacity-20">
+                  <Loader2 className="w-8 h-8 animate-spin mb-4" />
+                  <span className="text-[10px] font-black uppercase tracking-[2px]">Cargando historial...</span>
+                </div>
+              ) : userGenerations.length === 0 ? (
+                <div className="text-center py-20 border-2 border-dashed border-white/5 rounded-[40px]">
+                  <p className="text-white/20 text-xs font-black uppercase tracking-[3px]">Aún no has generado imágenes</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
+                  {userGenerations.map((gen) => (
+                    <div key={gen.id} className="group relative aspect-[4/5] rounded-2xl overflow-hidden border border-white/10 bg-[#0a0a0c] hover:border-accent/40 transition-all duration-500">
+                      <img src={gen.image_url} alt="Generación" className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              setResultImage(gen.image_url);
+                              setIsSuccess(true);
+                              setAppStep('result');
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }}
+                            className="flex-1 bg-white text-black py-2 rounded-lg text-[8px] font-black uppercase tracking-[1px] hover:bg-accent transition-colors"
+                          >
+                            Ver
+                          </button>
+                          <a
+                            href={gen.image_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="p-2 bg-white/10 rounded-lg text-white hover:text-accent transition-colors"
+                          >
+                            <Download className="w-3 h-3" />
+                          </a>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
-      )}
-    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+        )
+      }
+    </div >
   );
 };
 
