@@ -53,12 +53,13 @@ interface AdminProps {
 }
 
 export const Admin: React.FC<AdminProps> = ({ onBack, IDENTITIES }) => {
-    const [view, setView] = useState<'users' | 'dashboard'>('users');
+    const [view, setView] = useState<'users' | 'dashboard' | 'styles'>('users');
     const [loading, setLoading] = useState(true);
     const [profiles, setProfiles] = useState<Profile[]>([]);
     const [generations, setGenerations] = useState<any[]>([]);
     const [payments, setPayments] = useState<Payment[]>([]);
     const [searchLogs, setSearchLogs] = useState<SearchLog[]>([]);
+    const [stylesMetadata, setStylesMetadata] = useState<any[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [updatingId, setUpdatingId] = useState<string | null>(null);
     const [selectedUser, setSelectedUser] = useState<Profile | null>(null);
@@ -86,12 +87,14 @@ export const Admin: React.FC<AdminProps> = ({ onBack, IDENTITIES }) => {
                 { data: pData, error: pError },
                 { data: gData, error: gError },
                 { data: payData, error: payError },
-                { data: sData, error: sError }
+                { data: sData, error: sError },
+                { data: stData, error: stError }
             ] = await Promise.all([
                 supabase.from('profiles').select('*').order('created_at', { ascending: false }),
                 supabase.from('generations').select('style_id, user_id, created_at, image_url'),
                 supabase.from('payment_notifications').select('amount, status, created_at, user_id'),
-                supabase.from('search_logs').select('query, created_at')
+                supabase.from('search_logs').select('query, created_at'),
+                supabase.from('styles_metadata').select('*')
             ]);
 
             if (pError) throw pError;
@@ -99,6 +102,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack, IDENTITIES }) => {
             setGenerations(gData || []);
             setPayments(payData || []);
             setSearchLogs(sData || []);
+            setStylesMetadata(stData || []);
         } catch (error) {
             console.error('Error fetching admin data:', error);
         } finally {
@@ -145,6 +149,36 @@ export const Admin: React.FC<AdminProps> = ({ onBack, IDENTITIES }) => {
             setAddError(err.message);
         } finally {
             setAdding(false);
+        }
+    };
+
+    const deleteGeneration = async (genId: string) => {
+        if (!confirm('¿Estás seguro de eliminar esta foto?')) return;
+        try {
+            const { error } = await supabase.from('generations').delete().eq('id', genId);
+            if (error) throw error;
+            setUserHistory(prev => prev.filter(g => g.id !== genId));
+            setGenerations(prev => prev.filter(g => g.id !== genId));
+        } catch (error) {
+            console.error('Error deleting generation:', error);
+        }
+    };
+
+    const updateStylePremium = async (styleId: string, isPremium: boolean) => {
+        try {
+            const { error } = await supabase
+                .from('styles_metadata')
+                .upsert({ id: styleId, is_premium: isPremium, updated_at: new Date().toISOString() });
+            if (error) throw error;
+            setStylesMetadata(prev => {
+                const existing = prev.find(s => s.id === styleId);
+                if (existing) {
+                    return prev.map(s => s.id === styleId ? { ...s, is_premium: isPremium } : s);
+                }
+                return [...prev, { id: styleId, is_premium: isPremium }];
+            });
+        } catch (error) {
+            console.error('Error updating style premium:', error);
         }
     };
 
@@ -382,6 +416,12 @@ export const Admin: React.FC<AdminProps> = ({ onBack, IDENTITIES }) => {
                                         className={`px-4 py-1.5 rounded-md text-[9px] font-black uppercase tracking-widest transition-all ${view === 'dashboard' ? 'bg-accent text-white shadow-lg shadow-accent/20' : 'text-white/40 hover:text-white'}`}
                                     >
                                         Dashboard
+                                    </button>
+                                    <button
+                                        onClick={() => { setView('styles'); setSelectedUser(null); }}
+                                        className={`px-4 py-1.5 rounded-md text-[9px] font-black uppercase tracking-widest transition-all ${view === 'styles' ? 'bg-accent text-white shadow-lg shadow-accent/20' : 'text-white/40 hover:text-white'}`}
+                                    >
+                                        Estilos
                                     </button>
                                 </div>
                             </div>
@@ -623,14 +663,79 @@ export const Admin: React.FC<AdminProps> = ({ onBack, IDENTITIES }) => {
                                                     <div className="w-full h-full flex items-center justify-center text-[8px] text-white/20 uppercase font-black tracking-widest">{g.style_id}</div>
                                                 )}
                                                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 to-transparent opacity-0 group-hover:opacity-100 transition-opacity p-4 flex flex-col justify-end">
-                                                    <span className="text-[8px] font-black uppercase text-accent mb-1">{g.style_id}</span>
-                                                    <span className="text-[7px] text-white/40">{new Date(g.created_at).toLocaleDateString()}</span>
+                                                    <div className="flex justify-between items-end">
+                                                        <div>
+                                                            <span className="text-[8px] font-black uppercase text-accent mb-1 block">{g.style_id}</span>
+                                                            <span className="text-[7px] text-white/40">{new Date(g.created_at).toLocaleDateString()}</span>
+                                                        </div>
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); deleteGeneration(g.id); }}
+                                                            className="p-2 bg-red-500/20 hover:bg-red-500 text-red-500 hover:text-white rounded-lg transition-all"
+                                                        >
+                                                            <Trash2 className="w-3 h-3" />
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         ))}
                                     </div>
                                 )}
                             </div>
+                        </div>
+                    </div>
+                ) : view === 'styles' ? (
+                    <div className="animate-[fadeIn_0.5s_ease-out]">
+                        <div className="bg-[#0a0a0c] border border-white/5 rounded-[40px] overflow-hidden shadow-2xl">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="border-b border-white/5 bg-white/[0.02]">
+                                        <th className="px-8 py-6 text-[10px] font-black uppercase tracking-[3px] text-white/40">Estilo / Personaje</th>
+                                        <th className="px-8 py-6 text-[10px] font-black uppercase tracking-[3px] text-white/40 text-center">Categoría</th>
+                                        <th className="px-8 py-6 text-[10px] font-black uppercase tracking-[3px] text-white/40 text-center">Status Premium</th>
+                                        <th className="px-8 py-6 text-[10px] font-black uppercase tracking-[3px] text-white/40 text-right">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-white/5">
+                                    {IDENTITIES.map((style) => {
+                                        const meta = stylesMetadata.find(m => m.id === style.id);
+                                        const isPremium = meta ? meta.is_premium : style.isPremium;
+                                        return (
+                                            <tr key={style.id} className="hover:bg-white/[0.01] transition-colors group/row">
+                                                <td className="px-8 py-6">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="w-12 h-12 rounded-xl overflow-hidden border border-white/10 group-hover/row:border-accent transition-colors">
+                                                            <img src={style.url} alt="" className="w-full h-full object-cover" />
+                                                        </div>
+                                                        <div className="flex flex-col">
+                                                            <span className="text-sm font-bold text-white mb-1">{style.title}</span>
+                                                            <span className="text-[9px] text-white/20 font-mono uppercase">{style.id}</span>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-8 py-6 text-center">
+                                                    <span className="text-[10px] font-black uppercase tracking-[2px] text-white/40">{style.subCategory}</span>
+                                                </td>
+                                                <td className="px-8 py-6 text-center">
+                                                    <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-[2px] border ${isPremium ? 'bg-accent/10 border-accent/20 text-accent' : 'bg-white/5 border-white/10 text-white/40'}`}>
+                                                        {isPremium ? 'Premium' : 'Gratis'}
+                                                    </span>
+                                                </td>
+                                                <td className="px-8 py-6 text-right">
+                                                    <button
+                                                        onClick={() => updateStylePremium(style.id, !isPremium)}
+                                                        className={`px-4 py-2 rounded-xl border transition-all text-[9px] font-black uppercase tracking-[2px] ${isPremium
+                                                            ? 'bg-white/5 border-white/10 text-white hover:bg-white/10'
+                                                            : 'bg-accent border-accent text-white hover:bg-white hover:text-black hover:border-white shadow-lg shadow-accent/20'
+                                                            }`}
+                                                    >
+                                                        {isPremium ? 'Quitar Premium' : 'Hacer Premium'}
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
                         </div>
                     </div>
                 ) : (

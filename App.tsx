@@ -224,19 +224,31 @@ const App: React.FC = () => {
   const [packToUnlock, setPackToUnlock] = useState<any>(null);
   const [showPremiumOffer, setShowPremiumOffer] = useState(false);
   const [isUnlocking, setIsUnlocking] = useState(false);
+  const [stylesMetadata, setStylesMetadata] = useState<any[]>([]);
   const [appStep, setAppStep] = useState<'gallery' | 'setup' | 'processing' | 'result'>('gallery');
 
   const PREMIUM_PACK_PRICE = 3000;
+
+  // Merge static identities with DB metadata
+  const mergedIdentities = React.useMemo(() => {
+    return IDENTITIES.map(style => {
+      const meta = stylesMetadata.find(m => m.id === style.id);
+      return {
+        ...style,
+        isPremium: meta ? meta.is_premium : style.isPremium
+      };
+    });
+  }, [stylesMetadata]);
 
   // Lógica "Para Vos": Seleccionamos 4 estilos destacados (aleatorios pero consistentes por sesión)
   const recommendedIdentities = React.useMemo(() => {
     // Definimos algunos IDs que queremos que aparezcan seguro o priorizamos
     const priorityIds = ['f1_a', 'pb_a', 'suit_a', 'bb_a', 'ph_c'];
-    return IDENTITIES
+    return mergedIdentities
       .filter(id => priorityIds.includes(id.id))
       .sort(() => Math.random() - 0.5)
       .slice(0, 4);
-  }, []);
+  }, [mergedIdentities]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -272,8 +284,21 @@ const App: React.FC = () => {
     if (session?.user) {
       fetchProfile();
       fetchGenerations();
+      fetchStylesMetadata();
     }
   }, [session]);
+
+  const fetchStylesMetadata = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('styles_metadata')
+        .select('*');
+      if (error) throw error;
+      setStylesMetadata(data || []);
+    } catch (err) {
+      console.error('Error fetching styles metadata:', err);
+    }
+  };
 
   const fetchProfile = async () => {
     try {
@@ -620,49 +645,44 @@ const App: React.FC = () => {
   const handleDownload = async () => {
     if (!resultImage) return;
 
-    // Detectar si es móvil para usar Share API si está disponible
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
     try {
-      const response = await fetch(resultImage);
-      if (!response.ok) throw new Error('Error al descargar la imagen');
-      const blob = await response.blob();
+      // Usar un nombre de archivo amigable
+      const filename = `creativa-photo-${Date.now()}.png`;
 
-      // En móviles, compartir es mucho más intuitivo y funcional que descargar un archivo
-      if (isMobile && navigator.share) {
-        const file = new File([blob], `creativa-photo-${Date.now()}.png`, { type: 'image/png' });
+      // Intentar descargar vía blob para evitar problemas de cross-origin
+      const response = await fetch(resultImage, { mode: 'cors' });
+      const blob = await response.blob();
+      const file = new File([blob], filename, { type: 'image/png' });
+
+      // En móviles, priorizar Share API
+      if (isMobile && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
         try {
           await navigator.share({
             files: [file],
             title: 'Mi Foto Creativa',
-            text: '¡Mira mi foto generada con IA!'
+            text: '¡Mira mi foto generada con IA por Creativa Labs!'
           });
           return;
         } catch (shareError: any) {
-          if (shareError.name !== 'AbortError') {
-            console.error('Share failed:', shareError);
-          } else {
-            return; // El usuario canceló la acción de compartir
-          }
+          if (shareError.name !== 'AbortError') throw shareError;
+          return; // Usuario canceló
         }
       }
 
-      // Comportamiento estándar de descarga (Desktop)
+      // Fallback para descarga estándar
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `creativa-photo-${Date.now()}.png`;
+      link.download = filename;
       document.body.appendChild(link);
       link.click();
-
-      setTimeout(() => {
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-      }, 100);
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
     } catch (error) {
-      console.error('Download error:', error);
-      // Fallback: Si todo falla, abrimos la URL directamente
-      // En móviles, esto permite al usuario guardar la foto dejando presionado
+      console.error('Download/Share error:', error);
+      // Último recurso: abrir en pestaña nueva o redirección directa
       if (isMobile) {
         window.location.href = resultImage;
       } else {
@@ -670,7 +690,6 @@ const App: React.FC = () => {
       }
     }
   };
-
   const ASPECT_RATIOS = [
     { id: '9:16', label: '9:16', icon: Smartphone, desc: 'Portrait' },
     { id: '16:9', label: '16:9', icon: Monitor, desc: 'Landscape' },
@@ -730,7 +749,7 @@ const App: React.FC = () => {
   }
 
   if (showAdmin && profile?.is_master) {
-    return <Admin onBack={() => setShowAdmin(false)} IDENTITIES={IDENTITIES} />;
+    return <Admin onBack={() => setShowAdmin(false)} IDENTITIES={mergedIdentities} />;
   }
 
   return (
@@ -816,17 +835,19 @@ const App: React.FC = () => {
             <div className="flex flex-col items-center gap-4 pt-8">
               <div className="w-64 h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
                 <div
-                  className="h-full bg-accent transition-all duration-1000 ease-out shadow-[0_0_15px_rgba(255,85,0,0.5)]"
+                  className="h-full bg-accent transition-all duration-300 ease-linear shadow-[0_0_15px_rgba(255,85,0,0.5)]"
                   style={{
-                    width: `${elapsedSeconds <= 67.5
-                      ? (elapsedSeconds / 75) * 100
-                      : 90 + (Math.min(9, (elapsedSeconds - 67.5) * 0.2))
-                      }%`
+                    width: `${(() => {
+                      if (elapsedSeconds < 5) return (elapsedSeconds / 5) * 30; // 0-5s: 0-30%
+                      if (elapsedSeconds < 25) return 30 + ((elapsedSeconds - 5) / 20) * 50; // 5-25s: 30-80%
+                      if (elapsedSeconds < 60) return 80 + ((elapsedSeconds - 25) / 35) * 15; // 25-60s: 80-95%
+                      return Math.min(99, 95 + ((elapsedSeconds - 60) / 60) * 4); // 60s+: -> 99%
+                    })()}%`
                   }}
                 />
               </div>
               <p className="text-[8px] text-white/30 font-black tracking-[3px] uppercase">
-                {elapsedSeconds > 75 ? "Finalizando detalles finales..." : "Sincronizando con el servidor"}
+                {elapsedSeconds > 30 ? "Finalizando detalles finales..." : "Sincronizando con el servidor"}
               </p>
             </div>
           </div>
@@ -966,7 +987,7 @@ const App: React.FC = () => {
               {/* Grouped Identities */}
               <div className="space-y-20">
                 {Array.from(new Set(
-                  IDENTITIES
+                  mergedIdentities
                     .filter(id => {
                       const matchesCategory = activeCategory === 'all' || id.category === activeCategory;
                       const q = searchQuery.toLowerCase();
@@ -985,7 +1006,7 @@ const App: React.FC = () => {
                       <div className="flex-grow h-[1px] bg-white/5" />
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 justify-items-center">
-                      {IDENTITIES
+                      {mergedIdentities
                         .filter(id => {
                           const matchesCategory = activeCategory === 'all' || id.category === activeCategory;
                           const q = searchQuery.toLowerCase();
@@ -1025,7 +1046,7 @@ const App: React.FC = () => {
                 ))}
 
                 {/* No results message */}
-                {searchQuery && IDENTITIES.filter(id => {
+                {searchQuery && mergedIdentities.filter(id => {
                   const matchesCategory = activeCategory === 'all' || id.category === activeCategory;
                   const q = searchQuery.toLowerCase();
                   return matchesCategory && (
@@ -1059,7 +1080,7 @@ const App: React.FC = () => {
                 <div className="flex flex-col items-center mb-16">
                   <div className="w-32 h-32 rounded-3xl overflow-hidden border-2 border-accent mb-6 shadow-[0_0_30px_rgba(255,85,0,0.3)]">
                     <img
-                      src={IDENTITIES.find(i => i.id === formData.selectedIdentity)?.url}
+                      src={mergedIdentities.find(i => i.id === formData.selectedIdentity)?.url}
                       className="w-full h-full object-cover"
                       alt="Estilo"
                     />
@@ -1067,7 +1088,7 @@ const App: React.FC = () => {
                   <div className="text-center">
                     <span className="text-accent text-[8px] font-black uppercase tracking-[4px]">Transformación Elegida</span>
                     <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white">
-                      {IDENTITIES.find(i => i.id === formData.selectedIdentity)?.title}
+                      {mergedIdentities.find(i => i.id === formData.selectedIdentity)?.title}
                     </h2>
                   </div>
                 </div>
