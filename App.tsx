@@ -13,7 +13,7 @@ const IDENTITIES = [
   {
     id: 'f1_a',
     title: 'Red Bull Racing',
-    url: '/cabina/F1-A.jpg',
+    url: 'F1-A.jpg',
     category: 'sports',
     subCategory: 'Formula 1',
     tags: ['speed', 'f1', 'action', 'professional', 'carrera', 'deporte', 'rojo', 'velocidad', 'auto', 'monaco'],
@@ -22,7 +22,7 @@ const IDENTITIES = [
   {
     id: 'f1_b',
     title: 'Ferrari Team',
-    url: '/cabina/F1-B.jpg',
+    url: 'F1-B.jpg',
     category: 'sports',
     subCategory: 'Formula 1',
     tags: ['speed', 'f1', 'classic', 'racing', 'italia', 'rojo', 'leyenda', 'historico', 'caballino'],
@@ -31,7 +31,7 @@ const IDENTITIES = [
   {
     id: 'f1_c',
     title: 'Mercedes AMG',
-    url: '/cabina/F1-C.jpg',
+    url: 'F1-C.jpg',
     category: 'sports',
     subCategory: 'Formula 1',
     tags: ['modern', 'f1', 'tech', 'silver', 'flecha', 'alemania', 'pro', 'campeon', 'plata'],
@@ -40,7 +40,7 @@ const IDENTITIES = [
   {
     id: 'f1_d',
     title: 'Pit Stop Vibe',
-    url: '/cabina/F1-D.jpg',
+    url: 'F1-D.jpg',
     category: 'sports',
     subCategory: 'Formula 1',
     tags: ['mechanic', 'f1', 'teamwork', 'garage', 'trabajo', 'boxes', 'mecanico', 'equipo'],
@@ -49,7 +49,7 @@ const IDENTITIES = [
   {
     id: 'bb_a',
     title: 'The Heisenberg',
-    url: '/cabina/BB-A.jpg',
+    url: 'BB-A.jpg',
     category: 'series',
     subCategory: 'Breaking Bad',
     tags: ['drama', 'meth', 'hat', 'cinematic', 'pelado', 'quimica', 'drogas', 'sombrero', 'lentes']
@@ -57,7 +57,7 @@ const IDENTITIES = [
   {
     id: 'bb_b',
     title: 'Desert Cook',
-    url: '/cabina/BB-B.jpg',
+    url: 'BB-B.jpg',
     category: 'series',
     subCategory: 'Breaking Bad',
     tags: ['rv', 'desert', 'yellow', 'gasmask', 'careta', 'cocina', 'arena', 'desierto', 'amarillo']
@@ -65,7 +65,7 @@ const IDENTITIES = [
   {
     id: 'bb_c',
     title: 'Better Call Saul',
-    url: '/cabina/BB-C.jpg',
+    url: 'BB-C.jpg',
     category: 'series',
     subCategory: 'Breaking Bad',
     tags: ['lawyer', 'suit', 'colorful', 'office', 'abogado', 'traje', 'comedia', 'estafador', 'carcel']
@@ -73,7 +73,7 @@ const IDENTITIES = [
   {
     id: 'bb_d',
     title: 'Los Pollos Hermanos',
-    url: '/cabina/BB-D.jpg',
+    url: 'BB-D.jpg',
     category: 'series',
     subCategory: 'Breaking Bad',
     tags: ['chicken', 'fried', 'restaurant', 'yellow', 'empleado', 'delantal', 'comida', 'fastfood']
@@ -81,7 +81,7 @@ const IDENTITIES = [
   {
     id: 'suit_a',
     title: 'Harvey Specter',
-    url: '/cabina/SUIT-A.jpg',
+    url: 'SUIT-A.jpg',
     category: 'series',
     subCategory: 'La Ley de los Audaces',
     tags: ['law', 'executive', 'expensive', 'classy', 'traje', 'corbata', 'lujo', 'abogado', 'exito']
@@ -89,7 +89,7 @@ const IDENTITIES = [
   {
     id: 'suit_b',
     title: 'Mike Ross Style',
-    url: '/cabina/SUIT-B.jpg',
+    url: 'SUIT-B.jpg',
     category: 'series',
     subCategory: 'La Ley de los Audaces',
     tags: ['law', 'young', 'genius', 'bicycle', 'bici', 'mochila', 'bolso', 'joven', 'mensajero']
@@ -97,7 +97,7 @@ const IDENTITIES = [
   {
     id: 'suit_c',
     title: 'Donna Paulsen',
-    url: '/cabina/SUIT-C.jpg',
+    url: 'SUIT-C.jpg',
     category: 'series',
     subCategory: 'La Ley de los Audaces',
     tags: ['secretary', 'powerful', 'fashion', 'redhead', 'vestido', 'pelirroja', 'secretaria', 'mujer']
@@ -105,7 +105,7 @@ const IDENTITIES = [
   {
     id: 'suit_d',
     title: 'Pearson Hardman',
-    url: '/cabina/SUIT-D.jpg',
+    url: 'SUIT-D.jpg',
     category: 'series',
     subCategory: 'La Ley de los Audaces',
     tags: ['firm', 'luxury', 'office', 'success', 'oficina', 'socios', 'empresa', 'corporativo']
@@ -113,7 +113,7 @@ const IDENTITIES = [
   {
     id: 'pb_a',
     title: 'Thomas Shelby',
-    url: '/cabina/PB-A.jpg',
+    url: 'PB-A.jpg',
     category: 'series',
     subCategory: 'Peaky Blinders',
     tags: ['gangster', 'vintage', 'cap', 'whiskey', 'boina', 'fuego', 'mafia', 'fumar', 'antiguo'],
@@ -122,7 +122,7 @@ const IDENTITIES = [
   {
     id: 'pb_b',
     title: 'Birmingham Streets',
-    url: '/cabina/PB-B.jpg',
+    url: 'PB-B.jpg',
     category: 'series',
     subCategory: 'Peaky Blinders',
     tags: ['industrial', 'smoke', 'horse', 'family', 'caballo', 'niebla', 'calle', 'oscuro', 'frio'],
@@ -131,7 +131,7 @@ const IDENTITIES = [
   {
     id: 'pb_c',
     title: 'Garrison Pub',
-    url: '/cabina/PB-C.jpg',
+    url: 'PB-C.jpg',
     category: 'series',
     subCategory: 'Peaky Blinders',
     tags: ['bar', 'drink', 'meeting', 'gentlemen', 'trago', 'reunion', 'poker', 'londres', 'taberna'],
@@ -140,7 +140,7 @@ const IDENTITIES = [
   {
     id: 'pb_d',
     title: 'The Razor Edge',
-    url: '/cabina/PB-D.jpg',
+    url: 'PB-D.jpg',
     category: 'series',
     subCategory: 'Peaky Blinders',
     tags: ['razor', 'fight', 'strategy', 'british', 'navaja', 'pelea', 'sangre', 'inglaterra'],
@@ -149,7 +149,7 @@ const IDENTITIES = [
   {
     id: 'ph_a',
     title: 'Urban Explorer',
-    url: '/cabina/PH-A.jpg',
+    url: 'PH-A.jpg',
     category: 'urban',
     subCategory: 'Urbano',
     tags: ['street', 'hoodie', 'city', 'night', 'buchon', 'noche', 'grafiti', 'ciudad', 'capucha']
@@ -157,7 +157,7 @@ const IDENTITIES = [
   {
     id: 'ph_b',
     title: 'Studio Portrait',
-    url: '/cabina/PH-B.jpg',
+    url: 'PH-B.jpg',
     category: 'urban',
     subCategory: 'Urbano',
     tags: ['clean', 'lighting', 'vogue', 'model', 'estudio', 'flash', 'limpio', 'retrato', 'blanco']
@@ -165,7 +165,7 @@ const IDENTITIES = [
   {
     id: 'ph_c',
     title: 'Neon Life',
-    url: '/cabina/PH-C.jpg',
+    url: 'PH-C.jpg',
     category: 'urban',
     subCategory: 'Urbano',
     tags: ['color', 'neon', 'asia', 'cyberpunk', 'futuro', 'luces', 'noche', 'tokyo', 'led']
@@ -173,7 +173,7 @@ const IDENTITIES = [
   {
     id: 'ph_d',
     title: 'Vintage Film',
-    url: '/cabina/PH-D.jpg',
+    url: 'PH-D.jpg',
     category: 'urban',
     subCategory: 'Urbano',
     tags: ['analog', 'grainy', 'retro', '90s', 'rollo', 'sepia', 'viejo', 'fotografia', 'vhs']
@@ -181,7 +181,7 @@ const IDENTITIES = [
   {
     id: 'jhonw_a',
     title: 'Baba Yaga',
-    url: '/cabina/jhonw_a.jpg',
+    url: 'jhonw_a.jpg',
     category: 'cinema',
     subCategory: 'John Wick',
     tags: ['john wick', 'accion', 'suit', 'weapons', 'venganza', 'traje', 'asesino', 'perro'],
@@ -190,7 +190,7 @@ const IDENTITIES = [
   {
     id: 'jhonw_b',
     title: 'The Continental',
-    url: '/cabina/jhonw_b.jpg',
+    url: 'jhonw_b.jpg',
     category: 'cinema',
     subCategory: 'John Wick',
     tags: ['john wick', 'hotel', 'neon', 'mercy', 'noche', 'monedas', 'lujo', 'accion'],
@@ -199,7 +199,7 @@ const IDENTITIES = [
   {
     id: 'jhonw_c',
     title: 'High Table Legacy',
-    url: '/cabina/jhonw_c.jpg',
+    url: 'jhonw_c.jpg',
     category: 'cinema',
     subCategory: 'John Wick',
     tags: ['john wick', 'trama', 'poder', 'oro', 'consejo', 'elegante', 'noir'],
@@ -208,7 +208,7 @@ const IDENTITIES = [
   {
     id: 'jhonw_d',
     title: 'Excommunicado',
-    url: '/cabina/jhonw_d.jpg',
+    url: 'jhonw_d.jpg',
     category: 'cinema',
     subCategory: 'John Wick',
     tags: ['john wick', 'escape', 'lluvia', 'recompensa', 'reloj', 'correr', 'persecucion'],
@@ -217,7 +217,7 @@ const IDENTITIES = [
   {
     id: 'jhonw_e',
     title: 'Desert Assassin',
-    url: '/cabina/jhonw_e.jpg',
+    url: 'jhonw_e.jpg',
     category: 'cinema',
     subCategory: 'John Wick',
     tags: ['john wick', 'desierto', 'arena', 'casablanca', 'calor', 'caballo'],
@@ -226,7 +226,7 @@ const IDENTITIES = [
   {
     id: 'jhonw_f',
     title: 'Ballerina Soul',
-    url: '/cabina/jhonw_f.jpg',
+    url: 'jhonw_f.jpg',
     category: 'cinema',
     subCategory: 'John Wick',
     tags: ['john wick', 'danza', 'pelea', 'ballet', 'teatro', 'elegancia'],
@@ -235,7 +235,7 @@ const IDENTITIES = [
   {
     id: 'jhonw_g',
     title: 'Osaka Night',
-    url: '/cabina/jhonw_g.jpg',
+    url: 'jhonw_g.jpg',
     category: 'cinema',
     subCategory: 'John Wick',
     tags: ['john wick', 'japon', 'katana', 'neon', 'rojo', 'samurai'],
@@ -244,7 +244,7 @@ const IDENTITIES = [
   {
     id: 'jhonw_h',
     title: 'Last Stand',
-    url: '/cabina/jhonw_h.jpg',
+    url: 'jhonw_h.jpg',
     category: 'cinema',
     subCategory: 'John Wick',
     tags: ['john wick', 'final', 'amanecer', 'escaleras', 'paris', 'sacrificio'],
@@ -253,7 +253,7 @@ const IDENTITIES = [
   {
     id: 'magic_a',
     title: 'El Gran Mago',
-    url: '/cabina/magic_a.jpg',
+    url: 'magic_a.jpg',
     category: 'fantasy',
     subCategory: 'Magia',
     tags: ['magia', 'magos', 'cartas', 'ilusion', 'truco', 'chistera', 'misterio', 'humo'],
@@ -262,7 +262,7 @@ const IDENTITIES = [
   {
     id: 'magic_b',
     title: 'Ilusión Real',
-    url: '/cabina/magic_b.jpg',
+    url: 'magic_b.jpg',
     category: 'fantasy',
     subCategory: 'Magia',
     tags: ['magia', 'cartas', 'fuego', 'levitacion', 'misterio', 'show', 'escenario', 'magico'],
@@ -271,7 +271,7 @@ const IDENTITIES = [
   {
     id: 'magic_c',
     title: 'Arcane Master',
-    url: '/cabina/magic_c.jpg',
+    url: 'magic_c.jpg',
     category: 'fantasy',
     subCategory: 'Magia',
     tags: ['magia', 'hechizo', 'runas', 'libro', 'poder', 'energia', 'azul'],
@@ -280,7 +280,7 @@ const IDENTITIES = [
   {
     id: 'magic_d',
     title: 'Dark Illusion',
-    url: '/cabina/magic_d.jpg',
+    url: 'magic_d.jpg',
     category: 'fantasy',
     subCategory: 'Magia',
     tags: ['magia', 'oscuro', 'sombras', 'vudu', 'miedo', 'cuervo'],
@@ -289,7 +289,7 @@ const IDENTITIES = [
   {
     id: 'magic_e',
     title: 'Street Magic',
-    url: '/cabina/magic_e.jpg',
+    url: 'magic_e.jpg',
     category: 'fantasy',
     subCategory: 'Magia',
     tags: ['magia', 'calle', 'moneda', 'mano', 'close up', 'asombro'],
@@ -298,7 +298,7 @@ const IDENTITIES = [
   {
     id: 'sup_a',
     title: 'The Avenger',
-    url: '/cabina/sup_a.jpg',
+    url: 'sup_a.jpg',
     category: 'cinema',
     subCategory: 'Superhéroes',
     tags: ['superheroes', 'ironman', 'avengers', 'tech', 'poder', 'vengadores', 'heroe', 'vuelo'],
@@ -307,7 +307,7 @@ const IDENTITIES = [
   {
     id: 'sup_b',
     title: 'Legacy of Thor',
-    url: '/cabina/sup_b.jpg',
+    url: 'sup_b.jpg',
     category: 'cinema',
     subCategory: 'Superhéroes',
     tags: ['superheroes', 'thor', 'hulk', 'god', 'trueno', 'fuerza', 'martillo', 'epico'],
@@ -316,7 +316,7 @@ const IDENTITIES = [
   {
     id: 'sup_c',
     title: 'Cosmic Guardian',
-    url: '/cabina/sup_c.jpg',
+    url: 'sup_c.jpg',
     category: 'cinema',
     subCategory: 'Superhéroes',
     tags: ['superheroes', 'guardian', 'galaxia', 'estrellas', 'vuelo', 'fuerza'],
@@ -325,7 +325,7 @@ const IDENTITIES = [
   {
     id: 'sup_d',
     title: 'Emerald Might',
-    url: '/cabina/sup_d.jpg',
+    url: 'sup_d.jpg',
     category: 'cinema',
     subCategory: 'Superhéroes',
     tags: ['superheroes', 'hulk', 'fuerza', 'verde', 'destruccion', 'enojo'],
@@ -334,7 +334,7 @@ const IDENTITIES = [
   {
     id: 'sup_e',
     title: 'Justice Knight',
-    url: '/cabina/sup_e.jpg',
+    url: 'sup_e.jpg',
     category: 'cinema',
     subCategory: 'Superhéroes',
     tags: ['superheroes', 'batman', 'noche', 'capa', 'justicia', 'murcielago'],
@@ -343,7 +343,7 @@ const IDENTITIES = [
   {
     id: 'sup_f',
     title: 'Knight Alt I',
-    url: '/cabina/sup_f.jpg',
+    url: 'sup_f.jpg',
     category: 'cinema',
     subCategory: 'Superhéroes',
     tags: ['superheroes', 'variante', 'oscuro', 'armadura'],
@@ -352,7 +352,7 @@ const IDENTITIES = [
   {
     id: 'sup_g',
     title: 'Knight Alt II',
-    url: '/cabina/sup_g.jpg',
+    url: 'sup_g.jpg',
     category: 'cinema',
     subCategory: 'Superhéroes',
     tags: ['superheroes', 'variante', 'tecnologico', 'azul'],
@@ -1312,42 +1312,49 @@ const App: React.FC = () => {
                       <h3 className="text-sm font-black tracking-[4px] uppercase text-white/60 italic">{subCat}</h3>
                       <div className="flex-grow h-[1px] bg-white/5" />
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 justify-items-center">
-                      {mergedIdentities
-                        .filter(id => {
-                          const matchesCategory = activeCategory === 'all' || id.category === activeCategory;
-                          const q = searchQuery.toLowerCase();
-                          return id.subCategory === subCat && matchesCategory && (
-                            id.title.toLowerCase().includes(q) ||
-                            id.subCategory.toLowerCase().includes(q) ||
-                            id.tags.some(tag => tag.toLowerCase().includes(q))
-                          );
-                        })
-                        .map((identity) => (
-                          <UploadCard
-                            key={identity.id}
-                            type="character"
-                            title={identity.title}
-                            sampleImageUrl={identity.url}
-                            isSelected={formData.selectedIdentity === identity.id}
-                            isPremium={identity.isPremium && !profile?.unlocked_packs?.includes(identity.subCategory) && !profile?.is_master}
-                            tags={identity.tags}
-                            onSelect={() => {
-                              const isActuallyPremium = identity.isPremium && !profile?.unlocked_packs?.includes(identity.subCategory) && !profile?.is_master;
-                              if (isActuallyPremium) {
-                                if (profile && profile.credits >= PREMIUM_PACK_PRICE) {
-                                  setPackToUnlock(identity);
-                                } else {
-                                  setShowPremiumOffer(true);
-                                }
-                              } else {
-                                setFormData(p => ({ ...p, selectedIdentity: identity.id }));
-                                setAppStep('setup');
-                                window.scrollTo({ top: 0, behavior: 'smooth' });
-                              }
-                            }}
-                          />
-                        ))}
+                    <div className="relative group/carousel">
+                      <div className="flex overflow-x-auto pb-12 gap-6 snap-x snap-mandatory no-scrollbar scroll-smooth px-4">
+                        {mergedIdentities
+                          .filter(id => {
+                            const matchesCategory = activeCategory === 'all' || id.category === activeCategory;
+                            const q = searchQuery.toLowerCase();
+                            return id.subCategory === subCat && matchesCategory && (
+                              id.title.toLowerCase().includes(q) ||
+                              id.subCategory.toLowerCase().includes(q) ||
+                              id.tags.some(tag => tag.toLowerCase().includes(q))
+                            );
+                          })
+                          .map((identity) => (
+                            <div key={identity.id} className="min-w-[280px] sm:min-w-[320px] snap-center transform hover:scale-[1.02] transition-transform duration-500">
+                              <UploadCard
+                                type="character"
+                                title={identity.title}
+                                sampleImageUrl={identity.url}
+                                isSelected={formData.selectedIdentity === identity.id}
+                                isPremium={identity.isPremium && !profile?.unlocked_packs?.includes(identity.subCategory) && !profile?.is_master}
+                                tags={identity.tags}
+                                onSelect={() => {
+                                  const isActuallyPremium = identity.isPremium && !profile?.unlocked_packs?.includes(identity.subCategory) && !profile?.is_master;
+                                  if (isActuallyPremium) {
+                                    if (profile && profile.credits >= PREMIUM_PACK_PRICE) {
+                                      setPackToUnlock(identity);
+                                    } else {
+                                      setShowPremiumOffer(true);
+                                    }
+                                  } else {
+                                    setFormData(p => ({ ...p, selectedIdentity: identity.id }));
+                                    setAppStep('setup');
+                                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                                  }
+                                }}
+                              />
+                            </div>
+                          ))}
+                      </div>
+
+                      {/* Carousel Fade Edges */}
+                      <div className="absolute left-0 top-0 bottom-12 w-20 bg-gradient-to-r from-[#050505]/80 to-transparent pointer-events-none z-[10] opacity-0 group-hover/carousel:opacity-100 transition-opacity" />
+                      <div className="absolute right-0 top-0 bottom-12 w-20 bg-gradient-to-l from-[#050505]/80 to-transparent pointer-events-none z-[10] opacity-0 group-hover/carousel:opacity-100 transition-opacity" />
                     </div>
                   </div>
                 ))}
