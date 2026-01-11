@@ -7,6 +7,7 @@ import { Auth } from './components/Auth';
 import { Admin } from './components/Admin';
 import { supabase } from './lib/supabaseClient';
 import { FormState } from './types';
+import confetti from 'canvas-confetti';
 
 const IDENTITIES = [
   {
@@ -369,6 +370,25 @@ const App: React.FC = () => {
       setProfile(prev => prev ? { ...prev, credits: newCredits, unlocked_packs: newUnlockedPacks } : null);
       setPackToUnlock(null);
       setErrorMessage(null);
+
+      // 🎉 Efecto Confetti
+      const duration = 3 * 1000;
+      const animationEnd = Date.now() + duration;
+      const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 500 };
+
+      const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
+
+      const interval: any = setInterval(function () {
+        const timeLeft = animationEnd - Date.now();
+
+        if (timeLeft <= 0) {
+          return clearInterval(interval);
+        }
+
+        const particleCount = 50 * (timeLeft / duration);
+        confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 }, colors: ['#ff5500', '#ffffff', '#00d2ff'] });
+        confetti({ ...defaults, particleCount, origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 }, colors: ['#ff5500', '#ffffff', '#00d2ff'] });
+      }, 250);
 
     } catch (error) {
       console.error('Error unlocking pack:', error);
@@ -816,9 +836,17 @@ const App: React.FC = () => {
             <div className="absolute inset-0 bg-accent/20 blur-[100px] rounded-full animate-pulse" />
 
             <div className="relative w-32 h-32 flex items-center justify-center">
-              <Loader2 className="w-full h-full text-accent animate-spin stroke-[1px]" />
+              <div className="absolute inset-0 border-[1px] border-accent/20 rounded-full animate-[ping_3s_linear_infinite]" />
+              <div className="absolute inset-[-10px] border-[1px] border-white/5 rounded-full animate-[ping_4s_linear_infinite]" />
+
+              <Loader2 className="w-full h-full text-accent animate-spin stroke-[1px] opacity-40" />
+
               <div className="absolute inset-0 flex items-center justify-center">
-                <span className="text-2xl font-black italic tracking-tighter">{elapsedSeconds}s</span>
+                <div className="flex flex-col items-center">
+                  <Monitor className="w-6 h-6 text-accent animate-pulse mb-1" />
+                  <span className="text-xl font-black italic tracking-tighter text-white">AI</span>
+                  <span className="text-[6px] font-black uppercase tracking-[2px] text-accent/60">Scanning...</span>
+                </div>
               </div>
             </div>
           </div>

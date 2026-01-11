@@ -11,6 +11,7 @@
   "dependencies": {
     "@react-three/fiber": "^9.4.0",
     "@supabase/supabase-js": "^2.90.1",
+    "@types/canvas-confetti": "^1.9.0",
     "lucide-react": "^0.554.0",
     "qrcode.react": "^4.2.0",
     "react": "^19.2.0",
@@ -21,7 +22,9 @@
     "@types/node": "^22.14.0",
     "@vitejs/plugin-basic-ssl": "^2.1.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "canvas-confetti": "^1.9.4",
     "typescript": "~5.8.2",
-    "vite": "^6.2.0"
+    "vite": "^6.2.0",
+    "vite-plugin-pwa": "^1.2.0"
   }
 }

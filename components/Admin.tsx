@@ -65,6 +65,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack, IDENTITIES }) => {
     const [selectedUser, setSelectedUser] = useState<Profile | null>(null);
     const [userHistory, setUserHistory] = useState<any[]>([]);
     const [loadingHistory, setLoadingHistory] = useState(false);
+    const [styleUpdatingId, setStyleUpdatingId] = useState<string | null>(null);
 
     // Add User State
     const [showAddModal, setShowAddModal] = useState(false);
@@ -166,10 +167,17 @@ export const Admin: React.FC<AdminProps> = ({ onBack, IDENTITIES }) => {
 
     const updateStylePremium = async (styleId: string, isPremium: boolean) => {
         try {
+            setStyleUpdatingId(styleId);
             const { error } = await supabase
                 .from('styles_metadata')
-                .upsert({ id: styleId, is_premium: isPremium, updated_at: new Date().toISOString() });
+                .upsert({
+                    id: styleId,
+                    is_premium: isPremium,
+                    updated_at: new Date().toISOString()
+                });
+
             if (error) throw error;
+
             setStylesMetadata(prev => {
                 const existing = prev.find(s => s.id === styleId);
                 if (existing) {
@@ -177,8 +185,11 @@ export const Admin: React.FC<AdminProps> = ({ onBack, IDENTITIES }) => {
                 }
                 return [...prev, { id: styleId, is_premium: isPremium }];
             });
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error updating style premium:', error);
+            alert(`Error al actualizar estilo: ${error.message || 'Error desconocido'}`);
+        } finally {
+            setStyleUpdatingId(null);
         }
     };
 
@@ -731,13 +742,20 @@ export const Admin: React.FC<AdminProps> = ({ onBack, IDENTITIES }) => {
                                                 </td>
                                                 <td className="px-8 py-6 text-right">
                                                     <button
+                                                        disabled={styleUpdatingId === packName}
                                                         onClick={() => updateStylePremium(packName, !isPremium)}
-                                                        className={`px-4 py-2 rounded-xl border transition-all text-[9px] font-black uppercase tracking-[2px] ${isPremium
+                                                        className={`px-4 py-2 rounded-xl border transition-all text-[9px] font-black uppercase tracking-[2px] flex items-center gap-2 ml-auto ${isPremium
                                                             ? 'bg-white/5 border-white/10 text-white hover:bg-white/10'
                                                             : 'bg-accent border-accent text-white hover:bg-white hover:text-black hover:border-white shadow-lg shadow-accent/20'
-                                                            }`}
+                                                            } ${styleUpdatingId === packName ? 'opacity-50 cursor-not-allowed' : ''}`}
                                                     >
-                                                        {isPremium ? 'Quitar Premium' : 'Hacer Premium'}
+                                                        {styleUpdatingId === packName ? (
+                                                            <Loader2 className="w-3 h-3 animate-spin" />
+                                                        ) : isPremium ? (
+                                                            'Quitar Premium'
+                                                        ) : (
+                                                            'Hacer Premium'
+                                                        )}
                                                     </button>
                                                 </td>
                                             </tr>
