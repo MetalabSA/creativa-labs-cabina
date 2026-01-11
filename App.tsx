@@ -177,13 +177,68 @@ const IDENTITIES = [
     category: 'urban',
     subCategory: 'Urbano',
     tags: ['analog', 'grainy', 'retro', '90s', 'rollo', 'sepia', 'viejo', 'fotografia', 'vhs']
+  },
+  {
+    id: 'jhonw_a',
+    title: 'Baba Yaga',
+    url: '/cabina/jhonw_a.jpg',
+    category: 'cinema',
+    subCategory: 'John Wick',
+    tags: ['john wick', 'accion', 'suit', 'weapons', 'venganza', 'traje', 'asesino', 'perro'],
+    isPremium: true
+  },
+  {
+    id: 'jhonw_b',
+    title: 'The Continental',
+    url: '/cabina/jhonw_b.jpg',
+    category: 'cinema',
+    subCategory: 'John Wick',
+    tags: ['john wick', 'hotel', 'neon', 'mercy', 'noche', 'monedas', 'lujo', 'accion'],
+    isPremium: true
+  },
+  {
+    id: 'magic_a',
+    title: 'El Gran Mago',
+    url: '/cabina/magic_a.jpg',
+    category: 'fantasy',
+    subCategory: 'Magia',
+    tags: ['magia', 'magos', 'cartas', 'ilusion', 'truco', 'chistera', 'misterio', 'humo'],
+    isPremium: false
+  },
+  {
+    id: 'magic_b',
+    title: 'Ilusión Real',
+    url: '/cabina/magic_b.jpg',
+    category: 'fantasy',
+    subCategory: 'Magia',
+    tags: ['magia', 'cartas', 'fuego', 'levitacion', 'misterio', 'show', 'escenario', 'magico'],
+    isPremium: false
+  },
+  {
+    id: 'sup_a',
+    title: 'The Avenger',
+    url: '/cabina/sup_a.jpg',
+    category: 'cinema',
+    subCategory: 'Superhéroes',
+    tags: ['superheroes', 'ironman', 'avengers', 'tech', 'poder', 'vengadores', 'heroe', 'vuelo'],
+    isPremium: true
+  },
+  {
+    id: 'sup_b',
+    title: 'Legacy of Thor',
+    url: '/cabina/sup_b.jpg',
+    category: 'cinema',
+    subCategory: 'Superhéroes',
+    tags: ['superheroes', 'thor', 'hulk', 'god', 'trueno', 'fuerza', 'martillo', 'epico'],
+    isPremium: true
   }
 ];
 
 const CATEGORIES = [
   { id: 'all', label: 'Todo', icon: Sparkles },
   { id: 'series', label: 'Series', icon: Monitor },
-  { id: 'sports', label: 'Deportes', icon: Zap },
+  { id: 'cinema', label: 'Cine', icon: Layout },
+  { id: 'fantasy', label: 'Fantasía', icon: Sparkles },
   { id: 'urban', label: 'Urbano', icon: Camera }
 ];
 
@@ -247,7 +302,7 @@ const App: React.FC = () => {
   // Lógica "Para Vos": Seleccionamos 4 estilos destacados (aleatorios pero consistentes por sesión)
   const recommendedIdentities = React.useMemo(() => {
     // Definimos algunos IDs que queremos que aparezcan seguro o priorizamos
-    const priorityIds = ['f1_a', 'pb_a', 'suit_a', 'bb_a', 'ph_c'];
+    const priorityIds = ['jhonw_a', 'sup_a', 'pb_a', 'f1_a', 'magic_a'];
     return mergedIdentities
       .filter(id => priorityIds.includes(id.id))
       .sort(() => Math.random() - 0.5)
