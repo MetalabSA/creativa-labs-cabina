@@ -197,6 +197,60 @@ const IDENTITIES = [
     isPremium: true
   },
   {
+    id: 'jhonw_c',
+    title: 'High Table Legacy',
+    url: '/cabina/jhonw_c.jpg',
+    category: 'cinema',
+    subCategory: 'John Wick',
+    tags: ['john wick', 'trama', 'poder', 'oro', 'consejo', 'elegante', 'noir'],
+    isPremium: true
+  },
+  {
+    id: 'jhonw_d',
+    title: 'Excommunicado',
+    url: '/cabina/jhonw_d.jpg',
+    category: 'cinema',
+    subCategory: 'John Wick',
+    tags: ['john wick', 'escape', 'lluvia', 'recompensa', 'reloj', 'correr', 'persecucion'],
+    isPremium: true
+  },
+  {
+    id: 'jhonw_e',
+    title: 'Desert Assassin',
+    url: '/cabina/jhonw_e.jpg',
+    category: 'cinema',
+    subCategory: 'John Wick',
+    tags: ['john wick', 'desierto', 'arena', 'casablanca', 'calor', 'caballo'],
+    isPremium: true
+  },
+  {
+    id: 'jhonw_f',
+    title: 'Ballerina Soul',
+    url: '/cabina/jhonw_f.jpg',
+    category: 'cinema',
+    subCategory: 'John Wick',
+    tags: ['john wick', 'danza', 'pelea', 'ballet', 'teatro', 'elegancia'],
+    isPremium: true
+  },
+  {
+    id: 'jhonw_g',
+    title: 'Osaka Night',
+    url: '/cabina/jhonw_g.jpg',
+    category: 'cinema',
+    subCategory: 'John Wick',
+    tags: ['john wick', 'japon', 'katana', 'neon', 'rojo', 'samurai'],
+    isPremium: true
+  },
+  {
+    id: 'jhonw_h',
+    title: 'Last Stand',
+    url: '/cabina/jhonw_h.jpg',
+    category: 'cinema',
+    subCategory: 'John Wick',
+    tags: ['john wick', 'final', 'amanecer', 'escaleras', 'paris', 'sacrificio'],
+    isPremium: true
+  },
+  {
     id: 'magic_a',
     title: 'El Gran Mago',
     url: '/cabina/magic_a.jpg',
@@ -215,6 +269,33 @@ const IDENTITIES = [
     isPremium: false
   },
   {
+    id: 'magic_c',
+    title: 'Arcane Master',
+    url: '/cabina/magic_c.jpg',
+    category: 'fantasy',
+    subCategory: 'Magia',
+    tags: ['magia', 'hechizo', 'runas', 'libro', 'poder', 'energia', 'azul'],
+    isPremium: false
+  },
+  {
+    id: 'magic_d',
+    title: 'Dark Illusion',
+    url: '/cabina/magic_d.jpg',
+    category: 'fantasy',
+    subCategory: 'Magia',
+    tags: ['magia', 'oscuro', 'sombras', 'vudu', 'miedo', 'cuervo'],
+    isPremium: false
+  },
+  {
+    id: 'magic_e',
+    title: 'Street Magic',
+    url: '/cabina/magic_e.jpg',
+    category: 'fantasy',
+    subCategory: 'Magia',
+    tags: ['magia', 'calle', 'moneda', 'mano', 'close up', 'asombro'],
+    isPremium: false
+  },
+  {
     id: 'sup_a',
     title: 'The Avenger',
     url: '/cabina/sup_a.jpg',
@@ -230,6 +311,51 @@ const IDENTITIES = [
     category: 'cinema',
     subCategory: 'Superhéroes',
     tags: ['superheroes', 'thor', 'hulk', 'god', 'trueno', 'fuerza', 'martillo', 'epico'],
+    isPremium: true
+  },
+  {
+    id: 'sup_c',
+    title: 'Cosmic Guardian',
+    url: '/cabina/sup_c.jpg',
+    category: 'cinema',
+    subCategory: 'Superhéroes',
+    tags: ['superheroes', 'guardian', 'galaxia', 'estrellas', 'vuelo', 'fuerza'],
+    isPremium: true
+  },
+  {
+    id: 'sup_d',
+    title: 'Emerald Might',
+    url: '/cabina/sup_d.jpg',
+    category: 'cinema',
+    subCategory: 'Superhéroes',
+    tags: ['superheroes', 'hulk', 'fuerza', 'verde', 'destruccion', 'enojo'],
+    isPremium: true
+  },
+  {
+    id: 'sup_e',
+    title: 'Justice Knight',
+    url: '/cabina/sup_e.jpg',
+    category: 'cinema',
+    subCategory: 'Superhéroes',
+    tags: ['superheroes', 'batman', 'noche', 'capa', 'justicia', 'murcielago'],
+    isPremium: true
+  },
+  {
+    id: 'sup_e1',
+    title: 'Knight Alt I',
+    url: '/cabina/sup_e-1.jpg',
+    category: 'cinema',
+    subCategory: 'Superhéroes',
+    tags: ['superheroes', 'variante', 'oscuro', 'armadura'],
+    isPremium: true
+  },
+  {
+    id: 'sup_e2',
+    title: 'Knight Alt II',
+    url: '/cabina/sup_e-2.jpg',
+    category: 'cinema',
+    subCategory: 'Superhéroes',
+    tags: ['superheroes', 'variante', 'tecnologico', 'azul'],
     isPremium: true
   }
 ];
