@@ -484,12 +484,15 @@ const App: React.FC = () => {
   }, [searchQuery, session?.user?.id]);
 
   useEffect(() => {
+    fetchStylesMetadata();
+  }, [showAdmin]);
+
+  useEffect(() => {
     if (session?.user) {
       fetchProfile();
       fetchGenerations();
-      fetchStylesMetadata();
     }
-  }, [session, showAdmin]);
+  }, [session]);
 
   const fetchStylesMetadata = async () => {
     try {
