@@ -430,7 +430,8 @@ const App: React.FC = () => {
       const meta = stylesMetadata.find(m => m.id === style.id || m.id === style.subCategory);
       return {
         ...style,
-        isPremium: meta ? meta.is_premium : style.isPremium
+        isPremium: meta ? meta.is_premium : style.isPremium,
+        usageCount: meta?.usage_count || 0
       };
     });
   }, [stylesMetadata]);
@@ -443,6 +444,13 @@ const App: React.FC = () => {
       .filter(id => priorityIds.includes(id.id))
       .sort(() => Math.random() - 0.5)
       .slice(0, 4);
+  }, [mergedIdentities]);
+
+  const topIdentities = React.useMemo(() => {
+    return [...mergedIdentities]
+      .sort((a, b) => (b.usageCount || 0) - (a.usageCount || 0))
+      .slice(0, 5)
+      .filter(id => (id.usageCount || 0) > 0);
   }, [mergedIdentities]);
 
   useEffect(() => {
@@ -481,7 +489,7 @@ const App: React.FC = () => {
       fetchGenerations();
       fetchStylesMetadata();
     }
-  }, [session]);
+  }, [session, showAdmin]);
 
   const fetchStylesMetadata = async () => {
     try {
@@ -801,6 +809,13 @@ const App: React.FC = () => {
           image_url: result.image_url,
           aspect_ratio: formData.aspectRatio
         });
+
+        // INCREMENT USAGE COUNTER
+        try {
+          await supabase.rpc('increment_style_usage', { style_id_text: formData.selectedIdentity });
+        } catch (usageErr) {
+          console.error('Error incrementing usage:', usageErr);
+        }
 
 
         fetchProfile();
@@ -1262,7 +1277,54 @@ const App: React.FC = () => {
                           title={identity.title}
                           sampleImageUrl={identity.url}
                           isSelected={formData.selectedIdentity === identity.id}
-                          isPremium={identity.isPremium && !profile?.unlocked_packs?.includes(identity.subCategory) && !profile?.is_master}
+                          isPremium={identity.isPremium}
+                          isUnlocked={profile?.unlocked_packs?.includes(identity.subCategory) || profile?.is_master}
+                          usageCount={identity.usageCount}
+                          isTopStyle={topIdentities.some(t => t.id === identity.id)}
+                          tags={[]}
+                          onSelect={() => {
+                            const isActuallyPremium = identity.isPremium && !profile?.unlocked_packs?.includes(identity.subCategory) && !profile?.is_master;
+                            if (isActuallyPremium) {
+                              if (profile && profile.credits >= PREMIUM_PACK_PRICE) {
+                                setPackToUnlock(identity);
+                              } else {
+                                setShowPremiumOffer(true);
+                              }
+                            } else {
+                              setFormData(p => ({ ...p, selectedIdentity: identity.id }));
+                              setAppStep('setup');
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Top 5 Most Used Styles */}
+              {!searchQuery && topIdentities.length > 0 && (
+                <div className="mb-20 animate-[fadeIn_1.2s_ease-out]">
+                  <div className="flex items-center justify-center gap-4 mb-10">
+                    <div className="h-[1px] w-12 bg-gradient-to-r from-transparent to-accent" />
+                    <Zap className="w-5 h-5 text-accent animate-pulse" />
+                    <h3 className="text-[12px] font-black tracking-[6px] uppercase text-white italic">Los Más Buscados</h3>
+                    <Zap className="w-5 h-5 text-accent animate-pulse" />
+                    <div className="h-[1px] w-12 bg-gradient-to-l from-transparent to-accent" />
+                  </div>
+                  <div className="flex flex-nowrap overflow-x-auto pb-8 gap-4 px-4 no-scrollbar justify-center">
+                    {topIdentities.map((identity) => (
+                      <div key={`top-${identity.id}`} className="min-w-[120px] sm:min-w-[140px] transform hover:scale-110 transition-all duration-500">
+                        <UploadCard
+                          type="character"
+                          title={identity.title}
+                          sampleImageUrl={identity.url}
+                          isSelected={formData.selectedIdentity === identity.id}
+                          isPremium={identity.isPremium}
+                          isUnlocked={profile?.unlocked_packs?.includes(identity.subCategory) || profile?.is_master}
+                          usageCount={identity.usageCount}
+                          isTopStyle={true}
                           tags={[]}
                           onSelect={() => {
                             const isActuallyPremium = identity.isPremium && !profile?.unlocked_packs?.includes(identity.subCategory) && !profile?.is_master;
@@ -1405,7 +1467,10 @@ const App: React.FC = () => {
                                     title={identity.title}
                                     sampleImageUrl={identity.url}
                                     isSelected={formData.selectedIdentity === identity.id}
-                                    isPremium={identity.isPremium && !profile?.unlocked_packs?.includes(identity.subCategory) && !profile?.is_master}
+                                    isPremium={identity.isPremium}
+                                    isUnlocked={profile?.unlocked_packs?.includes(identity.subCategory) || profile?.is_master}
+                                    usageCount={identity.usageCount}
+                                    isTopStyle={topIdentities.some(t => t.id === identity.id)}
                                     tags={identity.tags}
                                     onSelect={() => {
                                       const isActuallyPremium = identity.isPremium && !profile?.unlocked_packs?.includes(identity.subCategory) && !profile?.is_master;

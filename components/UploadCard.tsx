@@ -9,11 +9,14 @@ interface UploadCardProps {
   sampleImageUrl: string;
   isSelected: boolean;
   isPremium?: boolean;
+  isUnlocked?: boolean;
+  usageCount?: number;
+  isTopStyle?: boolean;
   tags?: string[];
   onSelect: () => void;
 }
 
-const UploadCard: React.FC<UploadCardProps> = ({ title, sampleImageUrl, isSelected, onSelect, isPremium, tags }) => {
+const UploadCard: React.FC<UploadCardProps> = ({ title, sampleImageUrl, isSelected, onSelect, isPremium, isUnlocked, usageCount, isTopStyle, tags }) => {
   const [imageError, setImageError] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
 
@@ -67,6 +70,22 @@ const UploadCard: React.FC<UploadCardProps> = ({ title, sampleImageUrl, isSelect
         <div className="absolute top-6 left-6 z-[20] flex items-center gap-2 px-3 py-1 bg-gradient-to-r from-amber-500 to-yellow-300 rounded-full shadow-[0_0_20px_rgba(245,158,11,0.4)] animate-pulse">
           <Sparkles className="w-3 h-3 text-white" />
           <span className="text-[8px] font-black text-white uppercase tracking-[1px]">Premium</span>
+        </div>
+      )}
+
+      {/* Usage Counter Badge */}
+      {usageCount !== undefined && usageCount > 0 && (
+        <div className={`absolute bottom-6 left-6 z-[20] flex items-center gap-1.5 px-2.5 py-1 bg-black/60 backdrop-blur-md rounded-full border border-white/10 transition-all duration-500
+          ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
+          <div className="w-1 h-1 rounded-full bg-accent animate-pulse" />
+          <span className="text-[7px] font-black text-white/70 uppercase tracking-[1px]">{usageCount} usos</span>
+        </div>
+      )}
+
+      {/* Top 5 Badge */}
+      {isTopStyle && (
+        <div className="absolute top-6 right-6 z-[20] flex items-center justify-center w-8 h-8 bg-accent/20 backdrop-blur-xl border border-accent/40 rounded-full shadow-[0_0_15px_rgba(255,85,0,0.3)] animate-bounce duration-[2000ms]">
+          <Sparkles className="w-4 h-4 text-accent" />
         </div>
       )}
       {/* Dynamic Scan Line Animation */}
@@ -135,7 +154,7 @@ const UploadCard: React.FC<UploadCardProps> = ({ title, sampleImageUrl, isSelect
             ${isSelected
               ? 'bg-accent text-white border-accent shadow-[0_0_20px_rgba(255,85,0,0.4)]'
               : 'bg-black/60 text-white/40 border-white/10'}`}>
-            {isSelected ? 'ACTIVO' : isPremium ? 'DESBLOQUEAR' : 'SELECCIONAR'}
+            {isSelected ? 'ACTIVO' : (isPremium && !isUnlocked) ? 'DESBLOQUEAR' : 'SELECCIONAR'}
           </div>
 
           {/* Tags */}
