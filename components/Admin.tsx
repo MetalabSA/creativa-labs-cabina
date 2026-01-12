@@ -426,7 +426,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack, IDENTITIES }) => {
                             <button
                                 onClick={async () => {
                                     await supabase.auth.signOut();
-                                    window.location.reload();
+                                    window.location.href = '/cabina/';
                                 }}
                                 className="w-12 h-12 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center hover:bg-red-500/20 transition-all text-red-400"
                                 title="Cerrar Sesión"

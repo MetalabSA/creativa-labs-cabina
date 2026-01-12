@@ -1062,7 +1062,7 @@ const App: React.FC = () => {
             <button
               onClick={async () => {
                 await supabase.auth.signOut();
-                window.location.href = '/'; // Forzar redirección al inicio y limpieza de estado
+                window.location.href = '/cabina/'; // Redirigir a la raíz de la cabina
               }}
               className="group flex items-center gap-3 bg-white/5 hover:bg-red-500/10 border border-white/10 hover:border-red-500/20 px-6 py-3 rounded-full transition-all duration-500 pointer-events-auto"
             >
