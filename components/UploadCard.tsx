@@ -75,7 +75,8 @@ const UploadCard: React.FC<UploadCardProps> = ({ title, sampleImageUrl, isSelect
 
       {/* Usage Counter Badge */}
       {usageCount !== undefined && usageCount > 0 && (
-        <div className={`absolute bottom-6 left-6 z-[20] flex items-center gap-1.5 px-2.5 py-1 bg-black/60 backdrop-blur-md rounded-full border border-white/10 transition-all duration-500
+        <div className={`absolute left-6 z-[20] flex items-center gap-1.5 px-2.5 py-1 bg-black/60 backdrop-blur-md rounded-full border border-white/10 transition-all duration-500
+          ${isPremium ? 'top-16' : 'top-6'}
           ${isSelected ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
           <div className="w-1 h-1 rounded-full bg-accent animate-pulse" />
           <span className="text-[7px] font-black text-white/70 uppercase tracking-[1px]">{usageCount} usos</span>
