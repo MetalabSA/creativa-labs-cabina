@@ -1796,8 +1796,7 @@ const App: React.FC = () => {
                 {[
                   { name: 'Starter', price: 4000, credits: 500, bonus: '', color: 'white/5', popular: false },
                   { name: 'Standard', price: 8000, credits: 1100, bonus: '+10% Extra', color: 'accent/5', popular: true },
-                  { name: 'Business', price: 10000, credits: 1500, bonus: '+20% Extra', color: 'white/5', popular: false },
-                  { name: 'Unlock Premium', price: 20000, credits: 3000, bonus: 'Pack Completo', color: 'accent/5', premium: true }
+                  { name: 'Business', price: 10000, credits: 1500, bonus: '+20% Extra', color: 'white/5', popular: false }
                 ].map((pack) => (
                   <div
                     key={pack.name}
@@ -1836,7 +1835,7 @@ const App: React.FC = () => {
                       {processingPayment === pack.name ? (
                         <Loader2 className="w-4 h-4 animate-spin" />
                       ) : (
-                        'Próximamente'
+                        'Comprar'
                       )}
                     </button>
                   </div>
