@@ -982,26 +982,45 @@ const App: React.FC = () => {
 
       console.log('Respuesta de función:', data);
 
+      if (data?.error) {
+        const msg = data.message || "Error desconocido en el servidor.";
+        setErrorMessage(`Error de Pago: ${msg}`);
+        setNotifications(prev => [...prev, {
+          id: Date.now().toString(),
+          message: `❌ ${msg}`,
+          type: 'error'
+        }]);
+        return;
+      }
+
       const paymentUrl = data?.sandbox_init_point || data?.init_point;
       if (paymentUrl) {
         window.location.href = paymentUrl;
       } else {
         console.error('No se recibió URL de pago:', data);
-        const errorMsg = data?.error || data?.message || "No se pudo generar el enlace de pago.";
-        setErrorMessage(`Error: ${errorMsg}`);
+        setErrorMessage("No se pudo generar el enlace de pago.");
         setNotifications(prev => [...prev, {
           id: Date.now().toString(),
-          message: `❌ Error de Pago: ${errorMsg}`,
+          message: `❌ Error: No se recibió link de pago`,
           type: 'error'
         }]);
       }
     } catch (err: any) {
       console.error('Error initiating payment:', err);
-      const errorMsg = err.message || 'No se pudo iniciar el proceso de pago.';
-      setErrorMessage(`Error de conexión: ${errorMsg}`);
+      let errorMsg = err.message || 'No se pudo iniciar el proceso de pago.';
+
+      // Intentar extraer mensaje si es un error de Supabase Function
+      if (err.context) {
+        try {
+          const body = await err.context.json();
+          errorMsg = body.message || body.error || errorMsg;
+        } catch (e) { }
+      }
+
+      setErrorMessage(`Error: ${errorMsg}`);
       setNotifications(prev => [...prev, {
         id: Date.now().toString(),
-        message: `❌ Error de Conexión: ${errorMsg}`,
+        message: `❌ ${errorMsg}`,
         type: 'error'
       }]);
     } finally {
