@@ -989,10 +989,21 @@ const App: React.FC = () => {
         console.error('No se recibió URL de pago:', data);
         const errorMsg = data?.error || data?.message || "No se pudo generar el enlace de pago.";
         setErrorMessage(`Error: ${errorMsg}`);
+        setNotifications(prev => [...prev, {
+          id: Date.now().toString(),
+          message: `❌ Error de Pago: ${errorMsg}`,
+          type: 'error'
+        }]);
       }
     } catch (err: any) {
       console.error('Error initiating payment:', err);
-      setErrorMessage(`Error de conexión: ${err.message || 'No se pudo iniciar el proceso de pago.'}`);
+      const errorMsg = err.message || 'No se pudo iniciar el proceso de pago.';
+      setErrorMessage(`Error de conexión: ${errorMsg}`);
+      setNotifications(prev => [...prev, {
+        id: Date.now().toString(),
+        message: `❌ Error de Conexión: ${errorMsg}`,
+        type: 'error'
+      }]);
     } finally {
       setProcessingPayment(null);
     }
@@ -1786,8 +1797,8 @@ const App: React.FC = () => {
       {/* Modal de Precios */}
       {
         showPricing && (
-          <div className="fixed inset-0 z-[300] bg-black/70 backdrop-blur-md flex items-center justify-center p-4 animate-[fadeIn_0.3s_ease-out]">
-            <div className="relative w-full max-w-3xl bg-[#0a0a0c]/90 backdrop-blur-2xl rounded-[40px] p-6 md:p-8 border border-white/10 text-center shadow-2xl overflow-y-auto max-h-[95vh]">
+          <div className="fixed inset-0 z-[300] bg-black/40 backdrop-blur-md flex items-center justify-center p-4 animate-[fadeIn_0.3s_ease-out]">
+            <div className="relative w-full max-w-xl bg-white/5 backdrop-blur-[40px] rounded-[32px] p-6 md:p-8 border border-white/10 text-center shadow-2xl overflow-y-auto max-h-[95vh]">
               <button
                 onClick={() => setShowPricing(false)}
                 className="absolute top-6 right-6 w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
@@ -1799,20 +1810,20 @@ const App: React.FC = () => {
                 <CreditCard className="w-8 h-8 text-accent" />
               </div>
 
-              <h3 className="text-2xl md:text-3xl font-black mb-1 uppercase italic tracking-tight">Elegí tu Pack</h3>
-              <p className="text-accent text-[8px] font-black uppercase tracking-[3px] mb-1">Desbloquea todos los estilos Premium</p>
-              <p className="text-white/40 text-[7px] uppercase tracking-[3px] mb-8">Y obtené créditos para tus retratos con IA</p>
+              <h3 className="text-xl md:text-2xl font-black mb-1 uppercase italic tracking-tight">Elegí tu Pack</h3>
+              <p className="text-accent text-[7px] font-black uppercase tracking-[2px] mb-1">Desbloquea todos los estilos Premium</p>
+              <p className="text-white/40 text-[6px] uppercase tracking-[2px] mb-6">Obtené créditos para tus retratos con IA</p>
 
-              <div className="flex flex-wrap items-center justify-center gap-4">
+              <div className="flex flex-wrap items-center justify-center gap-3">
                 {[
                   { name: 'Starter', price: 4000, credits: 500, bonus: '', color: 'white/5', popular: false },
-                  { name: 'Standard', price: 8000, credits: 1100, bonus: '+10% Extra', color: 'accent/5', popular: true },
-                  { name: 'Business', price: 10000, credits: 1500, bonus: '+20% Extra', color: 'white/5', popular: false }
+                  { name: 'Standard', price: 8000, credits: 1100, bonus: '+10%', color: 'accent/5', popular: true },
+                  { name: 'Business', price: 10000, credits: 1500, bonus: '+20%', color: 'white/5', popular: false }
                 ].map((pack) => (
                   <div
                     key={pack.name}
-                    className={`relative w-full max-w-[210px] p-6 rounded-[28px] border transition-all duration-500 flex flex-col items-center group
-                    ${pack.popular ? 'bg-accent/10 border-accent shadow-[0_0_30px_rgba(255,85,0,0.15)] scale-105 z-10' : 'bg-white/5 border-white/5 hover:border-white/20'}`}
+                    className={`relative w-full max-w-[150px] p-4 rounded-[24px] border transition-all duration-500 flex flex-col items-center group
+                    ${pack.popular ? 'bg-accent/10 border-accent shadow-[0_0_20px_rgba(255,85,0,0.1)] scale-105 z-10' : 'bg-white/5 border-white/5 hover:border-white/20'}`}
                   >
                     {pack.popular && (
                       <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-accent text-[8px] font-black uppercase tracking-[2px] px-4 py-1 rounded-full">
@@ -1824,10 +1835,10 @@ const App: React.FC = () => {
                         Especial Packs
                       </div>
                     )}
-                    <span className="text-[8px] font-black uppercase tracking-[2px] text-white/40 mb-4">{pack.name}</span>
-                    <div className="flex flex-col items-center mb-6">
-                      <span className={`text-4xl font-black italic mb-1 ${pack.premium ? 'text-amber-400' : 'text-white'}`}>{pack.credits}</span>
-                      <span className="text-[8px] font-black uppercase tracking-[2px] text-accent">Créditos</span>
+                    <span className="text-[7px] font-black uppercase tracking-[1px] text-white/40 mb-3">{pack.name}</span>
+                    <div className="flex flex-col items-center mb-4">
+                      <span className={`text-3xl font-black italic mb-1 ${pack.premium ? 'text-amber-400' : 'text-white'}`}>{pack.credits}</span>
+                      <span className="text-[7px] font-black uppercase tracking-[1px] text-accent">Créditos</span>
                       {pack.bonus && (
                         <div className={`mt-4 flex items-center gap-2 px-3 py-1 rounded-full ${pack.premium ? 'bg-amber-500/20' : 'bg-accent/20'}`}>
                           <Zap className={`w-3 h-3 ${pack.premium ? 'text-amber-400' : 'text-accent'}`} />
@@ -1835,7 +1846,7 @@ const App: React.FC = () => {
                         </div>
                       )}
                     </div>
-                    <div className={`text-xl font-black italic mb-6 ${pack.premium ? 'text-amber-400' : 'text-white'}`}>${pack.price.toLocaleString()}</div>
+                    <div className={`text-lg font-black italic mb-4 ${pack.premium ? 'text-amber-400' : 'text-white'}`}>${pack.price.toLocaleString()}</div>
                     <button
                       disabled={!!processingPayment}
                       onClick={() => handlePayment(pack)}
@@ -1911,8 +1922,8 @@ const App: React.FC = () => {
       {/* Modal de Oferta Premium Exclusiva - Más delicado y pequeño */}
       {
         showPremiumOffer && (
-          <div className="fixed inset-0 z-[400] bg-black/70 backdrop-blur-md flex items-center justify-center p-6 animate-[fadeIn_0.3s_ease-out]">
-            <div className="relative w-full max-w-xs bg-[#0a0a0c]/90 backdrop-blur-2xl rounded-[32px] p-6 border border-amber-500/20 text-center shadow-[0_0_80px_rgba(251,191,36,0.1)]">
+          <div className="fixed inset-0 z-[400] bg-black/40 backdrop-blur-md flex items-center justify-center p-6 animate-[fadeIn_0.3s_ease-out]">
+            <div className="relative w-full max-w-[260px] bg-white/5 backdrop-blur-[40px] rounded-[32px] p-6 border border-amber-500/20 text-center shadow-[0_0_80px_rgba(251,191,36,0.1)]">
               <button
                 onClick={() => setShowPremiumOffer(false)}
                 className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
