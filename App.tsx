@@ -417,7 +417,7 @@ const App: React.FC = () => {
   const [showPremiumOffer, setShowPremiumOffer] = useState(false);
   const [isUnlocking, setIsUnlocking] = useState(false);
   const [stylesMetadata, setStylesMetadata] = useState<any[]>([]);
-  const [appStep, setAppStep] = useState<'gallery' | 'setup' | 'processing' | 'result'>('gallery');
+  const [appStep, setAppStep] = useState<'gallery' | 'setup' | 'processing' | 'result' | 'history'>('gallery');
   const [notifications, setNotifications] = useState<{ id: string, message: string, type: 'success' | 'error', action?: () => void }[]>([]);
   const [backgroundJob, setBackgroundJob] = useState<{ active: boolean, id: string | null, startTime: number } | null>(null);
 
@@ -1095,6 +1095,19 @@ const App: React.FC = () => {
               </button>
             )}
 
+            {!profile?.is_master && (
+              <button
+                onClick={() => setAppStep('history')}
+                className={`flex items-center gap-3 px-6 py-3 rounded-full transition-all duration-500 border ${appStep === 'history'
+                  ? 'bg-white text-black border-white'
+                  : 'bg-white/5 text-white/40 border-white/10 hover:border-white/40 hover:text-white'
+                  }`}
+              >
+                <LucideHistory className="w-4 h-4" />
+                <span className="text-[10px] font-black uppercase tracking-[2px]">Mis Fotos</span>
+              </button>
+            )}
+
             <button
               onClick={async () => {
                 await supabase.auth.signOut();
@@ -1246,10 +1259,13 @@ const App: React.FC = () => {
 
       {/* Volver Button - Only show in Setup/Result */}
       {
-        (appStep === 'setup' || appStep === 'result') && (
+        (appStep === 'setup' || appStep === 'result' || appStep === 'history') && (
           <div className="fixed top-24 left-6 z-[160] animate-[fadeIn_0.5s_ease-out]">
             <button
-              onClick={handleReset}
+              onClick={() => {
+                handleReset();
+                setAppStep('gallery');
+              }}
               className="group flex items-center gap-4 px-6 py-3 bg-black/40 backdrop-blur-xl border border-white/5 rounded-full hover:bg-white/10 transition-all pointer-events-auto shadow-2xl"
             >
               <ArrowDown className="w-4 h-4 text-accent rotate-90" />
@@ -1734,6 +1750,80 @@ const App: React.FC = () => {
               </button>
             </div>
           )}
+
+          {/* HISTORY VIEW */}
+          {appStep === 'history' && (
+            <div className="animate-[fadeIn_0.5s_ease-out] max-w-6xl mx-auto">
+              <div className="flex flex-col items-center mb-16 text-center">
+                <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-6">
+                  <LucideHistory className="w-8 h-8 text-accent" />
+                </div>
+                <h2 className="text-3xl font-black uppercase italic tracking-tight text-white mb-2">Mis Fotos</h2>
+                <div className="flex items-center gap-2">
+                  <div className="h-[1px] w-8 bg-accent/50" />
+                  <p className="text-[10px] tracking-[4px] text-white/40 uppercase">Historial de Generaciones</p>
+                  <div className="h-[1px] w-8 bg-accent/50" />
+                </div>
+              </div>
+
+              {loadingGenerations ? (
+                <div className="flex flex-col items-center py-20 opacity-40">
+                  <Loader2 className="w-10 h-10 animate-spin mb-4 text-accent" />
+                  <span className="text-[10px] font-black uppercase tracking-[2px]">Cargando historial...</span>
+                </div>
+              ) : userGenerations.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-32 border-2 border-dashed border-white/5 rounded-[40px] bg-white/[0.02]">
+                  <Camera className="w-12 h-12 text-white/10 mb-6" />
+                  <p className="text-white/30 text-xs font-black uppercase tracking-[4px] mb-8">Aún no has generado imágenes</p>
+                  <button
+                    onClick={() => setAppStep('gallery')}
+                    className="px-8 py-4 bg-accent text-white rounded-xl text-[10px] font-black uppercase tracking-[2px] hover:bg-white hover:text-black transition-all"
+                  >
+                    Crear mi primera foto
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                  {userGenerations.map((gen) => (
+                    <div key={gen.id} className="group relative aspect-[4/5] rounded-[32px] overflow-hidden border border-white/10 bg-[#0a0a0c] hover:border-accent/40 hover:shadow-[0_0_30px_rgba(0,0,0,0.5)] transition-all duration-500">
+                      <img
+                        src={gen.image_url}
+                        alt="Generación"
+                        className="w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-110 transition-all duration-700"
+                        crossOrigin="anonymous"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-6">
+                        <span className="text-[8px] font-black uppercase tracking-[2px] text-accent mb-2 block">
+                          {new Date(gen.created_at).toLocaleDateString()}
+                        </span>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => {
+                              setResultImage(gen.image_url);
+                              setIsSuccess(true);
+                              setAppStep('result');
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                            }}
+                            className="flex-1 bg-white text-black py-3 rounded-xl text-[8px] font-black uppercase tracking-[1px] hover:bg-accent hover:text-white transition-colors flex items-center justify-center gap-2"
+                          >
+                            <span>Ver</span>
+                          </button>
+                          <a
+                            href={gen.image_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="p-3 bg-white/10 rounded-xl text-white hover:bg-white hover:text-black transition-colors"
+                          >
+                            <Download className="w-4 h-4" />
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </section>
 
@@ -1741,13 +1831,30 @@ const App: React.FC = () => {
       {
         showCamera && (
           <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-xl flex items-center justify-center p-4">
-            <div className="relative w-full max-w-md aspect-[3/4] bg-primary rounded-[40px] overflow-hidden border border-white/10">
-              <div className="absolute inset-0 bg-black">
+            <div className="relative w-full max-w-md max-h-[90vh] aspect-[3/4] bg-primary rounded-[40px] overflow-hidden border border-white/10 flex flex-col">
+              <div className="relative flex-1 bg-black overflow-hidden">
                 {isCapturing ? (
                   <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover scale-x-[-1]" />
                 ) : (
                   <img src={capturedImage || ''} className="w-full h-full object-cover" alt="Previsualización" />
                 )}
+
+                {/* Error Display inside Camera */}
+                {cameraError && (
+                  <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 p-8 text-center">
+                    <div className="flex flex-col items-center">
+                      <AlertTriangle className="w-12 h-12 text-red-500 mb-4" />
+                      <p className="text-white text-xs font-bold uppercase tracking-widest">{cameraError}</p>
+                      <button
+                        onClick={initCamera}
+                        className="mt-6 px-6 py-3 bg-white/10 hover:bg-white/20 rounded-full text-[10px] font-black uppercase tracking-widest transition-all"
+                      >
+                        Reintentar
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {/* Overlay Técnico */}
                 <div className="absolute inset-0 border-[20px] border-black/40 pointer-events-none">
                   <div className="w-full h-full border border-white/5 relative flex items-center justify-center">
@@ -2001,69 +2108,7 @@ const App: React.FC = () => {
         <div className="text-white/10 text-[8px] uppercase tracking-[6px] font-bold italic">© 2024 Creativa Labs — Digital Alchemy Studio</div>
       </footer>
 
-      {/* Historial de Imágenes */}
-      {
-        !showAdmin && session && (
-          <section className="relative py-20 px-6 bg-black/50 backdrop-blur-xl border-t border-white/5 z-20">
-            <div className="max-w-[1200px] mx-auto">
-              <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-12">
-                <div>
-                  <div className="flex items-center gap-3 mb-2">
-                    <LucideHistory className="w-5 h-5 text-accent" />
-                    <h2 className="text-2xl font-black uppercase italic tracking-tight">Mis Fotos</h2>
-                  </div>
-                  <p className="text-[10px] tracking-[3px] text-white/40 uppercase">Tus últimos retratos generados</p>
-                </div>
-                <div className="px-6 py-2 rounded-full bg-white/5 border border-white/10">
-                  <p className="text-[8px] font-black uppercase tracking-[2px] text-white/20">Las imágenes se mantienen en el historial por 20 días</p>
-                </div>
-              </div>
-
-              {loadingGenerations ? (
-                <div className="flex flex-col items-center py-20 opacity-20">
-                  <Loader2 className="w-8 h-8 animate-spin mb-4" />
-                  <span className="text-[10px] font-black uppercase tracking-[2px]">Cargando historial...</span>
-                </div>
-              ) : userGenerations.length === 0 ? (
-                <div className="text-center py-20 border-2 border-dashed border-white/5 rounded-[40px]">
-                  <p className="text-white/20 text-xs font-black uppercase tracking-[3px]">Aún no has generado imágenes</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-6">
-                  {userGenerations.map((gen) => (
-                    <div key={gen.id} className="group relative aspect-[4/5] rounded-2xl overflow-hidden border border-white/10 bg-[#0a0a0c] hover:border-accent/40 transition-all duration-500">
-                      <img src={gen.image_url} alt="Generación" className="w-full h-full object-cover opacity-60 group-hover:opacity-100 transition-opacity" />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => {
-                              setResultImage(gen.image_url);
-                              setIsSuccess(true);
-                              setAppStep('result');
-                              window.scrollTo({ top: 0, behavior: 'smooth' });
-                            }}
-                            className="flex-1 bg-white text-black py-2 rounded-lg text-[8px] font-black uppercase tracking-[1px] hover:bg-accent transition-colors"
-                          >
-                            Ver
-                          </button>
-                          <a
-                            href={gen.image_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="p-2 bg-white/10 rounded-lg text-white hover:text-accent transition-colors"
-                          >
-                            <Download className="w-3 h-3" />
-                          </a>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </section>
-        )
-      }
+      {/* Historial Removed from Bottom */}
     </div >
   );
 };
