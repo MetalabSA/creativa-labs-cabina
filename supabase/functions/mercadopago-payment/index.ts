@@ -14,7 +14,9 @@ Deno.serve(async (req: Request) => {
     // Token proporcionado por el usuario
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
-    const MP_ACCESS_TOKEN = Deno.env.get("MP_ACCESS_TOKEN") || "TEST-1cfad41c-8fee-4f1e-a007-eea541f8f08a";
+    const MP_ACCESS_TOKEN = Deno.env.get("MP_ACCESS_TOKEN") || "";
+
+    console.log(`Using MP Token starting with: ${MP_ACCESS_TOKEN.substring(0, 8)}...`);
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -23,8 +25,12 @@ Deno.serve(async (req: Request) => {
         const isWebhook = url.searchParams.get("webhook") === "true";
         const host = req.headers.get("host") || "elesttjfwfhvzdvldytn.supabase.co";
 
+        console.log(`Request received: ${req.method} - Webhook: ${isWebhook}`);
+
         if (req.method === "POST" && !isWebhook) {
-            const { user_id, credits, price, pack_name, redirect_url } = await req.json();
+            const body = await req.json();
+            console.log("Creating preference for:", body);
+            const { user_id, credits, price, pack_name, redirect_url } = body;
 
             const preference = {
                 items: [{
@@ -74,14 +80,17 @@ Deno.serve(async (req: Request) => {
 
         if (isWebhook) {
             const body = await req.json();
+            console.log("Webhook received body:", JSON.stringify(body));
             const id = body.data?.id || body.id;
             const topic = body.type || body.topic;
 
             if ((topic === "payment" || topic === "merchant_order" || topic === "pay") && id) {
+                console.log(`Processing ${topic} with ID: ${id}`);
                 const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${id}`, {
                     headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` }
                 });
                 const paymentData = await mpRes.json();
+                console.log("Payment Data from MP:", JSON.stringify(paymentData));
 
                 if (paymentData.status === "approved") {
                     const [userId, creditsToAdd] = paymentData.external_reference.split(":");

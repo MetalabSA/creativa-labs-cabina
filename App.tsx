@@ -993,7 +993,7 @@ const App: React.FC = () => {
         return;
       }
 
-      const paymentUrl = data?.sandbox_init_point || data?.init_point;
+      const paymentUrl = data?.init_point || data?.sandbox_init_point;
       if (paymentUrl) {
         window.location.href = paymentUrl;
       } else {
