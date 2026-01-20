@@ -12,10 +12,13 @@
     "@react-three/fiber": "^9.4.0",
     "@supabase/supabase-js": "^2.90.1",
     "@types/canvas-confetti": "^1.9.0",
+    "clsx": "^2.1.1",
+    "framer-motion": "^12.27.5",
     "lucide-react": "^0.554.0",
     "qrcode.react": "^4.2.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "tailwind-merge": "^3.4.0",
     "three": "^0.181.2"
   },
   "devDependencies": {

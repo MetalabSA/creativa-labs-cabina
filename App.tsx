@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Camera, RefreshCw, Check, X, Search, Sparkles, User, ArrowDown, Printer, AlertTriangle, Loader2, Download, QrCode, Smartphone, Layout, Monitor, Instagram, LogOut, Shield, History as LucideHistory, CreditCard, Zap, Plus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Camera, RefreshCw, Check, X, Search, Sparkles, User, ArrowDown, Printer, AlertTriangle, Loader2, Download, QrCode, Smartphone, Layout, Monitor, Instagram, LogOut, Shield, History as LucideHistory, CreditCard, Zap, Plus, ChevronLeft, ChevronRight, Heart } from 'lucide-react';
 import { QRCodeCanvas } from 'qrcode.react';
 import Background3D from './components/Background3D';
 import UploadCard from './components/UploadCard';
@@ -8,6 +8,9 @@ import { Admin } from './components/Admin';
 import { supabase } from './lib/supabaseClient';
 import { FormState } from './types';
 import confetti from 'canvas-confetti';
+import { BubbleMenu } from './components/BubbleMenu';
+import { SettingsView } from './components/SettingsView';
+import { PacksView } from './components/PacksView';
 
 const PREFERRED_PACK_ORDER = [
   'La Ley de los Audaces',
@@ -402,6 +405,10 @@ const App: React.FC = () => {
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [currentPhraseIndex, setCurrentPhraseIndex] = useState(0);
 
+  // Favorites logic
+  const [favorites, setFavorites] = useState<string[]>([]);
+  const [loadingFavorites, setLoadingFavorites] = useState(false);
+
   // Auth & Profile State
   const [session, setSession] = useState<any>(null);
   const [profile, setProfile] = useState<{ credits: number, total_generations: number, is_master?: boolean, unlocked_packs?: string[] } | null>(null);
@@ -417,7 +424,7 @@ const App: React.FC = () => {
   const [showPremiumOffer, setShowPremiumOffer] = useState(false);
   const [isUnlocking, setIsUnlocking] = useState(false);
   const [stylesMetadata, setStylesMetadata] = useState<any[]>([]);
-  const [appStep, setAppStep] = useState<'gallery' | 'setup' | 'processing' | 'result' | 'history'>('gallery');
+  const [appStep, setAppStep] = useState<'gallery' | 'setup' | 'processing' | 'result' | 'history' | 'settings' | 'packs' | 'support'>('gallery');
   const [notifications, setNotifications] = useState<{ id: string, message: string, type: 'success' | 'error', action?: () => void }[]>([]);
   const [backgroundJob, setBackgroundJob] = useState<{ active: boolean, id: string | null, startTime: number } | null>(null);
 
@@ -491,8 +498,44 @@ const App: React.FC = () => {
     if (session?.user) {
       fetchProfile();
       fetchGenerations();
+      fetchFavorites();
     }
   }, [session]);
+
+  const fetchFavorites = async () => {
+    try {
+      setLoadingFavorites(true);
+      const { data, error } = await supabase
+        .from('favorites')
+        .select('style_id')
+        .eq('user_id', session.user.id);
+
+      if (error) throw error;
+      setFavorites(data.map(f => f.style_id));
+    } catch (err) {
+      console.error('Error fetching favorites:', err);
+    } finally {
+      setLoadingFavorites(false);
+    }
+  };
+
+  const handleToggleFavorite = async (styleId: string) => {
+    if (!session?.user) return;
+    try {
+      const isFav = favorites.includes(styleId);
+      if (isFav) {
+        // Remove
+        await supabase.from('favorites').delete().eq('user_id', session.user.id).eq('style_id', styleId);
+        setFavorites(prev => prev.filter(id => id !== styleId));
+      } else {
+        // Add
+        await supabase.from('favorites').insert({ user_id: session.user.id, style_id: styleId });
+        setFavorites(prev => [...prev, styleId]);
+      }
+    } catch (err) {
+      console.error('Error toggling favorite:', err);
+    }
+  };
 
   const fetchStylesMetadata = async () => {
     try {
@@ -1058,69 +1101,30 @@ const App: React.FC = () => {
     <div className="relative w-full min-h-screen font-sans text-white bg-primary overflow-x-hidden">
       <Background3D />
 
-      {/* Profile/Credits/Logout Header */}
-      <div className="fixed top-0 left-0 w-full z-[150] p-6 pointer-events-none">
-        <div className="max-w-[1400px] mx-auto flex justify-between items-center">
-          <div className="flex items-center gap-4 bg-black/40 backdrop-blur-xl border border-white/5 p-2 pr-6 rounded-full pointer-events-auto">
-            <div className="w-10 h-10 bg-accent rounded-full flex items-center justify-center text-white">
-              <Sparkles className="w-5 h-5 animate-pulse" />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-[8px] font-black uppercase tracking-[2px] text-white/40">Créditos IA</span>
-              <span className="text-sm font-black italic text-accent leading-none">
-                {loadingProfile ? '...' : (profile?.is_master ? 'INFINITOS' : `${profile?.credits || 0} DISPONIBLES`)}
-              </span>
-            </div>
-            {!profile?.is_master && (
-              <button
-                onClick={() => setShowPricing(true)}
-                className="ml-4 w-8 h-8 bg-accent/20 hover:bg-accent text-accent hover:text-white rounded-full flex items-center justify-center transition-all group/plus pointer-events-auto"
-              >
-                <Plus className="w-4 h-4 group-hover:scale-110 transition-transform" />
-              </button>
-            )}
-          </div>
-
-          <div className="flex items-center gap-4 pointer-events-auto">
-            {profile?.is_master && (
-              <button
-                onClick={() => setShowAdmin(!showAdmin)}
-                className={`flex items-center gap-3 px-6 py-3 rounded-full transition-all duration-500 border ${showAdmin
-                  ? 'bg-accent text-white border-accent'
-                  : 'bg-white/5 text-white/40 border-white/10 hover:border-accent hover:text-accent'
-                  }`}
-              >
-                <Shield className="w-4 h-4" />
-                <span className="text-[10px] font-black uppercase tracking-[2px]">{showAdmin ? 'Cerrar Panel' : 'Panel Admin'}</span>
-              </button>
-            )}
-
-            {!profile?.is_master && (
-              <button
-                onClick={() => setAppStep('history')}
-                className={`flex items-center gap-3 px-6 py-3 rounded-full transition-all duration-500 border ${appStep === 'history'
-                  ? 'bg-white text-black border-white'
-                  : 'bg-white/5 text-white/40 border-white/10 hover:border-white/40 hover:text-white'
-                  }`}
-              >
-                <LucideHistory className="w-4 h-4" />
-                <span className="text-[10px] font-black uppercase tracking-[2px]">Mis Fotos</span>
-              </button>
-            )}
-
-            <button
-              onClick={async () => {
-                await supabase.auth.signOut();
-                window.location.href = '/cabina/'; // Redirigir a la raíz de la cabina
-              }}
-              className="group flex items-center gap-3 bg-white/5 hover:bg-red-500/10 border border-white/10 hover:border-red-500/20 px-6 py-3 rounded-full transition-all duration-500 pointer-events-auto"
-            >
-              <span className="text-[10px] font-black uppercase tracking-[2px] text-white/40 group-hover:text-red-400">Cerrar Sesión</span>
-              <LogOut className="w-4 h-4 text-white/20 group-hover:text-red-400" />
-            </button>
-          </div>
-        </div>
-      </div>
+      {/* Bubble Menu */}
+      <BubbleMenu
+        user={session.user}
+        profile={profile}
+        onNavigate={(view) => {
+          if (view.startsWith('category_')) {
+            setActiveCategory(view.replace('category_', ''));
+            setAppStep('gallery');
+          } else if (view === 'favorites') {
+            setActiveCategory('favorites');
+            setAppStep('gallery');
+          } else {
+            // @ts-ignore
+            setAppStep(view);
+          }
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }}
+        onLogout={async () => {
+          await supabase.auth.signOut();
+          window.location.href = '/';
+        }}
+        categories={CATEGORIES}
+        currentView={appStep}
+      />
 
       {/* Floating Notifications */}
       <div className="fixed bottom-10 right-10 z-[500] flex flex-col gap-4">
@@ -1414,6 +1418,18 @@ const App: React.FC = () => {
                     <span className="font-black tracking-[2px] uppercase text-xs">{cat.label}</span>
                   </button>
                 ))}
+
+                {/* Favorites Tab */}
+                <button
+                  onClick={() => setActiveCategory('favorites')}
+                  className={`flex items-center gap-3 px-8 py-4 rounded-2xl border-2 transition-all duration-500
+                      ${activeCategory === 'favorites'
+                      ? 'bg-gradient-to-r from-pink-500 to-rose-500 border-pink-500 text-white shadow-[0_0_30px_rgba(244,63,94,0.3)] scale-105'
+                      : 'bg-white/5 border-white/5 text-white/40 hover:text-pink-400 hover:border-pink-500/30'}`}
+                >
+                  <Heart className={`w-5 h-5 ${activeCategory === 'favorites' ? 'fill-current animate-pulse' : ''}`} />
+                  <span className="font-black tracking-[2px] uppercase text-xs">Favoritos</span>
+                </button>
               </div>
 
               {/* Grouped Identities */}
@@ -1421,7 +1437,9 @@ const App: React.FC = () => {
                 {Array.from(new Set(
                   mergedIdentities
                     .filter(id => {
-                      const matchesCategory = activeCategory === 'all' || id.category === activeCategory;
+                      const matchesCategory = activeCategory === 'favorites'
+                        ? favorites.includes(id.id)
+                        : (activeCategory === 'all' || id.category === activeCategory);
                       const q = searchQuery.toLowerCase();
                       const matchesSearch =
                         id.title.toLowerCase().includes(q) ||
@@ -1468,7 +1486,9 @@ const App: React.FC = () => {
                       };
 
                       const subCatIdentities = mergedIdentities.filter(id => {
-                        const matchesCategory = activeCategory === 'all' || id.category === activeCategory;
+                        const matchesCategory = activeCategory === 'favorites'
+                          ? favorites.includes(id.id)
+                          : (activeCategory === 'all' || id.category === activeCategory);
                         const q = searchQuery.toLowerCase();
                         return id.subCategory === subCat && matchesCategory && (
                           id.title.toLowerCase().includes(q) ||
@@ -1524,6 +1544,11 @@ const App: React.FC = () => {
                                     usageCount={identity.usageCount}
                                     isTopStyle={topIdentities.some(t => t.id === identity.id)}
                                     tags={identity.tags}
+                                    isFavorite={favorites.includes(identity.id)}
+                                    onToggleFavorite={(e) => {
+                                      e.stopPropagation();
+                                      handleToggleFavorite(identity.id);
+                                    }}
                                     onSelect={() => {
                                       const isActuallyPremium = identity.isPremium && !profile?.unlocked_packs?.includes(identity.subCategory) && !profile?.is_master;
                                       if (isActuallyPremium) {
@@ -1824,8 +1849,56 @@ const App: React.FC = () => {
               )}
             </div>
           )}
+
+
+          {/* SETTINGS VIEW */}
+          {appStep === 'settings' && (
+            <SettingsView
+              profile={profile}
+              session={session}
+              onBack={() => setAppStep('gallery')}
+              onAddCredits={() => setShowPricing(true)}
+            />
+          )}
+
+          {/* PACKS VIEW */}
+          {appStep === 'packs' && (
+            <PacksView
+              identities={IDENTITIES}
+              unlockedPacks={profile?.unlocked_packs}
+              userCredits={profile?.credits || 0}
+              onBack={() => setAppStep('gallery')}
+              onUnlock={handleUnlockPack}
+              isUnlocking={isUnlocking}
+            />
+          )}
+
+          {/* SUPPORT VIEW */}
+          {appStep === 'support' && (
+            <div className="flex flex-col items-center justify-center pt-32 pb-20 animate-[fadeIn_0.5s_ease-out]">
+              <h2 className="text-3xl font-black italic uppercase text-white mb-6">Soporte</h2>
+              <div className="bg-white/5 border border-white/10 rounded-3xl p-8 max-w-md w-full text-center">
+                <p className="text-white/60 text-sm mb-6">
+                  Si tienes algún problema o sugerencia, contáctanos.
+                </p>
+                <a
+                  href="mailto:support@metalab.ai"
+                  className="inline-block px-8 py-4 bg-accent text-white rounded-xl font-black uppercase tracking-[2px] text-xs hover:bg-white hover:text-black transition-all"
+                >
+                  Enviar Email
+                </a>
+                <button
+                  onClick={() => setAppStep('gallery')}
+                  className="block w-full mt-6 text-[10px] font-black uppercase tracking-[2px] text-white/30 hover:text-white"
+                >
+                  Volver
+                </button>
+              </div>
+            </div>
+          )}
+
         </div>
-      </section>
+      </section >
 
       {/* Camera Modal */}
       {
@@ -1942,9 +2015,9 @@ const App: React.FC = () => {
 
               <div className="flex flex-wrap items-center justify-center gap-3">
                 {[
-                  { name: 'Starter', price: 4000, credits: 500, bonus: '', color: 'white/5', popular: false },
-                  { name: 'Standard', price: 8000, credits: 1100, bonus: '+10%', color: 'accent/5', popular: true },
-                  { name: 'Business', price: 10000, credits: 1500, bonus: '+20%', color: 'white/5', popular: false }
+                  { name: 'Starter', price: 4000, credits: 500, bonus: '', color: 'white/5', popular: false, premium: false },
+                  { name: 'Standard', price: 8000, credits: 1100, bonus: '+10%', color: 'accent/5', popular: true, premium: false },
+                  { name: 'Business', price: 10000, credits: 1500, bonus: '+20%', color: 'white/5', popular: false, premium: false }
                 ].map((pack) => (
                   <div
                     key={pack.name}

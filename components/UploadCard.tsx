@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { User, AlertCircle, Sparkles } from 'lucide-react';
+import { User, AlertCircle, Sparkles, Heart } from 'lucide-react';
 import { UploadType } from '../types';
 
 interface UploadCardProps {
@@ -13,10 +13,24 @@ interface UploadCardProps {
   usageCount?: number;
   isTopStyle?: boolean;
   tags?: string[];
+  isFavorite?: boolean;
   onSelect: () => void;
+  onToggleFavorite?: (e: React.MouseEvent) => void;
 }
 
-const UploadCard: React.FC<UploadCardProps> = ({ title, sampleImageUrl, isSelected, onSelect, isPremium, isUnlocked, usageCount, isTopStyle, tags }) => {
+const UploadCard: React.FC<UploadCardProps> = ({
+  title,
+  sampleImageUrl,
+  isSelected,
+  onSelect,
+  isPremium,
+  isUnlocked,
+  usageCount,
+  isTopStyle,
+  tags,
+  isFavorite,
+  onToggleFavorite
+}) => {
   const [imageError, setImageError] = useState(false);
   const [imageLoaded, setImageLoaded] = useState(false);
 
@@ -65,6 +79,19 @@ const UploadCard: React.FC<UploadCardProps> = ({ title, sampleImageUrl, isSelect
           : 'border-white/5 hover:border-white/20 bg-[#121215]'}`}
       onClick={onSelect}
     >
+      {/* Favorite Button */}
+      {onToggleFavorite && (
+        <button
+          onClick={onToggleFavorite}
+          className={`absolute top-4 right-4 z-[30] w-8 h-8 flex items-center justify-center rounded-full backdrop-blur-md border transition-all duration-300
+            ${isFavorite
+              ? 'bg-red-500/20 border-red-500/50 text-red-500'
+              : 'bg-black/40 border-white/10 text-white/40 hover:bg-white/10 hover:text-white'}`}
+        >
+          <Heart className={`w-4 h-4 ${isFavorite ? 'fill-current' : ''}`} />
+        </button>
+      )}
+
       {/* Premium Badge */}
       {isPremium && (
         <div className="absolute top-6 left-6 z-[20] flex items-center gap-2 px-3 py-1 bg-gradient-to-r from-amber-500 to-yellow-300 rounded-full shadow-[0_0_20px_rgba(245,158,11,0.4)] animate-pulse">
@@ -85,10 +112,11 @@ const UploadCard: React.FC<UploadCardProps> = ({ title, sampleImageUrl, isSelect
 
       {/* Top 5 Badge */}
       {isTopStyle && (
-        <div className="absolute top-6 right-6 z-[20] flex items-center justify-center w-8 h-8 bg-accent/20 backdrop-blur-xl border border-accent/40 rounded-full shadow-[0_0_15px_rgba(255,85,0,0.3)] animate-bounce duration-[2000ms]">
+        <div className="absolute top-6 right-16 z-[20] flex items-center justify-center w-8 h-8 bg-accent/20 backdrop-blur-xl border border-accent/40 rounded-full shadow-[0_0_15px_rgba(255,85,0,0.3)] animate-bounce duration-[2000ms]">
           <Sparkles className="w-4 h-4 text-accent" />
         </div>
       )}
+
       {/* Dynamic Scan Line Animation */}
       <div className={`absolute top-0 left-0 w-full h-[2px] bg-accent/60 blur-[2px] z-[10] pointer-events-none transition-opacity duration-500
         ${isSelected ? 'opacity-100 animate-[scan_3s_linear_infinite]' : 'opacity-0'}`} />
