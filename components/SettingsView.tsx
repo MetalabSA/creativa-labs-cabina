@@ -6,9 +6,19 @@ interface SettingsViewProps {
     session: any;
     onBack: () => void;
     onAddCredits: () => void;
+    onUpdateProfile: (data: any) => Promise<void>;
 }
 
-export const SettingsView: React.FC<SettingsViewProps> = ({ profile, session, onBack, onAddCredits }) => {
+export const SettingsView: React.FC<SettingsViewProps> = ({ profile, session, onBack, onAddCredits, onUpdateProfile }) => {
+    const [name, setName] = React.useState(profile?.full_name || '');
+    const [isSaving, setIsSaving] = React.useState(false);
+
+    const handleSave = async () => {
+        setIsSaving(true);
+        await onUpdateProfile({ full_name: name });
+        setIsSaving(false);
+    };
+
     return (
         <div className="w-full max-w-2xl mx-auto pt-32 px-6 pb-12 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <button
@@ -29,12 +39,34 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ profile, session, on
                         Información Personal
                     </h3>
 
-                    <div className="space-y-4">
+                    <div className="space-y-6">
                         <div>
                             <label className="block text-xs uppercase tracking-wider text-white/40 mb-1">Email</label>
-                            <div className="flex items-center gap-3 text-lg font-medium">
+                            <div className="flex items-center gap-3 text-lg font-medium text-white/80">
                                 <Mail className="w-5 h-5 text-white/40" />
                                 {session?.user?.email}
+                            </div>
+                        </div>
+
+                        <div className="pt-4 border-t border-white/10">
+                            <label className="block text-xs uppercase tracking-wider text-white/40 mb-3">Nombre Completo</label>
+                            <div className="flex gap-3">
+                                <div className="relative flex-1">
+                                    <input
+                                        type="text"
+                                        value={name}
+                                        onChange={(e) => setName(e.target.value)}
+                                        placeholder="Tu nombre aquí..."
+                                        className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white placeholder:text-white/20 focus:outline-none focus:border-accent transition-colors"
+                                    />
+                                </div>
+                                <button
+                                    onClick={handleSave}
+                                    disabled={isSaving || name === (profile?.full_name || '')}
+                                    className="px-6 py-3 bg-accent text-white rounded-xl font-bold uppercase tracking-wider text-xs hover:bg-white hover:text-black transition-all disabled:opacity-30 disabled:hover:bg-accent disabled:hover:text-white"
+                                >
+                                    {isSaving ? '...' : 'Guardar'}
+                                </button>
                             </div>
                         </div>
 

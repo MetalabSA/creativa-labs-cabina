@@ -35,12 +35,12 @@ export const BubbleMenu: React.FC<BubbleMenuProps> = ({
 
     return (
         <>
-            <div className="fixed top-6 inset-x-0 z-[200] flex justify-center px-4 pointer-events-none">
+            <div className="fixed top-6 inset-x-0 z-[200] flex justify-center md:justify-end md:pr-12 px-4 pointer-events-none">
                 <div className="pointer-events-auto relative">
                     <motion.div
                         layout
                         className={clsx(
-                            "bg-black/60 backdrop-blur-2xl border border-white/10 shadow-2xl overflow-hidden",
+                            "bg-black/60 backdrop-blur-3xl border border-white/20 shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden",
                             isOpen ? "rounded-[32px] w-[320px]" : "rounded-full w-auto"
                         )}
                         initial={{ borderRadius: 50 }}
@@ -136,7 +136,7 @@ export const BubbleMenu: React.FC<BubbleMenuProps> = ({
                                                     >
                                                         <div className="p-2 space-y-1">
                                                             {/* Favorites & My Photos inside Categories as requested, or top level? Request said "Tambien pondriamos una categoria de FAVORITOS, y 'Mis Fotos'" inside Categories */}
-                                                            <SubMenuItem label="Todo" onClick={() => handleNav('category_all')} />
+
                                                             {categories.map(cat => (
                                                                 <SubMenuItem
                                                                     key={cat.id}

@@ -411,7 +411,7 @@ const App: React.FC = () => {
 
   // Auth & Profile State
   const [session, setSession] = useState<any>(null);
-  const [profile, setProfile] = useState<{ credits: number, total_generations: number, is_master?: boolean, unlocked_packs?: string[] } | null>(null);
+  const [profile, setProfile] = useState<{ credits: number, total_generations: number, is_master?: boolean, unlocked_packs?: string[], full_name?: string } | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [showAdmin, setShowAdmin] = useState(false);
   const [userGenerations, setUserGenerations] = useState<any[]>([]);
@@ -554,7 +554,7 @@ const App: React.FC = () => {
       setLoadingProfile(true);
       const { data, error } = await supabase
         .from('profiles')
-        .select('credits, total_generations, is_master, unlocked_packs')
+        .select('credits, total_generations, is_master, unlocked_packs, full_name')
         .eq('id', session.user.id)
         .single();
 
@@ -564,6 +564,34 @@ const App: React.FC = () => {
       console.error('Error fetching profile:', error);
     } finally {
       setLoadingProfile(false);
+    }
+  };
+
+  const updateProfile = async (updates: any) => {
+    if (!session?.user) return;
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', session.user.id);
+
+      if (error) throw error;
+
+      // Update local state
+      setProfile(prev => prev ? { ...prev, ...updates } : null);
+
+      setNotifications(prev => [...prev, {
+        id: Date.now().toString(),
+        message: '✅ Perfil actualizado correctamente',
+        type: 'success'
+      }]);
+    } catch (err: any) {
+      console.error('Error updating profile:', err);
+      setNotifications(prev => [...prev, {
+        id: Date.now().toString(),
+        message: '❌ Error al actualizar perfil',
+        type: 'error'
+      }]);
     }
   };
 
@@ -1112,6 +1140,8 @@ const App: React.FC = () => {
           } else if (view === 'favorites') {
             setActiveCategory('favorites');
             setAppStep('gallery');
+          } else if (view === 'admin') {
+            setShowAdmin(true);
           } else {
             // @ts-ignore
             setAppStep(view);
@@ -1858,6 +1888,7 @@ const App: React.FC = () => {
               session={session}
               onBack={() => setAppStep('gallery')}
               onAddCredits={() => setShowPricing(true)}
+              onUpdateProfile={updateProfile}
             />
           )}
 
