@@ -852,19 +852,25 @@ const App: React.FC = () => {
       }
     }
 
-    setAppStep('processing'); // Added this line
+    setAppStep('processing');
 
     try {
-      const response = await fetch('https://automatizaciones.metalab30.com/webhook/cabina', {
-        method: 'POST',
-        body: data // Changed from 'body' to 'data' to match FormData variable
+      const { data: functionData, error: functionError } = await supabase.functions.invoke('cabina-vision', {
+        body: {
+          user_photo: capturedImage,
+          model_id: formData.selectedIdentity,
+          aspect_ratio: formData.aspectRatio,
+          user_id: session?.user?.id,
+          email: session?.user?.email,
+          guest_id: `cabina_${Date.now()}`
+        }
       });
 
-      if (!response.ok) throw new Error('Error en la generación'); // Added this line
+      if (functionError) throw functionError;
 
-      const result = await response.json(); // Renamed from 'data' to 'result' to match original structure
+      const result = functionData;
 
-      if (result.image_url) { // Using 'result'
+      if (result.image_url) {
         setResultImage(result.image_url);
 
         // Update total generations stats
@@ -891,7 +897,6 @@ const App: React.FC = () => {
           console.error('Error incrementing usage:', usageErr);
         }
 
-
         fetchProfile();
         fetchGenerations();
         setIsSuccess(true);
@@ -907,7 +912,7 @@ const App: React.FC = () => {
           }
         }]);
       } else {
-        // REFUND: If webhook returns error or unknown response
+        // REFUND: If function returns error or unknown response
         if (!isMaster) {
           await supabase
             .from('profiles')
@@ -919,7 +924,7 @@ const App: React.FC = () => {
         setIsSuccess(true);
         setAppStep('result');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Submission error:', error);
       // REFUND: On connection error
       if (!isMaster && profile) {
@@ -929,7 +934,7 @@ const App: React.FC = () => {
           .eq('id', session.user.id);
         setProfile(prev => prev ? { ...prev, credits: profile.credits } : null);
       }
-      setErrorMessage("Error de conexión. Créditos devueltos.");
+      setErrorMessage("VAR: Se perdió la conexión, pero tu foto ya está en proceso. Revisa tu galería.");
       setIsSuccess(true);
       setAppStep('result');
     } finally {
