@@ -855,7 +855,8 @@ const App: React.FC = () => {
     setAppStep('processing');
 
     try {
-      const { data: functionData, error: functionError } = await supabase.functions.invoke('cabina-vision', {
+      // --- PASO 1: CREAR TAREA ---
+      const { data: createData, error: createError } = await supabase.functions.invoke('cabina-vision', {
         body: {
           user_photo: capturedImage,
           model_id: formData.selectedIdentity,
@@ -866,75 +867,88 @@ const App: React.FC = () => {
         }
       });
 
-      if (functionError) throw functionError;
+      if (createError || !createData.success) throw new Error(createData?.error || "Error al iniciar la IA");
 
-      const result = functionData;
+      const taskId = createData.taskId;
+      console.log("Tarea iniciada en Kie.ai:", taskId);
 
-      if (result.image_url) {
-        setResultImage(result.image_url);
+      // --- PASO 2: POLLING (ESPERA ACTIVA) ---
+      let attempts = 0;
+      const maxAttempts = 60;
+      let finalResult = null;
 
-        // Update total generations stats
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update({
-            total_generations: (profile.total_generations || 0) + 1
-          })
-          .eq('id', session.user.id);
+      while (attempts < maxAttempts) {
+        // Esperamos 4 segundos entre intentos
+        await new Promise(r => setTimeout(r, 4000));
+        attempts++;
+        console.log(`Consultando estado... Intento ${attempts}`);
 
-        if (profileError) console.error('Error updating stats:', profileError);
-
-        await supabase.from('generations').insert({
-          user_id: session.user.id,
-          style_id: formData.selectedIdentity,
-          image_url: result.image_url,
-          aspect_ratio: formData.aspectRatio
+        const { data: checkData, error: checkError } = await supabase.functions.invoke('cabina-vision', {
+          body: {
+            action: 'check',
+            taskId: taskId,
+            model_id: formData.selectedIdentity,
+            user_id: session?.user?.id,
+            guest_id: `cabina_${Date.now()}`
+          }
         });
 
-        // INCREMENT USAGE COUNTER
-        try {
-          await supabase.rpc('increment_style_usage', { style_id_text: formData.selectedIdentity });
-        } catch (usageErr) {
-          console.error('Error incrementing usage:', usageErr);
+        if (checkError) {
+          console.warn("Fallo temporal en consulta, reintentando...");
+          continue;
         }
 
-        fetchProfile();
-        fetchGenerations();
-        setIsSuccess(true);
-        setAppStep('result');
-        setBackgroundJob(null);
-        setNotifications(prev => [...prev, {
-          id: Date.now().toString(),
-          message: '🪄 ¡Tu foto está lista!',
-          type: 'success',
-          action: () => {
-            setAppStep('result');
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          }
-        }]);
-      } else {
-        // REFUND: If function returns error or unknown response
-        if (!isMaster) {
-          await supabase
-            .from('profiles')
-            .update({ credits: profile.credits }) // Refund to original value
-            .eq('id', session.user.id);
-          setProfile(prev => prev ? { ...prev, credits: profile.credits } : null);
+        if (checkData.success && checkData.state === 'success' && checkData.image_url) {
+          finalResult = checkData.image_url;
+          break;
         }
-        setErrorMessage(result.error || "Respuesta desconocida del servidor.");
-        setIsSuccess(true);
-        setAppStep('result');
+
+        if (checkData.state === 'fail') {
+          throw new Error("La IA no pudo procesar la imagen.");
+        }
       }
+
+      if (!finalResult) {
+        throw new Error("Tiempo de espera agotado. Revisa tu galería en unos minutos.");
+      }
+
+      // --- PASO 3: ÉXITO Y ACTUALIZACIÓN ---
+      setResultImage(finalResult);
+
+      // Actualizar estadísticas
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({ total_generations: (profile.total_generations || 0) + 1 })
+        .eq('id', session.user.id);
+
+      if (profileError) console.error('Error updating stats:', profileError);
+
+      // Notificación de éxito
+      fetchProfile();
+      fetchGenerations();
+      setIsSuccess(true);
+      setAppStep('result');
+      setNotifications(prev => [...prev, {
+        id: Date.now().toString(),
+        message: '🪄 ¡Tu foto está lista!',
+        type: 'success',
+        action: () => {
+          setAppStep('result');
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      }]);
+
     } catch (error: any) {
       console.error('Submission error:', error);
-      // REFUND: On connection error
+      // REEMBOLSO: Solo si no es Master
       if (!isMaster && profile) {
         await supabase
           .from('profiles')
-          .update({ credits: profile.credits }) // Refund to original value
+          .update({ credits: profile.credits })
           .eq('id', session.user.id);
         setProfile(prev => prev ? { ...prev, credits: profile.credits } : null);
       }
-      setErrorMessage("VAR: Se perdió la conexión, pero tu foto ya está en proceso. Revisa tu galería.");
+      setErrorMessage(error.message || "Error inesperado en la conexión.");
       setIsSuccess(true);
       setAppStep('result');
     } finally {
@@ -942,6 +956,7 @@ const App: React.FC = () => {
       setBackgroundJob(null);
     }
   };
+
 
   const handlePrint = () => {
     if (!resultImage) return;
