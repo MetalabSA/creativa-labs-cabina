@@ -381,6 +381,22 @@ const CATEGORIES = [
   { id: 'urban', label: 'Urbano', icon: Camera }
 ];
 
+const base64ToBlob = (base64: string, type = 'image/jpeg') => {
+  try {
+    const parts = base64.split(',');
+    const byteCharacters = atob(parts[1] || parts[0]);
+    const byteNumbers = new Array(byteCharacters.length);
+    for (let i = 0; i < byteCharacters.length; i++) {
+      byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+    const byteArray = new Uint8Array(byteNumbers);
+    return new Blob([byteArray], { type });
+  } catch (e) {
+    console.error('Error converting base64 to blob:', e);
+    return null;
+  }
+};
+
 const App: React.FC = () => {
   const [formData, setFormData] = useState<FormState>({
     selectedIdentity: null,
@@ -919,10 +935,38 @@ const App: React.FC = () => {
     setAppStep('processing');
 
     try {
+      // --- PASO 0: SUBIR IMAGEN A STORAGE (OPTIMIZACIÓN PARA EVITAR TIMEOUT Y PAYLOAD LIMIT) ---
+      let photoUrlForIA = capturedImage;
+      if (capturedImage.startsWith('data:image')) {
+        try {
+          const blob = base64ToBlob(capturedImage);
+          if (blob) {
+            const fileName = `uploads/${session?.user?.id || 'anon'}_${Date.now()}.jpg`;
+            const { error: uploadError } = await supabase.storage
+              .from('user_photos')
+              .upload(fileName, blob, {
+                contentType: 'image/jpeg',
+                cacheControl: '3600',
+                upsert: true
+              });
+
+            if (!uploadError) {
+              const { data: { publicUrl } } = supabase.storage.from('user_photos').getPublicUrl(fileName);
+              photoUrlForIA = publicUrl;
+              console.log("Client upload successful:", photoUrlForIA);
+            } else {
+              console.warn("Client upload failed (Storage):", uploadError.message);
+            }
+          }
+        } catch (err) {
+          console.warn("Client side upload error (Exception):", err);
+        }
+      }
+
       // --- PASO 1: CREAR TAREA ---
       const { data: createData, error: createError } = await supabase.functions.invoke('cabina-vision', {
         body: {
-          user_photo: capturedImage,
+          user_photo: photoUrlForIA,
           model_id: formData.selectedIdentity,
           aspect_ratio: formData.aspectRatio,
           user_id: session?.user?.id,
