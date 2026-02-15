@@ -105,11 +105,39 @@ serve(async (req) => {
                 console.log(`[KIE-UPLOAD] Response: ${uploadText.substring(0, 500)}`);
                 try {
                     const uploadData = JSON.parse(uploadText);
-                    if (uploadData.code === 200 && uploadData.data?.url) {
-                        publicPhotoUrl = uploadData.data.url;
+                    // Buscar URL en múltiples campos posibles
+                    const possibleUrl = uploadData.data?.url
+                        || uploadData.data?.fileUrl
+                        || uploadData.data?.imageUrl
+                        || uploadData.data?.image_url
+                        || uploadData.data?.link
+                        || uploadData.data?.src
+                        || uploadData.url;
+
+                    // Si no encontramos en campos conocidos, buscar cualquier string con http en data
+                    let foundUrl = possibleUrl;
+                    if (!foundUrl && uploadData.data && typeof uploadData.data === 'object') {
+                        console.log("[KIE-UPLOAD] Campos en data:", Object.keys(uploadData.data).join(', '));
+                        for (const key of Object.keys(uploadData.data)) {
+                            const val = uploadData.data[key];
+                            if (typeof val === 'string' && val.startsWith('http')) {
+                                foundUrl = val;
+                                console.log(`[KIE-UPLOAD] URL encontrada en campo '${key}': ${val}`);
+                                break;
+                            }
+                        }
+                    }
+                    // Si data es directamente un string URL
+                    if (!foundUrl && typeof uploadData.data === 'string' && uploadData.data.startsWith('http')) {
+                        foundUrl = uploadData.data;
+                    }
+
+                    if (uploadData.code === 200 && foundUrl) {
+                        publicPhotoUrl = foundUrl;
                         console.log("[CABINA] ✅ Foto subida via KIE.AI:", publicPhotoUrl);
                     } else {
-                        uploadDebugInfo += `KIE(${uploadData.code}): ${uploadData.msg || uploadData.message || 'sin detalle'}. `;
+                        console.warn("[KIE-UPLOAD] data completo:", JSON.stringify(uploadData.data)?.substring(0, 300));
+                        uploadDebugInfo += `KIE(${uploadData.code}): ${uploadData.msg || 'ok'}, data keys: ${uploadData.data ? Object.keys(uploadData.data).join(',') : 'null'}. `;
                     }
                 } catch (parseErr) {
                     uploadDebugInfo += `KIE: No-JSON response (HTTP ${uploadRes.status}). `;
