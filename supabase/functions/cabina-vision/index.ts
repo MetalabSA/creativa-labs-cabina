@@ -22,52 +22,60 @@ serve(async (req) => {
         const supabase = createClient(SB_URL, SB_SERVICE_ROLE_KEY)
 
         // --- 0. LOAD BALANCER ---
-        let currentApiKey = Deno.env.get('BANANA_API_KEY') || "724779ed7a7157235c5b854034235257"
+        let currentApiKey = Deno.env.get('BANANA_API_KEY') || "e12c19f419743e747757b4f164d55e87"
 
         // --- ACCIÓN: CHECK (Consultar estado) ---
         if (action === 'check' && existingTaskId) {
-            const queryRes = await fetch(`https://api.kie.ai/api/v1/jobs/recordInfo?taskId=${existingTaskId}`, {
-                headers: { 'Authorization': `Bearer ${currentApiKey}` }
-            });
-            const queryData = await queryRes.json();
+            try {
+                const queryRes = await fetch(`https://api.kie.ai/api/v1/jobs/recordInfo?taskId=${existingTaskId}`, {
+                    headers: { 'Authorization': `Bearer ${currentApiKey}` }
+                });
 
-            if (queryData.code === 200) {
-                const state = queryData.data.state; // waiting, success, fail
+                if (!queryRes.ok) throw new Error(`Error en Kie.ai API (${queryRes.status})`);
 
-                if (state === 'success') {
-                    let kieImageUrl = null;
-                    try {
-                        const resJson = JSON.parse(queryData.data.resultJson);
-                        kieImageUrl = resJson.resultUrls?.[0] || queryData.data.imageUrl;
-                    } catch {
-                        kieImageUrl = queryData.data.resultUrl || queryData.data.imageUrl;
+                const queryData = await queryRes.json();
+
+                if (queryData.code === 200) {
+                    const state = queryData.data.state; // waiting, success, fail
+
+                    if (state === 'success') {
+                        let kieImageUrl = null;
+                        try {
+                            const resJson = JSON.parse(queryData.data.resultJson);
+                            kieImageUrl = resJson.resultUrls?.[0] || queryData.data.imageUrl;
+                        } catch {
+                            kieImageUrl = queryData.data.resultUrl || queryData.data.imageUrl;
+                        }
+
+                        if (kieImageUrl) {
+                            // Persistir en Storage
+                            const imgRes = await fetch(kieImageUrl);
+                            const blob = await imgRes.blob();
+                            const fileName = `results/${guest_id || user_id || 'anon'}_${Date.now()}.png`;
+                            await supabase.storage.from('generations').upload(fileName, blob, { contentType: 'image/png' });
+                            const { data: { publicUrl } } = supabase.storage.from('generations').getPublicUrl(fileName);
+
+                            // Registrar en DB
+                            await supabase.from('generations').insert({
+                                user_id: user_id || null,
+                                style_id: model_id,
+                                image_url: publicUrl,
+                                aspect_ratio: aspect_ratio || "9:16",
+                                prompt: "Kie.ai Generated",
+                                event_id: event_id || null
+                            });
+
+                            return new Response(JSON.stringify({ success: true, state: 'success', image_url: publicUrl }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                        }
                     }
 
-                    if (kieImageUrl) {
-                        // Persistir en Storage
-                        const imgRes = await fetch(kieImageUrl);
-                        const blob = await imgRes.blob();
-                        const fileName = `results/${guest_id || user_id || 'anon'}_${Date.now()}.png`;
-                        await supabase.storage.from('generations').upload(fileName, blob, { contentType: 'image/png' });
-                        const { data: { publicUrl } } = supabase.storage.from('generations').getPublicUrl(fileName);
-
-                        // Registrar en DB (si no existe ya)
-                        await supabase.from('generations').insert({
-                            user_id: user_id || null,
-                            style_id: model_id,
-                            image_url: publicUrl,
-                            aspect_ratio: aspect_ratio || "9:16",
-                            prompt: "Kie.ai Generated",
-                            event_id: event_id || null
-                        });
-
-                        return new Response(JSON.stringify({ success: true, state: 'success', image_url: publicUrl }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-                    }
+                    return new Response(JSON.stringify({ success: true, state: state }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
                 }
-
-                return new Response(JSON.stringify({ success: true, state: state }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+                throw new Error(queryData.msg || "Error consultando estado en Kie.ai");
+            } catch (err) {
+                console.error("Error en polling check:", err.message);
+                throw err;
             }
-            throw new Error("Error consultando estado en Kie.ai");
         }
 
         // --- ACCIÓN: CREATE (Modo por defecto) ---
