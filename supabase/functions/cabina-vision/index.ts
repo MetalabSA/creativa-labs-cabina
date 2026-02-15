@@ -85,48 +85,52 @@ serve(async (req) => {
 
         // --- ACCIÓN: CREATE ---
 
-        // 1. Procesar Foto del Usuario -> Subir (Híbrido: Supabase Storage → KIE.AI nativo)
+        // 1. Procesar Foto del Usuario -> Subir a KIE.AI (primario) + Supabase Storage (backup)
         let publicPhotoUrl = user_photo;
         if (user_photo && user_photo.startsWith('data:image')) {
-            let uploaded = false;
 
-            // Intento A: Supabase Storage (preferido - URLs permanentes)
+            // Método PRIMARIO: Uploader nativo de KIE.AI (probado y confiable)
             try {
-                const base64Content = user_photo.split(',')[1];
-                const binaryData = decode(base64Content);
-                const fileName = `uploads/${guest_id || user_id || 'anon'}_${Date.now()}.png`;
-                const { error: uploadError } = await supabase.storage.from('user_photos').upload(fileName, binaryData, { contentType: 'image/png' });
-                if (!uploadError) {
-                    const { data: { publicUrl } } = supabase.storage.from('user_photos').getPublicUrl(fileName);
-                    publicPhotoUrl = publicUrl;
-                    uploaded = true;
-                    console.log("[CABINA] Foto subida a Supabase Storage:", publicPhotoUrl);
+                console.log("[CABINA] Subiendo foto via KIE.AI nativo...");
+                const uploadRes = await fetch("https://kieai.redpandaai.co/api/file-base64-upload", {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentApiKey}` },
+                    body: JSON.stringify({ base64Data: user_photo, uploadPath: "images/base64", fileName: `cabina_${Date.now()}.png` })
+                });
+                const uploadData = await uploadRes.json();
+                if (uploadData.code === 200 && uploadData.data?.url) {
+                    publicPhotoUrl = uploadData.data.url;
+                    console.log("[CABINA] ✅ Foto subida via KIE.AI:", publicPhotoUrl);
                 } else {
-                    console.warn("[STORAGE] Error en upload:", uploadError.message);
+                    console.warn("[KIE-UPLOAD] Respuesta inesperada:", JSON.stringify(uploadData));
                 }
             } catch (e) {
-                console.warn("[STORAGE] Falló subida a Supabase Storage:", e.message);
+                console.error("[KIE-UPLOAD] Falló uploader nativo:", e.message);
             }
 
-            // Intento B: Uploader nativo de KIE.AI (fallback confiable)
-            if (!uploaded) {
+            // Método SECUNDARIO: Supabase Storage (para persistencia/backup)
+            if (publicPhotoUrl === user_photo) {
                 try {
-                    console.log("[CABINA] Usando uploader nativo de KIE.AI como fallback...");
-                    const uploadRes = await fetch("https://kieai.redpandaai.co/api/file-base64-upload", {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentApiKey}` },
-                        body: JSON.stringify({ base64Data: user_photo, uploadPath: "images/base64", fileName: `cabina_${Date.now()}.png` })
-                    });
-                    const uploadData = await uploadRes.json();
-                    if (uploadData.code === 200 && uploadData.data?.url) {
-                        publicPhotoUrl = uploadData.data.url;
-                        console.log("[CABINA] Foto subida via KIE.AI nativo:", publicPhotoUrl);
+                    console.log("[CABINA] Intentando Supabase Storage como fallback...");
+                    const base64Content = user_photo.split(',')[1];
+                    const binaryData = decode(base64Content);
+                    const fileName = `uploads/${guest_id || user_id || 'anon'}_${Date.now()}.png`;
+                    const { error: uploadError } = await supabase.storage.from('user_photos').upload(fileName, binaryData, { contentType: 'image/png' });
+                    if (!uploadError) {
+                        const { data: { publicUrl } } = supabase.storage.from('user_photos').getPublicUrl(fileName);
+                        publicPhotoUrl = publicUrl;
+                        console.log("[CABINA] ✅ Foto subida a Supabase Storage:", publicPhotoUrl);
                     } else {
-                        console.warn("[KIE-UPLOAD] Respuesta inesperada:", JSON.stringify(uploadData));
+                        console.warn("[STORAGE] Error en upload:", uploadError.message);
                     }
                 } catch (e) {
-                    console.error("[KIE-UPLOAD] Falló uploader nativo:", e.message);
+                    console.warn("[STORAGE] Falló subida a Supabase Storage:", e.message);
                 }
+            }
+
+            // Safety check: si después de ambos intentos sigue siendo base64, abortar
+            if (publicPhotoUrl.startsWith('data:image')) {
+                throw new Error("No se pudo subir la foto a ningún servidor. Intenta de nuevo.");
             }
         }
 
