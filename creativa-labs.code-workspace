@@ -32,6 +32,9 @@
 		},
 		{
 			"path": "../../RealEstate"
+		},
+		{
+			"path": "../../alquimia-command-center"
 		}
 	],
 	"settings": {}

@@ -22,7 +22,8 @@ serve(async (req) => {
         const supabase = createClient(SB_URL, SB_SERVICE_ROLE_KEY)
 
         // --- 0. LOAD BALANCER (Round Robin) ---
-        let currentApiKey = Deno.env.get('BANANA_API_KEY') || ""
+        // Usamos la nueva llave proporcionada por el usuario como principal si no hay pool
+        let currentApiKey = Deno.env.get('BANANA_API_KEY') || "724779ed7a7157235c5b854034235257"
         let keyId = null;
 
         try {
@@ -60,16 +61,24 @@ serve(async (req) => {
             }
         }
 
-        // 2. Obtener el Prompt (Desde tabla opcional o fallback)
+        // 2. Obtener el Prompt (Desde tabla identity_prompts)
         let masterPrompt = `Professional photo shoot, high resolution, detailed lighting.`;
         try {
             const { data: promptData } = await supabase.from('identity_prompts').select('master_prompt').eq('id', model_id).maybeSingle();
-            if (promptData?.master_prompt) masterPrompt = promptData.master_prompt;
+            if (promptData?.master_prompt) {
+                masterPrompt = promptData.master_prompt;
+            } else {
+                // Fallback: tratar de buscar en identities por si se renombró la tabla
+                const { data: altData } = await supabase.from('identities').select('master_prompt').eq('id', model_id).maybeSingle();
+                if (altData?.master_prompt) masterPrompt = altData.master_prompt;
+            }
         } catch (e) {
-            console.log("[ALQUIMISTA] Usando prompt por defecto.");
+            console.log("[ENGINE] Error al buscar prompt, usando fallback.");
         }
 
-        // 3. Invocar Kie.ai
+        console.log(`[ENGINE] Iniciando tarea para: ${model_id} con prompt optimizado.`);
+
+        // 3. Invocar Kie.ai (Task Creation)
         const createResponse = await fetch("https://api.kie.ai/api/v1/jobs/createTask", {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentApiKey}` },
@@ -78,7 +87,7 @@ serve(async (req) => {
                 input: {
                     prompt: masterPrompt,
                     image_input: [publicPhotoUrl],
-                    aspect_ratio: aspect_ratio || "1:1",
+                    aspect_ratio: aspect_ratio || "9:16",
                     resolution: "2K",
                     output_format: "png"
                 }
@@ -87,71 +96,96 @@ serve(async (req) => {
 
         const createResult = await createResponse.json();
 
-        if (createResult.code === 402) throw new Error("Saldo insuficiente en Kie.ai.");
-        if (createResult.code === 401) throw new Error("Error de API Key.");
-        if (createResult.code !== 200) throw new Error(`Kie.ai Error: ${createResult.msg || createResult.message}`);
+        if (createResult.code === 402) throw new Error("Saldo insuficiente en Alquimia Engine (Kie.ai).");
+        if (createResult.code === 401) throw new Error("Error de autorización: API Key inválida.");
+        if (createResult.code !== 200) throw new Error(`Engine Error: ${createResult.msg || createResult.message}`);
 
         const taskId = createResult.data.taskId;
-        console.log(`[ALQUIMISTA] Tarea creada: ${taskId}.`);
+        console.log(`[ENGINE] Tarea creada: ${taskId}.`);
 
-        // Rotar llave
+        // Rotar llave en el pool
         if (keyId) {
-            supabase.from('api_key_pool')
+            await supabase.from('api_key_pool')
                 .update({ last_used_at: new Date().toISOString(), usage_count: 1 })
-                .eq('id', keyId)
-                .then(() => console.log(`[BALANCER] Llave ${keyId} rotada.`));
+                .eq('id', keyId);
         }
 
-        // 4. Polling (60 intentos x 3s)
+        // 4. Polling con reintentos exponenciales ligeros (60 intentos x ~3s)
         let kieImageUrl = null;
         let attempts = 0;
-        while (attempts < 60) {
-            await new Promise(r => setTimeout(r, 3000));
-            const queryRes = await fetch(`https://api.kie.ai/api/v1/jobs/recordInfo?taskId=${taskId}`, {
-                headers: { 'Authorization': `Bearer ${currentApiKey}` }
-            });
-            const queryData = await queryRes.json();
+        const maxAttempts = 60;
 
-            if (queryData.code === 200) {
-                const state = queryData.data.state;
-                console.log(`[ALQUIMISTA] Intento ${attempts + 1}: ${state}`);
+        while (attempts < maxAttempts) {
+            await new Promise(r => setTimeout(r, 4000)); // Esperamos 4 segundos por intento
 
-                if (state === 'success') {
-                    try {
-                        const resJson = JSON.parse(queryData.data.resultJson);
-                        kieImageUrl = resJson.resultUrls?.[0] || queryData.data.imageUrl;
-                    } catch {
-                        kieImageUrl = queryData.data.resultUrl || queryData.data.imageUrl;
+            try {
+                const queryRes = await fetch(`https://api.kie.ai/api/v1/jobs/recordInfo?taskId=${taskId}`, {
+                    headers: { 'Authorization': `Bearer ${currentApiKey}` }
+                });
+                const queryData = await queryRes.json();
+
+                if (queryData.code === 200) {
+                    const state = queryData.data.state;
+                    console.log(`[ENGINE] Tarea ${taskId} - Intento ${attempts + 1}: ${state}`);
+
+                    if (state === 'success') {
+                        // Intentamos extraer la URL del resultado
+                        try {
+                            const resJson = JSON.parse(queryData.data.resultJson);
+                            kieImageUrl = resJson.resultUrls?.[0] || queryData.data.imageUrl;
+                        } catch {
+                            kieImageUrl = queryData.data.resultUrl || queryData.data.imageUrl;
+                        }
+                        if (kieImageUrl) break;
                     }
-                    if (kieImageUrl) break;
-                }
 
-                if (state === 'fail') throw new Error(`La IA falló: ${queryData.data.failMsg}`);
+                    if (state === 'fail') {
+                        throw new Error(`La IA falló al procesar: ${queryData.data.failMsg || 'Error desconocido'}`);
+                    }
+                }
+            } catch (e) {
+                console.warn(`[ENGINE] Error en polling intento ${attempts}: ${e.message}`);
+                // Si es un error crítico de la IA (state 'fail'), lanzamos el error
+                if (e.message.includes("IA falló")) throw e;
             }
             attempts++;
         }
 
-        if (!kieImageUrl) throw new Error("La IA está tardando mucho. Revisa tu galería en unos minutos.");
+        if (!kieImageUrl) {
+            throw new Error("El motor de IA está demorando más de lo habitual. Tu foto aparecerá en tu galería en unos minutos.");
+        }
 
-        // 5. Persistir en Storage
+        // 5. Persistir Resultado en Supabase Storage (Clave para evitar CORS y expiración)
         let finalImageUrl = kieImageUrl;
         try {
             const imgRes = await fetch(kieImageUrl);
-            const blob = await imgRes.blob();
-            const fileName = `results/${guest_id || user_id || 'anon'}_${Date.now()}.png`;
-            const { error: uploadError } = await supabase.storage.from('generations').upload(fileName, blob, { contentType: 'image/png' });
-            if (!uploadError) {
-                const { data: { publicUrl } } = supabase.storage.from('generations').getPublicUrl(fileName);
-                finalImageUrl = publicUrl;
+            if (imgRes.ok) {
+                const blob = await imgRes.blob();
+                const fileName = `results/${guest_id || user_id || 'anon'}_${Date.now()}.png`;
+                const { error: uploadError } = await supabase.storage.from('generations').upload(fileName, blob, { contentType: 'image/png' });
+
+                if (!uploadError) {
+                    const { data: { publicUrl } } = supabase.storage.from('generations').getPublicUrl(fileName);
+                    finalImageUrl = publicUrl;
+                    console.log(`[STORAGE] Imagen persistida: ${finalImageUrl}`);
+                }
             }
         } catch (e) {
-            console.error("[STORAGE] Error persistiendo:", e.message);
+            console.error("[STORAGE] No se pudo persistir la imagen, usando URL directa.");
         }
 
-        return new Response(JSON.stringify({ image_url: finalImageUrl, success: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        return new Response(JSON.stringify({
+            image_url: finalImageUrl,
+            success: true,
+            taskId: taskId
+        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
     } catch (error) {
         console.error(`[CRITICAL] ${error.message}`);
-        return new Response(JSON.stringify({ error: error.message, success: false }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 })
+        return new Response(JSON.stringify({
+            error: error.message,
+            success: false
+        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 })
     }
 })
+
