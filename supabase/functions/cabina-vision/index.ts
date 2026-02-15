@@ -12,7 +12,7 @@ serve(async (req) => {
 
     try {
         const body = await req.json()
-        const { user_photo, model_id, aspect_ratio, user_id, email, guest_id, action, taskId: existingTaskId, event_id } = body
+        const { user_photo, model_id, aspect_ratio, user_id, email, guest_id, event_id } = body
 
         const SB_URL = Deno.env.get('SUPABASE_URL') || ""
         const SB_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ""
@@ -21,62 +21,14 @@ serve(async (req) => {
         // API KEY
         const currentApiKey = Deno.env.get('BANANA_API_KEY') || "e12c19f419743e747757b4f164d55e87"
 
-        // --- ACCIÓN: CHECK ---
-        if (action === 'check' && existingTaskId) {
-            console.log(`[CHECK] Consultando taskId: ${existingTaskId}`);
-            const queryRes = await fetch(`https://api.kie.ai/api/v1/jobs/recordInfo?taskId=${existingTaskId}`, {
-                headers: { 'Authorization': `Bearer ${currentApiKey}` }
-            });
-            const queryData = await queryRes.json();
+        console.log(`[ALQUIMISTA] Inicio de proceso para modelo: ${model_id}`);
 
-            if (queryData.code === 200) {
-                const state = queryData.data.state;
-                if (state === 'success') {
-                    let kieImageUrl = null;
-                    try {
-                        const resJson = JSON.parse(queryData.data.resultJson);
-                        kieImageUrl = resJson.resultUrls?.[0] || queryData.data.imageUrl;
-                    } catch {
-                        kieImageUrl = queryData.data.resultUrl || queryData.data.imageUrl;
-                    }
-
-                    if (kieImageUrl) {
-                        try {
-                            const imgRes = await fetch(kieImageUrl);
-                            const blob = await imgRes.blob();
-                            const fileName = `results/${guest_id || user_id || 'anon'}_${Date.now()}.png`;
-                            await supabase.storage.from('generations').upload(fileName, blob, { contentType: 'image/png' });
-                            const { data: { publicUrl } } = supabase.storage.from('generations').getPublicUrl(fileName);
-
-                            await supabase.from('generations').insert({
-                                user_id: user_id || null,
-                                style_id: model_id,
-                                image_url: publicUrl,
-                                aspect_ratio: aspect_ratio || "9:16",
-                                prompt: "Kie.ai Generated",
-                                event_id: event_id || null
-                            });
-
-                            return new Response(JSON.stringify({ success: true, state: 'success', image_url: publicUrl }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-                        } catch (e) {
-                            return new Response(JSON.stringify({ success: true, state: 'success', image_url: kieImageUrl }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-                        }
-                    }
-                }
-                return new Response(JSON.stringify({ success: true, state: state }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-            }
-            return new Response(JSON.stringify({ success: false, error: queryData.msg }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-        }
-
-        // --- ACCIÓN: CREATE ---
-        console.log(`[CREATE] Iniciando tarea...`);
-
-        // 1. Subir a Kie.ai File Service (Para que ellos tengan la foto en su propio storage)
-        let kieNativeUrl = user_photo;
+        // --- PASO 1: SUBIR A KIE.AI NATIVE STORAGE ---
+        // (Como sugirió el USER basado en su nodo de n8n)
+        let kieNativeUrl = null;
         if (user_photo && user_photo.startsWith('data:image')) {
-            console.log("[KIE-UPLOAD] Subiendo base64 a Kie.ai...");
+            console.log("[KIE-UPLOAD] Subiendo base64 a Kie Service Nativo...");
             try {
-                // n8n style upload
                 const uploadRes = await fetch("https://kieai.redpandaai.co/api/file-base64-upload", {
                     method: 'POST',
                     headers: {
@@ -86,29 +38,35 @@ serve(async (req) => {
                     body: JSON.stringify({
                         base64Data: user_photo,
                         uploadPath: "images/base64",
-                        fileName: `${Date.now()}.png`
+                        fileName: `cabina_${Date.now()}.png`
                     })
                 });
 
                 const uploadData = await uploadRes.json();
                 if (uploadData.code === 200 || uploadData.success) {
                     kieNativeUrl = uploadData.data?.url || uploadData.url;
-                    console.log("[KIE-UPLOAD] URL obtenida:", kieNativeUrl);
+                    console.log("[KIE-UPLOAD] Éxito. URL de Kie:", kieNativeUrl);
                 } else {
-                    console.error("[KIE-UPLOAD] Falló:", JSON.stringify(uploadData));
+                    console.error("[KIE-UPLOAD] Falló carga nativa de Kie:", JSON.stringify(uploadData));
                 }
             } catch (e) {
-                console.error("[KIE-UPLOAD] Excepción:", e.message);
+                console.error("[KIE-UPLOAD] Error en subida Kie:", e.message);
             }
         }
 
-        // 2. Obtener Prompt
+        // Si falló la subida nativa, probamos pasarle la URL de Supabase como fallback
+        // o directamente el user_photo si ya era una URL.
+        if (!kieNativeUrl) {
+            kieNativeUrl = user_photo;
+        }
+
+        // --- PASO 2: OBTENER PROMPT ---
         let masterPrompt = "Professional photo shoot.";
         const { data: promptData } = await supabase.from('identity_prompts').select('master_prompt').eq('id', model_id).maybeSingle();
         if (promptData?.master_prompt) masterPrompt = promptData.master_prompt;
 
-        // 3. Crear Tarea
-        console.log("[KIE] createTask con URL:", kieNativeUrl?.substring(0, 50));
+        // --- PASO 3: CREAR TAREA (KIE.AI) ---
+        console.log("[KIE] Creando tarea en createTask...");
         const createResponse = await fetch("https://api.kie.ai/api/v1/jobs/createTask", {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentApiKey}` },
@@ -126,14 +84,77 @@ serve(async (req) => {
 
         const createResult = await createResponse.json();
         if (createResult.code !== 200) {
-            return new Response(JSON.stringify({ success: false, error: createResult.msg }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            throw new Error(`Kie.ai Error: ${createResult.msg}`);
         }
 
-        return new Response(JSON.stringify({
-            success: true,
-            taskId: createResult.data.taskId,
-            state: 'waiting'
-        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        const taskId = createResult.data.taskId;
+        console.log(`[KIE] Tarea creada: ${taskId}. Iniciando Polling Interno (Modo Futbol)...`);
+
+        // --- PASO 4: POLLING INTERNO (Como Fútbol lo resuelve) ---
+        let finalKieUrl = null;
+        let attempts = 0;
+        const maxAttempts = 18; // 18 x 3s = 54s (Cerca del timeout de 60s de Supabase)
+
+        while (attempts < maxAttempts) {
+            await new Promise(r => setTimeout(r, 3000));
+            attempts++;
+
+            const queryRes = await fetch(`https://api.kie.ai/api/v1/jobs/recordInfo?taskId=${taskId}`, {
+                headers: { 'Authorization': `Bearer ${currentApiKey}` }
+            });
+            const queryData = await queryRes.json();
+
+            if (queryData.code === 200) {
+                const state = queryData.data.state;
+                console.log(`[POLLING] Intento ${attempts}: Estado = ${state}`);
+
+                if (state === 'success') {
+                    try {
+                        const resJson = JSON.parse(queryData.data.resultJson);
+                        finalKieUrl = resJson.resultUrls?.[0] || queryData.data.imageUrl;
+                    } catch {
+                        finalKieUrl = queryData.data.resultUrl || queryData.data.imageUrl;
+                    }
+                    if (finalKieUrl) break;
+                }
+                if (state === 'fail') {
+                    throw new Error(`Kie.ai falló: ${queryData.data.failMsg || 'Error desconocido'}`);
+                }
+            }
+        }
+
+        // Si terminó el polling exitosamente o por tiempo
+        if (finalKieUrl) {
+            // --- PASO 5: PERSISTENCIA Y REGISTRO ---
+            try {
+                const imgRes = await fetch(finalKieUrl);
+                const blob = await imgRes.blob();
+                const fileName = `results/${guest_id || user_id || 'anon'}_${Date.now()}.png`;
+                await supabase.storage.from('generations').upload(fileName, blob, { contentType: 'image/png' });
+                const { data: { publicUrl } } = supabase.storage.from('generations').getPublicUrl(fileName);
+
+                await supabase.from('generations').insert({
+                    user_id: user_id || null,
+                    style_id: model_id,
+                    image_url: publicUrl,
+                    aspect_ratio: aspect_ratio || "9:16",
+                    prompt: masterPrompt.substring(0, 500),
+                    event_id: event_id || null
+                });
+
+                return new Response(JSON.stringify({ success: true, image_url: publicUrl }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            } catch (e) {
+                console.warn("[STORAGE] Error persistiendo, devolviendo URL directa.");
+                return new Response(JSON.stringify({ success: true, image_url: finalKieUrl }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+            }
+        } else {
+            // Si agota el tiempo de polling pero la tarea sigue viva
+            return new Response(JSON.stringify({
+                success: true,
+                taskId: taskId,
+                message: "La IA sigue trabajando, ver galería pronto."
+            }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
 
     } catch (error) {
         console.error("[CRITICAL]", error.message);

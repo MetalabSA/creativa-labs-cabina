@@ -934,125 +934,103 @@ const App: React.FC = () => {
 
     setAppStep('processing');
 
-    try {
-      // --- PASO 1: CREAR TAREA (AHORA USA EL SERVICIO NATIVO DE KIE.AI) ---
-      const { data: createData, error: createError } = await supabase.functions.invoke('cabina-vision', {
-        body: {
-          user_photo: capturedImage,
-          model_id: formData.selectedIdentity,
-          aspect_ratio: formData.aspectRatio,
-          user_id: session?.user?.id,
-          email: session?.user?.email,
-          guest_id: `cabina_${Date.now()}`,
-          event_id: eventConfig?.id
-        }
-      });
-
-      if (createError || !createData?.success) {
-        const msg = createError?.message || createData?.error || "Error al iniciar la IA";
-        throw new Error(msg);
+    // (Nota: La Edge Function ahora hace polling interno modo fútbol)
+    const { data: resultData, error: invokeError } = await supabase.functions.invoke('cabina-vision', {
+      body: {
+        user_photo: capturedImage,
+        model_id: formData.selectedIdentity,
+        aspect_ratio: formData.aspectRatio,
+        user_id: session?.user?.id,
+        email: session?.user?.email,
+        guest_id: `cabina_${Date.now()}`,
+        event_id: eventConfig?.id
       }
+    });
 
-      const taskId = createData.taskId;
-      console.log("Tarea iniciada en Kie.ai:", taskId);
+    if (invokeError) {
+      // Estilo Fútbol: Si hay timeout, asumimos que sigue en proceso
+      console.warn("Invoke error (posible timeout), modo background activado.");
+      throw new Error("VAR: Se perdió la conexión, pero tu Alquimia ya está en proceso en la nube. 🇦🇷");
+    }
 
-      // --- PASO 2: POLLING (ESPERA ACTIVA) ---
-      let attempts = 0;
-      const maxAttempts = 60;
-      let finalResult = null;
+    if (!resultData?.success) {
+      throw new Error(resultData?.error || "Error al iniciar la IA");
+    }
 
-      while (attempts < maxAttempts) {
-        // Esperamos 4 segundos entre intentos
-        await new Promise(r => setTimeout(r, 4000));
-        attempts++;
-        console.log(`Consultando estado... Intento ${attempts}`);
+    let finalResult = resultData.image_url;
 
-        const { data: checkData, error: checkError } = await supabase.functions.invoke('cabina-vision', {
-          body: {
-            action: 'check',
-            taskId: taskId,
-            model_id: formData.selectedIdentity,
-            user_id: session?.user?.id,
-            guest_id: `cabina_${Date.now()}`,
-            event_id: eventConfig?.id
-          }
+    // Si por alguna razón la función devolvió éxito pero no la URL todavía (timeout interno)
+    if (!finalResult && resultData.taskId) {
+      console.log("La función no terminó a tiempo, iniciando mini-polling de rescate...");
+      let rescueAttempts = 0;
+      while (rescueAttempts < 10) {
+        await new Promise(r => setTimeout(r, 5000));
+        rescueAttempts++;
+        const { data: rescueData } = await supabase.functions.invoke('cabina-vision', {
+          body: { action: 'check', taskId: resultData.taskId, model_id: formData.selectedIdentity }
         });
-
-        if (checkError) {
-          console.warn("Fallo temporal en consulta, reintentando...");
-          continue;
-        }
-
-        if (!checkData || checkData.success === false) {
-          const errorMsg = checkData?.error || "Error en la consulta de estado.";
-          throw new Error(errorMsg);
-        }
-
-        if (checkData.state === 'success' && checkData.image_url) {
-          finalResult = checkData.image_url;
+        if (rescueData?.success && rescueData.state === 'success' && rescueData.image_url) {
+          finalResult = rescueData.image_url;
           break;
         }
-
-        if (checkData.state === 'fail') {
-          throw new Error(checkData.error || "La IA falló al procesar la imagen en Kie.ai.");
-        }
       }
-
-      if (!finalResult) {
-        throw new Error("Tiempo de espera agotado. Revisa tu galería en unos minutos.");
-      }
-
-      // --- PASO 3: ÉXITO Y ACTUALIZACIÓN ---
-      setResultImage(finalResult);
-
-      // Actualizar estadísticas
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({ total_generations: (profile.total_generations || 0) + 1 })
-        .eq('id', session.user.id);
-
-      if (profileError) console.error('Error updating stats:', profileError);
-
-      // Notificación de éxito
-      fetchProfile();
-      fetchGenerations();
-      setIsSuccess(true);
-      setAppStep('result');
-      setNotifications(prev => [...prev, {
-        id: Date.now().toString(),
-        message: '🪄 ¡Tu foto está lista!',
-        type: 'success',
-        action: () => {
-          setAppStep('result');
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-      }]);
-
-    } catch (error: any) {
-      console.error('Submission error:', error);
-      // REEMBOLSO: Solo si no es Master
-      if (!isMaster && profile) {
-        await supabase
-          .from('profiles')
-          .update({ credits: profile.credits })
-          .eq('id', session.user.id);
-        setProfile(prev => prev ? { ...prev, credits: profile.credits } : null);
-      }
-      setErrorMessage(error.message || "Error inesperado en la conexión.");
-      setIsSuccess(true);
-      setAppStep('result');
-    } finally {
-      setIsSubmitting(false);
-      setBackgroundJob(null);
     }
-  };
+
+    if (!finalResult) {
+      throw new Error("La IA está tardando más de lo habitual. Revisa tu historia en un minuto.");
+    }
+
+    // --- PASO 3: ÉXITO Y ACTUALIZACIÓN ---
+    setResultImage(finalResult);
+
+    // Actualizar estadísticas
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .update({ total_generations: (profile.total_generations || 0) + 1 })
+      .eq('id', session.user.id);
+
+    if (profileError) console.error('Error updating stats:', profileError);
+
+    // Notificación de éxito
+    fetchProfile();
+    fetchGenerations();
+    setIsSuccess(true);
+    setAppStep('result');
+    setNotifications(prev => [...prev, {
+      id: Date.now().toString(),
+      message: '🪄 ¡Tu foto está lista!',
+      type: 'success',
+      action: () => {
+        setAppStep('result');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+    }]);
+
+  } catch (error: any) {
+    console.error('Submission error:', error);
+    // REEMBOLSO: Solo si no es Master
+    if (!isMaster && profile) {
+      await supabase
+        .from('profiles')
+        .update({ credits: profile.credits })
+        .eq('id', session.user.id);
+      setProfile(prev => prev ? { ...prev, credits: profile.credits } : null);
+    }
+    setErrorMessage(error.message || "Error inesperado en la conexión.");
+    setIsSuccess(true);
+    setAppStep('result');
+  } finally {
+    setIsSubmitting(false);
+    setBackgroundJob(null);
+  }
+};
 
 
-  const handlePrint = () => {
-    if (!resultImage) return;
-    const printWindow = window.open('', '_blank');
-    if (printWindow) {
-      printWindow.document.write(`
+const handlePrint = () => {
+  if (!resultImage) return;
+  const printWindow = window.open('', '_blank');
+  if (printWindow) {
+    printWindow.document.write(`
         <html>
           <head>
             <title>Imprimir Foto</title>
@@ -1070,1261 +1048,1261 @@ const App: React.FC = () => {
           </body>
         </html>
       `);
-      printWindow.document.close();
-    }
-  };
+    printWindow.document.close();
+  }
+};
 
-  const handleDownload = async () => {
-    if (!resultImage) return;
+const handleDownload = async () => {
+  if (!resultImage) return;
 
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
-    try {
-      // Usar un nombre de archivo amigable
-      const filename = `creativa-photo-${Date.now()}.png`;
+  try {
+    // Usar un nombre de archivo amigable
+    const filename = `creativa-photo-${Date.now()}.png`;
 
-      // Intentar descargar vía blob para evitar problemas de cross-origin
-      const response = await fetch(resultImage, { mode: 'cors' });
-      const blob = await response.blob();
-      const file = new File([blob], filename, { type: 'image/png' });
+    // Intentar descargar vía blob para evitar problemas de cross-origin
+    const response = await fetch(resultImage, { mode: 'cors' });
+    const blob = await response.blob();
+    const file = new File([blob], filename, { type: 'image/png' });
 
-      // En móviles, priorizar Share API
-      if (isMobile && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-        try {
-          await navigator.share({
-            files: [file],
-            title: 'Mi Foto Creativa',
-            text: '¡Mira mi foto generada con IA por Creativa Labs!'
-          });
-          return;
-        } catch (shareError: any) {
-          if (shareError.name !== 'AbortError') throw shareError;
-          return; // Usuario canceló
-        }
-      }
-
-      // Fallback para descarga estándar
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
-    } catch (error) {
-      console.error('Download/Share error:', error);
-      // Último recurso: abrir en pestaña nueva o redirección directa
-      if (isMobile) {
-        window.location.href = resultImage;
-      } else {
-        window.open(resultImage, '_blank');
-      }
-    }
-  };
-  const ASPECT_RATIOS = [
-    { id: '9:16', label: '9:16', icon: Smartphone, desc: 'Portrait' },
-    { id: '16:9', label: '16:9', icon: Monitor, desc: 'Landscape' },
-    { id: '4:5', label: '4:5', icon: Instagram, desc: 'Classic' }
-  ];
-
-  const handleReset = () => {
-    setCapturedImage(null);
-    setResultImage(null);
-    setIsSuccess(false);
-    setIsSubmitting(false);
-    setFormData(p => ({ ...p, selectedIdentity: null }));
-    setAppStep('gallery');
-    setErrorMessage(null);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const isReady = capturedImage && formData.selectedIdentity;
-
-  const handlePayment = async (pack: any) => {
-    try {
-      setProcessingPayment(pack.name);
-      console.log('Iniciando pago para pack:', pack.name);
-
-      const { data, error } = await supabase.functions.invoke('mercadopago-payment', {
-        body: {
-          user_id: session.user.id,
-          credits: pack.credits,
-          price: pack.price,
-          pack_name: pack.name,
-          redirect_url: window.location.origin
-        }
-      });
-
-      if (error) {
-        console.error('Error invocando función:', error);
-        throw error;
-      }
-
-      console.log('Respuesta de función:', data);
-
-      if (data?.error) {
-        const msg = data.message || "Error desconocido en el servidor.";
-        setErrorMessage(`Error de Pago: ${msg}`);
-        setNotifications(prev => [...prev, {
-          id: Date.now().toString(),
-          message: `❌ ${msg}`,
-          type: 'error'
-        }]);
+    // En móviles, priorizar Share API
+    if (isMobile && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({
+          files: [file],
+          title: 'Mi Foto Creativa',
+          text: '¡Mira mi foto generada con IA por Creativa Labs!'
+        });
         return;
+      } catch (shareError: any) {
+        if (shareError.name !== 'AbortError') throw shareError;
+        return; // Usuario canceló
       }
+    }
 
-      const paymentUrl = data?.init_point || data?.sandbox_init_point;
-      if (paymentUrl) {
-        window.location.href = paymentUrl;
-      } else {
-        console.error('No se recibió URL de pago:', data);
-        setErrorMessage("No se pudo generar el enlace de pago.");
-        setNotifications(prev => [...prev, {
-          id: Date.now().toString(),
-          message: `❌ Error: No se recibió link de pago`,
-          type: 'error'
-        }]);
+    // Fallback para descarga estándar
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error('Download/Share error:', error);
+    // Último recurso: abrir en pestaña nueva o redirección directa
+    if (isMobile) {
+      window.location.href = resultImage;
+    } else {
+      window.open(resultImage, '_blank');
+    }
+  }
+};
+const ASPECT_RATIOS = [
+  { id: '9:16', label: '9:16', icon: Smartphone, desc: 'Portrait' },
+  { id: '16:9', label: '16:9', icon: Monitor, desc: 'Landscape' },
+  { id: '4:5', label: '4:5', icon: Instagram, desc: 'Classic' }
+];
+
+const handleReset = () => {
+  setCapturedImage(null);
+  setResultImage(null);
+  setIsSuccess(false);
+  setIsSubmitting(false);
+  setFormData(p => ({ ...p, selectedIdentity: null }));
+  setAppStep('gallery');
+  setErrorMessage(null);
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+};
+
+const isReady = capturedImage && formData.selectedIdentity;
+
+const handlePayment = async (pack: any) => {
+  try {
+    setProcessingPayment(pack.name);
+    console.log('Iniciando pago para pack:', pack.name);
+
+    const { data, error } = await supabase.functions.invoke('mercadopago-payment', {
+      body: {
+        user_id: session.user.id,
+        credits: pack.credits,
+        price: pack.price,
+        pack_name: pack.name,
+        redirect_url: window.location.origin
       }
-    } catch (err: any) {
-      console.error('Error initiating payment:', err);
-      let errorMsg = err.message || 'No se pudo iniciar el proceso de pago.';
+    });
 
-      // Intentar extraer mensaje si es un error de Supabase Function
-      if (err.context) {
-        try {
-          const body = await err.context.json();
-          errorMsg = body.message || body.error || errorMsg;
-        } catch (e) { }
-      }
+    if (error) {
+      console.error('Error invocando función:', error);
+      throw error;
+    }
 
-      setErrorMessage(`Error: ${errorMsg}`);
+    console.log('Respuesta de función:', data);
+
+    if (data?.error) {
+      const msg = data.message || "Error desconocido en el servidor.";
+      setErrorMessage(`Error de Pago: ${msg}`);
       setNotifications(prev => [...prev, {
         id: Date.now().toString(),
-        message: `❌ ${errorMsg}`,
+        message: `❌ ${msg}`,
         type: 'error'
       }]);
-    } finally {
-      setProcessingPayment(null);
+      return;
     }
-  };
 
-  if (!session) {
-    return <Auth />;
+    const paymentUrl = data?.init_point || data?.sandbox_init_point;
+    if (paymentUrl) {
+      window.location.href = paymentUrl;
+    } else {
+      console.error('No se recibió URL de pago:', data);
+      setErrorMessage("No se pudo generar el enlace de pago.");
+      setNotifications(prev => [...prev, {
+        id: Date.now().toString(),
+        message: `❌ Error: No se recibió link de pago`,
+        type: 'error'
+      }]);
+    }
+  } catch (err: any) {
+    console.error('Error initiating payment:', err);
+    let errorMsg = err.message || 'No se pudo iniciar el proceso de pago.';
+
+    // Intentar extraer mensaje si es un error de Supabase Function
+    if (err.context) {
+      try {
+        const body = await err.context.json();
+        errorMsg = body.message || body.error || errorMsg;
+      } catch (e) { }
+    }
+
+    setErrorMessage(`Error: ${errorMsg}`);
+    setNotifications(prev => [...prev, {
+      id: Date.now().toString(),
+      message: `❌ ${errorMsg}`,
+      type: 'error'
+    }]);
+  } finally {
+    setProcessingPayment(null);
   }
+};
 
-  if (showAdmin && profile?.is_master) {
-    return (
-      <div className="relative w-full min-h-screen bg-primary z-[200]">
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[-1]" />
-        <div className="fixed top-0 left-0 w-full z-[250] p-6">
-          <div className="max-w-[1400px] mx-auto flex justify-end items-center">
-            <button
-              onClick={() => setShowAdmin(false)}
-              className="flex items-center gap-3 px-6 py-3 rounded-full bg-accent text-white border border-accent shadow-lg shadow-accent/20"
-            >
-              <Shield className="w-4 h-4" />
-              <span className="text-[10px] font-black uppercase tracking-[2px]">Volver a la App</span>
-            </button>
-          </div>
-        </div>
-        <div className="relative z-[210]">
-          <Admin onBack={() => setShowAdmin(false)} IDENTITIES={mergedIdentities} />
-        </div>
-      </div>
-    );
-  }
+if (!session) {
+  return <Auth />;
+}
 
+if (showAdmin && profile?.is_master) {
   return (
-    <div className="relative w-full min-h-screen font-sans text-white bg-primary overflow-x-hidden">
-      <Background3D />
-
-      {/* Bubble Menu */}
-      <BubbleMenu
-        user={session.user}
-        profile={profile}
-        onNavigate={(view) => {
-          if (view.startsWith('category_')) {
-            setActiveCategory(view.replace('category_', ''));
-            setAppStep('gallery');
-          } else if (view === 'favorites') {
-            setActiveCategory('favorites');
-            setAppStep('gallery');
-          } else if (view === 'admin') {
-            setShowAdmin(true);
-          } else {
-            // @ts-ignore
-            setAppStep(view);
-          }
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        }}
-        onLogout={async () => {
-          await supabase.auth.signOut();
-          window.location.href = '/';
-        }}
-        categories={CATEGORIES}
-        currentView={appStep}
-      />
-
-      {/* Floating Notifications */}
-      <div className="fixed bottom-10 right-10 z-[500] flex flex-col gap-4">
-        {notifications.map(notif => (
-          <div
-            key={notif.id}
-            onClick={notif.action}
-            className={`flex items-center gap-4 px-8 py-4 rounded-2xl border backdrop-blur-2xl animate-[fadeInRight_0.5s_ease-out] shadow-2xl cursor-pointer hover:scale-105 transition-all
-              ${notif.type === 'success' ? 'bg-accent/20 border-accent/40 text-white' : 'bg-red-500/20 border-red-500/40 text-red-100'}`}
+    <div className="relative w-full min-h-screen bg-primary z-[200]">
+      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[-1]" />
+      <div className="fixed top-0 left-0 w-full z-[250] p-6">
+        <div className="max-w-[1400px] mx-auto flex justify-end items-center">
+          <button
+            onClick={() => setShowAdmin(false)}
+            className="flex items-center gap-3 px-6 py-3 rounded-full bg-accent text-white border border-accent shadow-lg shadow-accent/20"
           >
-            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${notif.type === 'success' ? 'bg-accent' : 'bg-red-500'}`}>
-              {notif.type === 'success' ? <Check className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
-            </div>
-            <div className="flex flex-col">
-              <span className="font-black text-[10px] uppercase tracking-[2px]">{notif.message}</span>
-              {notif.action && <span className="text-[7px] font-bold text-accent uppercase tracking-[1px]">Clic para ver</span>}
-            </div>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setNotifications(prev => prev.filter(n => n.id !== notif.id));
-              }}
-              className="ml-4 opacity-40 hover:opacity-100"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        ))}
-
-        {/* Active Job Bottom Bar */}
-        {isSubmitting && backgroundJob?.active && (
-          <div className="bg-black/80 backdrop-blur-xl border border-white/10 p-6 rounded-[24px] shadow-2xl flex items-center gap-6 animate-[fadeInUp_0.5s_ease-out]">
-            <div className="relative w-12 h-12 flex items-center justify-center">
-              <div className="absolute inset-0 border-[1px] border-accent/20 rounded-full animate-spin" />
-              <span className="text-[8px] font-black">{elapsedSeconds}s</span>
-            </div>
-            <div className="flex flex-col text-left">
-              <span className="text-white text-[10px] font-black uppercase tracking-[2px]">Alquimia en progreso...</span>
-              <span className="text-white/40 text-[7px] uppercase tracking-[1px]">Podés seguir usando la app</span>
-            </div>
-            <button
-              onClick={() => {
-                setAppStep('gallery');
-                setBackgroundJob({ active: false, id: null, startTime: Date.now() });
-              }}
-              className="px-4 py-2 bg-accent text-white rounded-lg text-[8px] font-black uppercase tracking-[1px] hover:bg-white transition-colors"
-            >
-              Cerrar
-            </button>
-          </div>
-        )}
+            <Shield className="w-4 h-4" />
+            <span className="text-[10px] font-black uppercase tracking-[2px]">Volver a la App</span>
+          </button>
+        </div>
       </div>
+      <div className="relative z-[210]">
+        <Admin onBack={() => setShowAdmin(false)} IDENTITIES={mergedIdentities} />
+      </div>
+    </div>
+  );
+}
 
-      {/* Loading Overlay */}
-      {isSubmitting && !backgroundJob?.active && (
-        <div className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-2xl flex flex-col items-center justify-center p-6 text-center animate-[fadeIn_0.3s_ease-out]">
-          <div className="relative mb-12">
-            {/* Pulsing Glow Background */}
-            <div className="absolute inset-0 bg-accent/20 blur-[100px] rounded-full animate-pulse" />
+return (
+  <div className="relative w-full min-h-screen font-sans text-white bg-primary overflow-x-hidden">
+    <Background3D />
 
-            <div className="relative w-32 h-32 flex items-center justify-center">
-              <div className="absolute inset-0 border-[1px] border-accent/20 rounded-full animate-[ping_3s_linear_infinite]" />
-              <div className="absolute inset-[-10px] border-[1px] border-white/5 rounded-full animate-[ping_4s_linear_infinite]" />
+    {/* Bubble Menu */}
+    <BubbleMenu
+      user={session.user}
+      profile={profile}
+      onNavigate={(view) => {
+        if (view.startsWith('category_')) {
+          setActiveCategory(view.replace('category_', ''));
+          setAppStep('gallery');
+        } else if (view === 'favorites') {
+          setActiveCategory('favorites');
+          setAppStep('gallery');
+        } else if (view === 'admin') {
+          setShowAdmin(true);
+        } else {
+          // @ts-ignore
+          setAppStep(view);
+        }
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }}
+      onLogout={async () => {
+        await supabase.auth.signOut();
+        window.location.href = '/';
+      }}
+      categories={CATEGORIES}
+      currentView={appStep}
+    />
 
-              <Loader2 className="w-full h-full text-accent animate-spin stroke-[1px] opacity-40" />
-
-              <div className="absolute inset-0 flex items-center justify-center">
-                <div className="flex flex-col items-center">
-                  <Monitor className="w-6 h-6 text-accent animate-pulse mb-1" />
-                  <span className="text-xl font-black italic tracking-tighter text-white">AI</span>
-                  <span className="text-[6px] font-black uppercase tracking-[2px] text-accent/60">Scanning...</span>
-                </div>
-              </div>
-            </div>
+    {/* Floating Notifications */}
+    <div className="fixed bottom-10 right-10 z-[500] flex flex-col gap-4">
+      {notifications.map(notif => (
+        <div
+          key={notif.id}
+          onClick={notif.action}
+          className={`flex items-center gap-4 px-8 py-4 rounded-2xl border backdrop-blur-2xl animate-[fadeInRight_0.5s_ease-out] shadow-2xl cursor-pointer hover:scale-105 transition-all
+              ${notif.type === 'success' ? 'bg-accent/20 border-accent/40 text-white' : 'bg-red-500/20 border-red-500/40 text-red-100'}`}
+        >
+          <div className={`w-10 h-10 rounded-full flex items-center justify-center ${notif.type === 'success' ? 'bg-accent' : 'bg-red-500'}`}>
+            {notif.type === 'success' ? <Check className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
           </div>
-
-          <div className="max-w-md space-y-8 relative z-10">
-            <div className="space-y-2">
-              <span className="text-accent text-[10px] font-black tracking-[5px] uppercase block animate-pulse">
-                Procesando Alquimia Digital
-              </span>
-              <h3 className="text-2xl font-black italic uppercase tracking-tight h-20 flex items-center justify-center transition-all duration-500">
-                {PHRASES[currentPhraseIndex]}
-              </h3>
-            </div>
-
-            <div className="flex flex-col items-center gap-4 pt-8">
-              <div className="w-64 h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
-                <div
-                  className="h-full bg-accent transition-all duration-300 ease-linear shadow-[0_0_15px_rgba(255,85,0,0.5)]"
-                  style={{
-                    width: `${(() => {
-                      if (elapsedSeconds < 5) return (elapsedSeconds / 5) * 30; // 0-5s: 0-30%
-                      if (elapsedSeconds < 25) return 30 + ((elapsedSeconds - 5) / 20) * 50; // 5-25s: 30-80%
-                      if (elapsedSeconds < 60) return 80 + ((elapsedSeconds - 25) / 35) * 15; // 25-60s: 80-95%
-                      return Math.min(99, 95 + ((elapsedSeconds - 60) / 60) * 4); // 60s+: -> 99%
-                    })()}%`
-                  }}
-                />
-              </div>
-              <p className="text-[8px] text-white/30 font-black tracking-[3px] uppercase">
-                {elapsedSeconds > 30 ? "Finalizando detalles finales..." : "Sincronizando con el servidor"}
-              </p>
-            </div>
-
-            <button
-              onClick={() => {
-                setBackgroundJob({ active: true, id: null, startTime: Date.now() });
-                setAppStep('gallery');
-              }}
-              className="px-8 py-4 mt-8 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-[2px] hover:bg-white/10 transition-all flex items-center gap-3 group"
-            >
-              <Smartphone className="w-4 h-4 text-accent group-hover:scale-110 transition-transform" />
-              Procesar en Segundo Plano
-            </button>
+          <div className="flex flex-col">
+            <span className="font-black text-[10px] uppercase tracking-[2px]">{notif.message}</span>
+            {notif.action && <span className="text-[7px] font-bold text-accent uppercase tracking-[1px]">Clic para ver</span>}
           </div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setNotifications(prev => prev.filter(n => n.id !== notif.id));
+            }}
+            className="ml-4 opacity-40 hover:opacity-100"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      ))}
+
+      {/* Active Job Bottom Bar */}
+      {isSubmitting && backgroundJob?.active && (
+        <div className="bg-black/80 backdrop-blur-xl border border-white/10 p-6 rounded-[24px] shadow-2xl flex items-center gap-6 animate-[fadeInUp_0.5s_ease-out]">
+          <div className="relative w-12 h-12 flex items-center justify-center">
+            <div className="absolute inset-0 border-[1px] border-accent/20 rounded-full animate-spin" />
+            <span className="text-[8px] font-black">{elapsedSeconds}s</span>
+          </div>
+          <div className="flex flex-col text-left">
+            <span className="text-white text-[10px] font-black uppercase tracking-[2px]">Alquimia en progreso...</span>
+            <span className="text-white/40 text-[7px] uppercase tracking-[1px]">Podés seguir usando la app</span>
+          </div>
+          <button
+            onClick={() => {
+              setAppStep('gallery');
+              setBackgroundJob({ active: false, id: null, startTime: Date.now() });
+            }}
+            className="px-4 py-2 bg-accent text-white rounded-lg text-[8px] font-black uppercase tracking-[1px] hover:bg-white transition-colors"
+          >
+            Cerrar
+          </button>
         </div>
       )}
+    </div>
 
-      {/* Hero - Only show in Gallery */}
-      {
-        appStep === 'gallery' && (
-          <section className="relative h-[40vh] w-full flex flex-col items-center justify-center z-10 px-4">
-            <div className="text-center pointer-events-none">
-              <h1 className="font-black text-[clamp(2.5rem,10vw,10rem)] leading-none tracking-tighter uppercase select-none">
-                {eventConfig?.event_name || 'Creativa'} <span className="text-white/20">{eventConfig ? '' : 'Labs'}</span>
-              </h1>
-              <div className="mt-4 flex flex-col items-center gap-2">
-                <div className="h-[1px] w-16 bg-accent" />
-                <div className="text-[10px] tracking-[0.5rem] text-white/40 uppercase">{eventConfig?.config?.welcome_text || 'Photo Booth Experience'}</div>
+    {/* Loading Overlay */}
+    {isSubmitting && !backgroundJob?.active && (
+      <div className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-2xl flex flex-col items-center justify-center p-6 text-center animate-[fadeIn_0.3s_ease-out]">
+        <div className="relative mb-12">
+          {/* Pulsing Glow Background */}
+          <div className="absolute inset-0 bg-accent/20 blur-[100px] rounded-full animate-pulse" />
+
+          <div className="relative w-32 h-32 flex items-center justify-center">
+            <div className="absolute inset-0 border-[1px] border-accent/20 rounded-full animate-[ping_3s_linear_infinite]" />
+            <div className="absolute inset-[-10px] border-[1px] border-white/5 rounded-full animate-[ping_4s_linear_infinite]" />
+
+            <Loader2 className="w-full h-full text-accent animate-spin stroke-[1px] opacity-40" />
+
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="flex flex-col items-center">
+                <Monitor className="w-6 h-6 text-accent animate-pulse mb-1" />
+                <span className="text-xl font-black italic tracking-tighter text-white">AI</span>
+                <span className="text-[6px] font-black uppercase tracking-[2px] text-accent/60">Scanning...</span>
               </div>
             </div>
-          </section>
-        )
-      }
-
-      {/* Volver Button - Only show in Setup/Result */}
-      {
-        (appStep === 'setup' || appStep === 'result' || appStep === 'history') && (
-          <div className="fixed top-24 left-6 z-[160] animate-[fadeIn_0.5s_ease-out]">
-            <button
-              onClick={() => {
-                handleReset();
-                setAppStep('gallery');
-              }}
-              className="group flex items-center gap-4 px-6 py-3 bg-black/40 backdrop-blur-xl border border-white/5 rounded-full hover:bg-white/10 transition-all pointer-events-auto shadow-2xl"
-            >
-              <ArrowDown className="w-4 h-4 text-accent rotate-90" />
-              <span className="text-[10px] font-black uppercase tracking-[3px]">Volver a Estilos</span>
-            </button>
           </div>
-        )
-      }
+        </div>
 
-      {/* Main Experience */}
-      <section className="relative min-h-screen w-full bg-[#050505]/95 backdrop-blur-md border-t border-white/5 py-20 px-6 z-20">
-        <div className="max-w-[1200px] mx-auto">
+        <div className="max-w-md space-y-8 relative z-10">
+          <div className="space-y-2">
+            <span className="text-accent text-[10px] font-black tracking-[5px] uppercase block animate-pulse">
+              Procesando Alquimia Digital
+            </span>
+            <h3 className="text-2xl font-black italic uppercase tracking-tight h-20 flex items-center justify-center transition-all duration-500">
+              {PHRASES[currentPhraseIndex]}
+            </h3>
+          </div>
 
-          {/* GALLERY VIEW: Styles Selection */}
-          {appStep === 'gallery' && (
-            <div className="animate-[fadeIn_1s_ease-out]">
-              <div className="text-center mb-16">
-                <span className="inline-block px-4 py-1 rounded-full bg-accent/10 border border-accent/20 text-accent text-[10px] font-black tracking-[3px] uppercase mb-6">Discovery</span>
-                <h2 className="text-4xl font-black tracking-tight uppercase mb-4 italic text-white">{eventConfig ? 'Selecciona tu Estilo' : 'Elige tu destino'}</h2>
-                <p className="text-white/30 text-[10px] uppercase tracking-[4px]">{eventConfig ? 'Personaliza tu experiencia exclusiva' : 'Navega por los universos visuales disponibles'}</p>
-              </div>
+          <div className="flex flex-col items-center gap-4 pt-8">
+            <div className="w-64 h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
+              <div
+                className="h-full bg-accent transition-all duration-300 ease-linear shadow-[0_0_15px_rgba(255,85,0,0.5)]"
+                style={{
+                  width: `${(() => {
+                    if (elapsedSeconds < 5) return (elapsedSeconds / 5) * 30; // 0-5s: 0-30%
+                    if (elapsedSeconds < 25) return 30 + ((elapsedSeconds - 5) / 20) * 50; // 5-25s: 30-80%
+                    if (elapsedSeconds < 60) return 80 + ((elapsedSeconds - 25) / 35) * 15; // 25-60s: 80-95%
+                    return Math.min(99, 95 + ((elapsedSeconds - 60) / 60) * 4); // 60s+: -> 99%
+                  })()}%`
+                }}
+              />
+            </div>
+            <p className="text-[8px] text-white/30 font-black tracking-[3px] uppercase">
+              {elapsedSeconds > 30 ? "Finalizando detalles finales..." : "Sincronizando con el servidor"}
+            </p>
+          </div>
 
-              {/* Smart Search (Lupa) */}
-              <div className="max-w-xl mx-auto mb-12 relative group">
-                <div className="absolute inset-0 bg-accent/5 blur-2xl rounded-full opacity-0 group-focus-within:opacity-100 transition-opacity duration-700" />
-                <div className="relative flex items-center bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden focus-within:border-accent/50 transition-all duration-300">
-                  <div className="pl-6 pointer-events-none">
-                    <Search className={`w-5 h-5 transition-colors ${searchQuery ? 'text-accent' : 'text-white/20'}`} />
-                  </div>
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Busca por estilo, pack o tags (ej: f1, traje, neon)..."
-                    className="w-full bg-transparent border-none px-6 py-5 text-sm font-bold placeholder:text-white/10 focus:outline-none focus:ring-0 text-white"
-                  />
-                  {searchQuery && (
-                    <button
-                      onClick={() => setSearchQuery('')}
-                      className="pr-6 text-white/20 hover:text-white transition-colors"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  )}
+          <button
+            onClick={() => {
+              setBackgroundJob({ active: true, id: null, startTime: Date.now() });
+              setAppStep('gallery');
+            }}
+            className="px-8 py-4 mt-8 bg-white/5 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-[2px] hover:bg-white/10 transition-all flex items-center gap-3 group"
+          >
+            <Smartphone className="w-4 h-4 text-accent group-hover:scale-110 transition-transform" />
+            Procesar en Segundo Plano
+          </button>
+        </div>
+      </div>
+    )}
+
+    {/* Hero - Only show in Gallery */}
+    {
+      appStep === 'gallery' && (
+        <section className="relative h-[40vh] w-full flex flex-col items-center justify-center z-10 px-4">
+          <div className="text-center pointer-events-none">
+            <h1 className="font-black text-[clamp(2.5rem,10vw,10rem)] leading-none tracking-tighter uppercase select-none">
+              {eventConfig?.event_name || 'Creativa'} <span className="text-white/20">{eventConfig ? '' : 'Labs'}</span>
+            </h1>
+            <div className="mt-4 flex flex-col items-center gap-2">
+              <div className="h-[1px] w-16 bg-accent" />
+              <div className="text-[10px] tracking-[0.5rem] text-white/40 uppercase">{eventConfig?.config?.welcome_text || 'Photo Booth Experience'}</div>
+            </div>
+          </div>
+        </section>
+      )
+    }
+
+    {/* Volver Button - Only show in Setup/Result */}
+    {
+      (appStep === 'setup' || appStep === 'result' || appStep === 'history') && (
+        <div className="fixed top-24 left-6 z-[160] animate-[fadeIn_0.5s_ease-out]">
+          <button
+            onClick={() => {
+              handleReset();
+              setAppStep('gallery');
+            }}
+            className="group flex items-center gap-4 px-6 py-3 bg-black/40 backdrop-blur-xl border border-white/5 rounded-full hover:bg-white/10 transition-all pointer-events-auto shadow-2xl"
+          >
+            <ArrowDown className="w-4 h-4 text-accent rotate-90" />
+            <span className="text-[10px] font-black uppercase tracking-[3px]">Volver a Estilos</span>
+          </button>
+        </div>
+      )
+    }
+
+    {/* Main Experience */}
+    <section className="relative min-h-screen w-full bg-[#050505]/95 backdrop-blur-md border-t border-white/5 py-20 px-6 z-20">
+      <div className="max-w-[1200px] mx-auto">
+
+        {/* GALLERY VIEW: Styles Selection */}
+        {appStep === 'gallery' && (
+          <div className="animate-[fadeIn_1s_ease-out]">
+            <div className="text-center mb-16">
+              <span className="inline-block px-4 py-1 rounded-full bg-accent/10 border border-accent/20 text-accent text-[10px] font-black tracking-[3px] uppercase mb-6">Discovery</span>
+              <h2 className="text-4xl font-black tracking-tight uppercase mb-4 italic text-white">{eventConfig ? 'Selecciona tu Estilo' : 'Elige tu destino'}</h2>
+              <p className="text-white/30 text-[10px] uppercase tracking-[4px]">{eventConfig ? 'Personaliza tu experiencia exclusiva' : 'Navega por los universos visuales disponibles'}</p>
+            </div>
+
+            {/* Smart Search (Lupa) */}
+            <div className="max-w-xl mx-auto mb-12 relative group">
+              <div className="absolute inset-0 bg-accent/5 blur-2xl rounded-full opacity-0 group-focus-within:opacity-100 transition-opacity duration-700" />
+              <div className="relative flex items-center bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden focus-within:border-accent/50 transition-all duration-300">
+                <div className="pl-6 pointer-events-none">
+                  <Search className={`w-5 h-5 transition-colors ${searchQuery ? 'text-accent' : 'text-white/20'}`} />
                 </div>
-              </div>
-
-              {/* Styles Grids and Categories (Existing Logic) */}
-              {!searchQuery && (
-                <div className="mb-20 animate-[fadeIn_0.8s_ease-out]">
-                  <div className="flex items-center justify-center gap-3 mb-8">
-                    <Sparkles className="w-4 h-4 text-amber-500 animate-pulse" />
-                    <h3 className="text-[10px] font-black tracking-[4px] uppercase text-white/40">Recomendados para vos</h3>
-                    <Sparkles className="w-4 h-4 text-amber-500 animate-pulse" />
-                  </div>
-                  <div className="flex flex-nowrap overflow-x-auto pb-8 gap-3 px-4 no-scrollbar justify-center">
-                    {recommendedIdentities.map((identity) => (
-                      <div key={`rec-${identity.id}`} className="min-w-[110px] sm:min-w-[120px] transform hover:scale-110 transition-all duration-500">
-                        <UploadCard
-                          type="character"
-                          title={identity.title}
-                          sampleImageUrl={identity.url}
-                          isSelected={formData.selectedIdentity === identity.id}
-                          isPremium={identity.isPremium}
-                          isUnlocked={profile?.unlocked_packs?.includes(identity.subCategory) || profile?.is_master}
-                          usageCount={identity.usageCount}
-                          isTopStyle={topIdentities.some(t => t.id === identity.id)}
-                          tags={[]}
-                          onSelect={() => {
-                            const isActuallyPremium = identity.isPremium && !profile?.unlocked_packs?.includes(identity.subCategory) && !profile?.is_master;
-                            if (isActuallyPremium) {
-                              if (profile && profile.credits >= PREMIUM_PACK_PRICE) {
-                                setPackToUnlock(identity);
-                              } else {
-                                setShowPremiumOffer(true);
-                              }
-                            } else {
-                              setFormData(p => ({ ...p, selectedIdentity: identity.id }));
-                              setAppStep('setup');
-                              window.scrollTo({ top: 0, behavior: 'smooth' });
-                            }
-                          }}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Top 5 Most Used Styles */}
-              {!searchQuery && topIdentities.length > 0 && (
-                <div className="mb-20 animate-[fadeIn_1.2s_ease-out]">
-                  <div className="flex items-center justify-center gap-4 mb-10">
-                    <div className="h-[1px] w-12 bg-gradient-to-r from-transparent to-accent" />
-                    <Zap className="w-5 h-5 text-accent animate-pulse" />
-                    <h3 className="text-[12px] font-black tracking-[6px] uppercase text-white italic">Los Más Buscados</h3>
-                    <Zap className="w-5 h-5 text-accent animate-pulse" />
-                    <div className="h-[1px] w-12 bg-gradient-to-l from-transparent to-accent" />
-                  </div>
-                  <div className="flex flex-nowrap overflow-x-auto pb-8 gap-4 px-4 no-scrollbar justify-center">
-                    {topIdentities.map((identity) => (
-                      <div key={`top-${identity.id}`} className="min-w-[120px] sm:min-w-[140px] transform hover:scale-110 transition-all duration-500">
-                        <UploadCard
-                          type="character"
-                          title={identity.title}
-                          sampleImageUrl={identity.url}
-                          isSelected={formData.selectedIdentity === identity.id}
-                          isPremium={identity.isPremium}
-                          isUnlocked={profile?.unlocked_packs?.includes(identity.subCategory) || profile?.is_master}
-                          usageCount={identity.usageCount}
-                          isTopStyle={true}
-                          tags={[]}
-                          onSelect={() => {
-                            const isActuallyPremium = identity.isPremium && !profile?.unlocked_packs?.includes(identity.subCategory) && !profile?.is_master;
-                            if (isActuallyPremium) {
-                              if (profile && profile.credits >= PREMIUM_PACK_PRICE) {
-                                setPackToUnlock(identity);
-                              } else {
-                                setShowPremiumOffer(true);
-                              }
-                            } else {
-                              setFormData(p => ({ ...p, selectedIdentity: identity.id }));
-                              setAppStep('setup');
-                              window.scrollTo({ top: 0, behavior: 'smooth' });
-                            }
-                          }}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Category Selector */}
-              <div className="flex flex-wrap justify-center gap-4 mb-16">
-                {CATEGORIES.map((cat) => (
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Busca por estilo, pack o tags (ej: f1, traje, neon)..."
+                  className="w-full bg-transparent border-none px-6 py-5 text-sm font-bold placeholder:text-white/10 focus:outline-none focus:ring-0 text-white"
+                />
+                {searchQuery && (
                   <button
-                    key={cat.id}
-                    onClick={() => setActiveCategory(cat.id)}
-                    className={`flex items-center gap-3 px-8 py-4 rounded-2xl border-2 transition-all duration-500
-                      ${activeCategory === cat.id
-                        ? 'bg-accent border-accent text-white shadow-[0_0_30px_rgba(255,85,0,0.3)] scale-105'
-                        : 'bg-white/5 border-white/5 text-white/40 hover:border-white/20'}`}
+                    onClick={() => setSearchQuery('')}
+                    className="pr-6 text-white/20 hover:text-white transition-colors"
                   >
-                    <cat.icon className={`w-5 h-5 ${activeCategory === cat.id ? 'animate-pulse' : ''}`} />
-                    <span className="font-black tracking-[2px] uppercase text-xs">{cat.label}</span>
+                    <X className="w-4 h-4" />
                   </button>
-                ))}
-
-                {/* Favorites Tab */}
-                <button
-                  onClick={() => setActiveCategory('favorites')}
-                  className={`flex items-center gap-3 px-8 py-4 rounded-2xl border-2 transition-all duration-500
-                      ${activeCategory === 'favorites'
-                      ? 'bg-gradient-to-r from-pink-500 to-rose-500 border-pink-500 text-white shadow-[0_0_30px_rgba(244,63,94,0.3)] scale-105'
-                      : 'bg-white/5 border-white/5 text-white/40 hover:text-pink-400 hover:border-pink-500/30'}`}
-                >
-                  <Heart className={`w-5 h-5 ${activeCategory === 'favorites' ? 'fill-current animate-pulse' : ''}`} />
-                  <span className="font-black tracking-[2px] uppercase text-xs">Favoritos</span>
-                </button>
+                )}
               </div>
+            </div>
 
-              {/* Grouped Identities */}
-              <div className="space-y-20">
-                {Array.from(new Set(
-                  availableIdentities
-                    .filter(id => {
+            {/* Styles Grids and Categories (Existing Logic) */}
+            {!searchQuery && (
+              <div className="mb-20 animate-[fadeIn_0.8s_ease-out]">
+                <div className="flex items-center justify-center gap-3 mb-8">
+                  <Sparkles className="w-4 h-4 text-amber-500 animate-pulse" />
+                  <h3 className="text-[10px] font-black tracking-[4px] uppercase text-white/40">Recomendados para vos</h3>
+                  <Sparkles className="w-4 h-4 text-amber-500 animate-pulse" />
+                </div>
+                <div className="flex flex-nowrap overflow-x-auto pb-8 gap-3 px-4 no-scrollbar justify-center">
+                  {recommendedIdentities.map((identity) => (
+                    <div key={`rec-${identity.id}`} className="min-w-[110px] sm:min-w-[120px] transform hover:scale-110 transition-all duration-500">
+                      <UploadCard
+                        type="character"
+                        title={identity.title}
+                        sampleImageUrl={identity.url}
+                        isSelected={formData.selectedIdentity === identity.id}
+                        isPremium={identity.isPremium}
+                        isUnlocked={profile?.unlocked_packs?.includes(identity.subCategory) || profile?.is_master}
+                        usageCount={identity.usageCount}
+                        isTopStyle={topIdentities.some(t => t.id === identity.id)}
+                        tags={[]}
+                        onSelect={() => {
+                          const isActuallyPremium = identity.isPremium && !profile?.unlocked_packs?.includes(identity.subCategory) && !profile?.is_master;
+                          if (isActuallyPremium) {
+                            if (profile && profile.credits >= PREMIUM_PACK_PRICE) {
+                              setPackToUnlock(identity);
+                            } else {
+                              setShowPremiumOffer(true);
+                            }
+                          } else {
+                            setFormData(p => ({ ...p, selectedIdentity: identity.id }));
+                            setAppStep('setup');
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                          }
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Top 5 Most Used Styles */}
+            {!searchQuery && topIdentities.length > 0 && (
+              <div className="mb-20 animate-[fadeIn_1.2s_ease-out]">
+                <div className="flex items-center justify-center gap-4 mb-10">
+                  <div className="h-[1px] w-12 bg-gradient-to-r from-transparent to-accent" />
+                  <Zap className="w-5 h-5 text-accent animate-pulse" />
+                  <h3 className="text-[12px] font-black tracking-[6px] uppercase text-white italic">Los Más Buscados</h3>
+                  <Zap className="w-5 h-5 text-accent animate-pulse" />
+                  <div className="h-[1px] w-12 bg-gradient-to-l from-transparent to-accent" />
+                </div>
+                <div className="flex flex-nowrap overflow-x-auto pb-8 gap-4 px-4 no-scrollbar justify-center">
+                  {topIdentities.map((identity) => (
+                    <div key={`top-${identity.id}`} className="min-w-[120px] sm:min-w-[140px] transform hover:scale-110 transition-all duration-500">
+                      <UploadCard
+                        type="character"
+                        title={identity.title}
+                        sampleImageUrl={identity.url}
+                        isSelected={formData.selectedIdentity === identity.id}
+                        isPremium={identity.isPremium}
+                        isUnlocked={profile?.unlocked_packs?.includes(identity.subCategory) || profile?.is_master}
+                        usageCount={identity.usageCount}
+                        isTopStyle={true}
+                        tags={[]}
+                        onSelect={() => {
+                          const isActuallyPremium = identity.isPremium && !profile?.unlocked_packs?.includes(identity.subCategory) && !profile?.is_master;
+                          if (isActuallyPremium) {
+                            if (profile && profile.credits >= PREMIUM_PACK_PRICE) {
+                              setPackToUnlock(identity);
+                            } else {
+                              setShowPremiumOffer(true);
+                            }
+                          } else {
+                            setFormData(p => ({ ...p, selectedIdentity: identity.id }));
+                            setAppStep('setup');
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                          }
+                        }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Category Selector */}
+            <div className="flex flex-wrap justify-center gap-4 mb-16">
+              {CATEGORIES.map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => setActiveCategory(cat.id)}
+                  className={`flex items-center gap-3 px-8 py-4 rounded-2xl border-2 transition-all duration-500
+                      ${activeCategory === cat.id
+                      ? 'bg-accent border-accent text-white shadow-[0_0_30px_rgba(255,85,0,0.3)] scale-105'
+                      : 'bg-white/5 border-white/5 text-white/40 hover:border-white/20'}`}
+                >
+                  <cat.icon className={`w-5 h-5 ${activeCategory === cat.id ? 'animate-pulse' : ''}`} />
+                  <span className="font-black tracking-[2px] uppercase text-xs">{cat.label}</span>
+                </button>
+              ))}
+
+              {/* Favorites Tab */}
+              <button
+                onClick={() => setActiveCategory('favorites')}
+                className={`flex items-center gap-3 px-8 py-4 rounded-2xl border-2 transition-all duration-500
+                      ${activeCategory === 'favorites'
+                    ? 'bg-gradient-to-r from-pink-500 to-rose-500 border-pink-500 text-white shadow-[0_0_30px_rgba(244,63,94,0.3)] scale-105'
+                    : 'bg-white/5 border-white/5 text-white/40 hover:text-pink-400 hover:border-pink-500/30'}`}
+              >
+                <Heart className={`w-5 h-5 ${activeCategory === 'favorites' ? 'fill-current animate-pulse' : ''}`} />
+                <span className="font-black tracking-[2px] uppercase text-xs">Favoritos</span>
+              </button>
+            </div>
+
+            {/* Grouped Identities */}
+            <div className="space-y-20">
+              {Array.from(new Set(
+                availableIdentities
+                  .filter(id => {
+                    const matchesCategory = activeCategory === 'favorites'
+                      ? favorites.includes(id.id)
+                      : (activeCategory === 'all' || id.category === activeCategory);
+                    const q = searchQuery.toLowerCase();
+                    const matchesSearch =
+                      id.title.toLowerCase().includes(q) ||
+                      id.subCategory.toLowerCase().includes(q) ||
+                      id.tags.some(tag => tag.toLowerCase().includes(q));
+                    return matchesCategory && matchesSearch;
+                  })
+                  .map(id => id.subCategory)
+              ))
+                .sort((a, b) => {
+                  const metaA = stylesMetadata.find(m => m.id === a);
+                  const metaB = stylesMetadata.find(m => m.id === b);
+                  const orderA = metaA?.sort_order ?? 999;
+                  const orderB = metaB?.sort_order ?? 999;
+                  if (orderA !== orderB) return orderA - orderB;
+                  return a.localeCompare(b);
+                })
+                .map(subCat => {
+                  const CarouselWrapper = () => {
+                    const scrollRef = useRef<HTMLDivElement>(null);
+                    const [canScrollLeft, setCanScrollLeft] = useState(false);
+                    const [canScrollRight, setCanScrollRight] = useState(true);
+
+                    const checkScroll = () => {
+                      if (scrollRef.current) {
+                        const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
+                        setCanScrollLeft(scrollLeft > 10);
+                        setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 10);
+                      }
+                    };
+
+                    useEffect(() => {
+                      checkScroll();
+                      const timer = setTimeout(checkScroll, 500); // Re-check after images load
+                      return () => clearTimeout(timer);
+                    }, []);
+
+                    const scroll = (direction: 'left' | 'right') => {
+                      if (scrollRef.current) {
+                        const { clientWidth } = scrollRef.current;
+                        const scrollAmount = direction === 'left' ? -clientWidth * 0.8 : clientWidth * 0.8;
+                        scrollRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+                      }
+                    };
+
+                    const subCatIdentities = availableIdentities.filter(id => {
                       const matchesCategory = activeCategory === 'favorites'
                         ? favorites.includes(id.id)
                         : (activeCategory === 'all' || id.category === activeCategory);
                       const q = searchQuery.toLowerCase();
-                      const matchesSearch =
+                      return id.subCategory === subCat && matchesCategory && (
                         id.title.toLowerCase().includes(q) ||
                         id.subCategory.toLowerCase().includes(q) ||
-                        id.tags.some(tag => tag.toLowerCase().includes(q));
-                      return matchesCategory && matchesSearch;
-                    })
-                    .map(id => id.subCategory)
-                ))
-                  .sort((a, b) => {
-                    const metaA = stylesMetadata.find(m => m.id === a);
-                    const metaB = stylesMetadata.find(m => m.id === b);
-                    const orderA = metaA?.sort_order ?? 999;
-                    const orderB = metaB?.sort_order ?? 999;
-                    if (orderA !== orderB) return orderA - orderB;
-                    return a.localeCompare(b);
-                  })
-                  .map(subCat => {
-                    const CarouselWrapper = () => {
-                      const scrollRef = useRef<HTMLDivElement>(null);
-                      const [canScrollLeft, setCanScrollLeft] = useState(false);
-                      const [canScrollRight, setCanScrollRight] = useState(true);
-
-                      const checkScroll = () => {
-                        if (scrollRef.current) {
-                          const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
-                          setCanScrollLeft(scrollLeft > 10);
-                          setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 10);
-                        }
-                      };
-
-                      useEffect(() => {
-                        checkScroll();
-                        const timer = setTimeout(checkScroll, 500); // Re-check after images load
-                        return () => clearTimeout(timer);
-                      }, []);
-
-                      const scroll = (direction: 'left' | 'right') => {
-                        if (scrollRef.current) {
-                          const { clientWidth } = scrollRef.current;
-                          const scrollAmount = direction === 'left' ? -clientWidth * 0.8 : clientWidth * 0.8;
-                          scrollRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
-                        }
-                      };
-
-                      const subCatIdentities = availableIdentities.filter(id => {
-                        const matchesCategory = activeCategory === 'favorites'
-                          ? favorites.includes(id.id)
-                          : (activeCategory === 'all' || id.category === activeCategory);
-                        const q = searchQuery.toLowerCase();
-                        return id.subCategory === subCat && matchesCategory && (
-                          id.title.toLowerCase().includes(q) ||
-                          id.subCategory.toLowerCase().includes(q) ||
-                          id.tags.some(tag => tag.toLowerCase().includes(q))
-                        );
-                      });
-
-                      const itemCount = subCatIdentities.length;
-
-                      return (
-                        <div key={subCat} className="animate-[fadeIn_0.5s_ease-out]">
-                          <div className="flex items-center gap-4 mb-8">
-                            <div className="h-[2px] w-8 bg-accent" />
-                            <h3 className="text-sm font-black tracking-[4px] uppercase text-white/60 italic">{subCat}</h3>
-                            <div className="flex-grow h-[1px] bg-white/5" />
-                          </div>
-                          <div className="relative group/carousel">
-                            {/* Navigation Arrows - Only show if more than 4 items */}
-                            {itemCount > 4 && (
-                              <>
-                                <button
-                                  onClick={() => scroll('left')}
-                                  className={`absolute -left-4 top-1/2 -translate-y-1/2 z-30 p-3 rounded-full bg-black/80 border border-accent/30 shadow-[0_0_20px_rgba(255,85,0,0.2)] backdrop-blur-xl transition-all duration-300 hover:scale-110 active:scale-95
-                                    ${canScrollLeft ? 'opacity-100' : 'opacity-20 pointer-events-none'}`}
-                                >
-                                  <ChevronLeft className="w-5 h-5 text-accent" />
-                                </button>
-                                <button
-                                  onClick={() => scroll('right')}
-                                  className={`absolute -right-4 top-1/2 -translate-y-1/2 z-30 p-3 rounded-full bg-black/80 border border-accent/30 shadow-[0_0_20px_rgba(255,85,0,0.2)] backdrop-blur-xl transition-all duration-300 hover:scale-110 active:scale-95
-                                    ${canScrollRight ? 'opacity-100' : 'opacity-20 pointer-events-none'}`}
-                                >
-                                  <ChevronRight className="w-5 h-5 text-accent" />
-                                </button>
-                              </>
-                            )}
-
-                            <div
-                              ref={scrollRef}
-                              onScroll={checkScroll}
-                              className={`flex flex-nowrap overflow-x-auto pt-8 pb-12 gap-6 snap-x snap-mandatory no-scrollbar scroll-smooth px-4 ${itemCount <= 4 ? 'justify-center' : ''}`}
-                            >
-                              {subCatIdentities.map((identity) => (
-                                <div key={identity.id} className="min-w-[130px] sm:min-w-[140px] lg:min-w-[150px] snap-center transform hover:scale-[1.08] transition-all duration-500">
-                                  <UploadCard
-                                    type="character"
-                                    title={identity.title}
-                                    sampleImageUrl={identity.url}
-                                    isSelected={formData.selectedIdentity === identity.id}
-                                    isPremium={identity.isPremium}
-                                    isUnlocked={profile?.unlocked_packs?.includes(identity.subCategory) || profile?.is_master}
-                                    usageCount={identity.usageCount}
-                                    isTopStyle={topIdentities.some(t => t.id === identity.id)}
-                                    tags={identity.tags}
-                                    isFavorite={favorites.includes(identity.id)}
-                                    onToggleFavorite={(e) => {
-                                      e.stopPropagation();
-                                      handleToggleFavorite(identity.id);
-                                    }}
-                                    onSelect={() => {
-                                      const isActuallyPremium = identity.isPremium && !profile?.unlocked_packs?.includes(identity.subCategory) && !profile?.is_master;
-                                      if (isActuallyPremium) {
-                                        if (profile && profile.credits >= PREMIUM_PACK_PRICE) {
-                                          setPackToUnlock(identity);
-                                        } else {
-                                          setShowPremiumOffer(true);
-                                        }
-                                      } else {
-                                        setFormData(p => ({ ...p, selectedIdentity: identity.id }));
-                                        setAppStep('setup');
-                                        window.scrollTo({ top: 0, behavior: 'smooth' });
-                                      }
-                                    }}
-                                  />
-                                </div>
-                              ))}
-                            </div>
-
-                            {/* Carousel Fade Edges */}
-                            <div className="absolute left-0 top-0 bottom-12 w-20 bg-gradient-to-r from-[#050505]/80 to-transparent pointer-events-none z-[10] opacity-0 group-hover/carousel:opacity-100 transition-opacity" />
-                            <div className="absolute right-0 top-0 bottom-12 w-20 bg-gradient-to-l from-[#050505]/80 to-transparent pointer-events-none z-[10] opacity-0 group-hover/carousel:opacity-100 transition-opacity" />
-                          </div>
-                        </div>
+                        id.tags.some(tag => tag.toLowerCase().includes(q))
                       );
-                    };
-                    return <CarouselWrapper key={subCat} />;
-                  })}
+                    });
 
-                {/* No results message */}
-                {searchQuery && mergedIdentities.filter(id => {
-                  const matchesCategory = activeCategory === 'all' || id.category === activeCategory;
-                  const q = searchQuery.toLowerCase();
-                  return matchesCategory && (
-                    id.title.toLowerCase().includes(q) ||
-                    id.subCategory.toLowerCase().includes(q) ||
-                    id.tags.some(tag => tag.toLowerCase().includes(q))
-                  );
-                }).length === 0 && (
-                    <div className="py-20 text-center animate-pulse">
-                      <Search className="w-12 h-12 text-white/5 mx-auto mb-4" />
-                      <p className="text-white/20 text-[10px] font-black uppercase tracking-[4px]">
-                        No hay resultados para "{searchQuery}"
-                      </p>
-                      <button
-                        onClick={() => setSearchQuery('')}
-                        className="mt-6 text-accent text-[8px] font-black uppercase tracking-[2px] hover:underline"
-                      >
-                        Limpiar búsqueda
-                      </button>
-                    </div>
-                  )}
-              </div>
-            </div>
-          )}
+                    const itemCount = subCatIdentities.length;
 
-          {/* SETUP VIEW: Camera & Aspect Ratio */}
-          {appStep === 'setup' && (
-            <div className="animate-[fadeInDown_0.8s_ease-out]">
-              {/* Selected Style Preview Header */}
-              {formData.selectedIdentity && (
-                <div className="flex flex-col items-center mb-16">
-                  <div className="w-32 h-32 rounded-3xl overflow-hidden border-2 border-accent mb-6 shadow-[0_0_30px_rgba(255,85,0,0.3)]">
-                    <img
-                      src={mergedIdentities.find(i => i.id === formData.selectedIdentity)?.url}
-                      className="w-full h-full object-cover"
-                      alt="Estilo"
-                    />
-                  </div>
-                  <div className="text-center">
-                    <span className="text-accent text-[8px] font-black uppercase tracking-[4px]">Transformación Elegida</span>
-                    <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white">
-                      {mergedIdentities.find(i => i.id === formData.selectedIdentity)?.title}
-                    </h2>
-                  </div>
-                </div>
-              )}
-
-              {/* Paso 1: Foto */}
-              <div className="text-center mb-16">
-                <span className="inline-block px-4 py-1 rounded-full bg-accent/10 border border-accent/20 text-accent text-[10px] font-black tracking-[3px] uppercase mb-6">Paso 01</span>
-                <h2 className="text-2xl font-black tracking-[0.2em] uppercase mb-8">Captura tu Rostro</h2>
-                <p className="text-white/30 text-[9px] uppercase tracking-[3px] mb-12">Ubica tu cara en el centro para mejores resultados</p>
-
-                <div className="flex flex-col items-center gap-8">
-                  {!capturedImage ? (
-                    <button
-                      onClick={startCameraAction}
-                      className="group relative flex items-center justify-center gap-4 px-12 py-6 bg-white/5 border-2 border-white/10 rounded-2xl hover:bg-accent hover:border-accent transition-all duration-500 hover:scale-105"
-                    >
-                      <Camera className="w-6 h-6 text-accent group-hover:text-white" />
-                      <span className="font-black tracking-[4px] uppercase text-sm text-white">Iniciar Cámara</span>
-                    </button>
-                  ) : (
-                    <div className="relative group">
-                      <div className="w-64 aspect-[4/5] rounded-3xl overflow-hidden border-2 border-accent shadow-[0_0_40px_rgba(255,85,0,0.3)] relative">
-                        <img src={capturedImage} className="w-full h-full object-cover" alt="Tu foto" />
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                        <div className="absolute top-0 left-0 w-full h-[1px] bg-accent/50 animate-[scan_2s_linear_infinite]" />
-                      </div>
-                      <button
-                        onClick={() => setCapturedImage(null)}
-                        className="absolute -top-3 -right-3 w-10 h-10 bg-white text-black rounded-full flex items-center justify-center hover:bg-accent hover:text-white transition-all shadow-xl z-30"
-                      >
-                        <RefreshCw className="w-5 h-5" />
-                      </button>
-                      <p className="mt-4 text-[9px] font-black tracking-[3px] text-accent uppercase">Foto Capturada</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* DIVIDER */}
-              <div className="relative py-20 flex items-center justify-center">
-                <div className="absolute w-full h-[1px] bg-white/5" />
-                <ArrowDown className={`relative px-4 bg-[#050505] w-12 h-5 transition-colors duration-500 ${capturedImage ? 'text-accent' : 'text-white/10'}`} />
-              </div>
-
-              {/* Paso 2: Aspect Ratio */}
-              <div className={`transition-all duration-700 ${capturedImage ? 'opacity-100' : 'opacity-20 pointer-events-none grayscale'}`}>
-                <div className="text-center mb-16">
-                  <span className="inline-block px-4 py-1 rounded-full bg-white/5 border border-white/10 text-white/40 text-[10px] font-black tracking-[3px] uppercase mb-6">Paso 02</span>
-                  <h2 className="text-2xl font-black tracking-[0.2em] uppercase mb-12">Formato de Imagen</h2>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 max-w-3xl mx-auto">
-                    {ASPECT_RATIOS.map((ratio) => (
-                      <button
-                        key={ratio.id}
-                        onClick={() => setFormData(p => ({ ...p, aspectRatio: ratio.id }))}
-                        className={`relative group flex flex-col items-center p-8 rounded-[32px] border-2 transition-all duration-500
-                          ${formData.aspectRatio === ratio.id
-                            ? 'border-accent bg-accent/5 shadow-[0_0_40px_rgba(255,85,0,0.2)]'
-                            : 'border-white/5 bg-white/2 bg-[#121215] hover:border-white/20'}`}
-                      >
-                        <div className={`mb-6 p-4 rounded-2xl transition-all duration-500
-                          ${formData.aspectRatio === ratio.id ? 'bg-accent text-white' : 'bg-white/5 text-white/40 group-hover:text-white'}`}>
-                          <ratio.icon className="w-8 h-8" />
+                    return (
+                      <div key={subCat} className="animate-[fadeIn_0.5s_ease-out]">
+                        <div className="flex items-center gap-4 mb-8">
+                          <div className="h-[2px] w-8 bg-accent" />
+                          <h3 className="text-sm font-black tracking-[4px] uppercase text-white/60 italic">{subCat}</h3>
+                          <div className="flex-grow h-[1px] bg-white/5" />
                         </div>
-                        <span className={`text-xl font-black tracking-[4px] mb-2 ${formData.aspectRatio === ratio.id ? 'text-white' : 'text-white/40'}`}>
-                          {ratio.label}
-                        </span>
-                        {formData.aspectRatio === ratio.id && <Check className="absolute top-4 right-4 w-5 h-5 text-accent" />}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
+                        <div className="relative group/carousel">
+                          {/* Navigation Arrows - Only show if more than 4 items */}
+                          {itemCount > 4 && (
+                            <>
+                              <button
+                                onClick={() => scroll('left')}
+                                className={`absolute -left-4 top-1/2 -translate-y-1/2 z-30 p-3 rounded-full bg-black/80 border border-accent/30 shadow-[0_0_20px_rgba(255,85,0,0.2)] backdrop-blur-xl transition-all duration-300 hover:scale-110 active:scale-95
+                                    ${canScrollLeft ? 'opacity-100' : 'opacity-20 pointer-events-none'}`}
+                              >
+                                <ChevronLeft className="w-5 h-5 text-accent" />
+                              </button>
+                              <button
+                                onClick={() => scroll('right')}
+                                className={`absolute -right-4 top-1/2 -translate-y-1/2 z-30 p-3 rounded-full bg-black/80 border border-accent/30 shadow-[0_0_20px_rgba(255,85,0,0.2)] backdrop-blur-xl transition-all duration-300 hover:scale-110 active:scale-95
+                                    ${canScrollRight ? 'opacity-100' : 'opacity-20 pointer-events-none'}`}
+                              >
+                                <ChevronRight className="w-5 h-5 text-accent" />
+                              </button>
+                            </>
+                          )}
 
-              {/* Submit Button */}
-              <div className={`mt-32 max-w-sm mx-auto transition-all duration-700 ${isReady ? 'opacity-100 scale-100' : 'opacity-30 scale-95 pointer-events-none'}`}>
-                <button
-                  onClick={handleSubmit}
-                  disabled={isSubmitting || !isReady}
-                  className="group relative w-full h-20 rounded-2xl overflow-hidden transition-all duration-500 shadow-2xl"
-                >
-                  <div className={`absolute inset-0 transition-all duration-500 ${isReady ? 'bg-accent' : 'bg-white/10'}`} />
-                  <div className="relative flex items-center justify-center gap-4 font-black text-sm uppercase tracking-[6px] text-white">
-                    {isSubmitting ? <span>PROCESANDO...</span> : (
-                      <>
-                        <span>GENERAR ALQUIMIA</span>
-                        <Sparkles className="w-5 h-5" />
-                      </>
-                    )}
+                          <div
+                            ref={scrollRef}
+                            onScroll={checkScroll}
+                            className={`flex flex-nowrap overflow-x-auto pt-8 pb-12 gap-6 snap-x snap-mandatory no-scrollbar scroll-smooth px-4 ${itemCount <= 4 ? 'justify-center' : ''}`}
+                          >
+                            {subCatIdentities.map((identity) => (
+                              <div key={identity.id} className="min-w-[130px] sm:min-w-[140px] lg:min-w-[150px] snap-center transform hover:scale-[1.08] transition-all duration-500">
+                                <UploadCard
+                                  type="character"
+                                  title={identity.title}
+                                  sampleImageUrl={identity.url}
+                                  isSelected={formData.selectedIdentity === identity.id}
+                                  isPremium={identity.isPremium}
+                                  isUnlocked={profile?.unlocked_packs?.includes(identity.subCategory) || profile?.is_master}
+                                  usageCount={identity.usageCount}
+                                  isTopStyle={topIdentities.some(t => t.id === identity.id)}
+                                  tags={identity.tags}
+                                  isFavorite={favorites.includes(identity.id)}
+                                  onToggleFavorite={(e) => {
+                                    e.stopPropagation();
+                                    handleToggleFavorite(identity.id);
+                                  }}
+                                  onSelect={() => {
+                                    const isActuallyPremium = identity.isPremium && !profile?.unlocked_packs?.includes(identity.subCategory) && !profile?.is_master;
+                                    if (isActuallyPremium) {
+                                      if (profile && profile.credits >= PREMIUM_PACK_PRICE) {
+                                        setPackToUnlock(identity);
+                                      } else {
+                                        setShowPremiumOffer(true);
+                                      }
+                                    } else {
+                                      setFormData(p => ({ ...p, selectedIdentity: identity.id }));
+                                      setAppStep('setup');
+                                      window.scrollTo({ top: 0, behavior: 'smooth' });
+                                    }
+                                  }}
+                                />
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Carousel Fade Edges */}
+                          <div className="absolute left-0 top-0 bottom-12 w-20 bg-gradient-to-r from-[#050505]/80 to-transparent pointer-events-none z-[10] opacity-0 group-hover/carousel:opacity-100 transition-opacity" />
+                          <div className="absolute right-0 top-0 bottom-12 w-20 bg-gradient-to-l from-[#050505]/80 to-transparent pointer-events-none z-[10] opacity-0 group-hover/carousel:opacity-100 transition-opacity" />
+                        </div>
+                      </div>
+                    );
+                  };
+                  return <CarouselWrapper key={subCat} />;
+                })}
+
+              {/* No results message */}
+              {searchQuery && mergedIdentities.filter(id => {
+                const matchesCategory = activeCategory === 'all' || id.category === activeCategory;
+                const q = searchQuery.toLowerCase();
+                return matchesCategory && (
+                  id.title.toLowerCase().includes(q) ||
+                  id.subCategory.toLowerCase().includes(q) ||
+                  id.tags.some(tag => tag.toLowerCase().includes(q))
+                );
+              }).length === 0 && (
+                  <div className="py-20 text-center animate-pulse">
+                    <Search className="w-12 h-12 text-white/5 mx-auto mb-4" />
+                    <p className="text-white/20 text-[10px] font-black uppercase tracking-[4px]">
+                      No hay resultados para "{searchQuery}"
+                    </p>
+                    <button
+                      onClick={() => setSearchQuery('')}
+                      className="mt-6 text-accent text-[8px] font-black uppercase tracking-[2px] hover:underline"
+                    >
+                      Limpiar búsqueda
+                    </button>
                   </div>
-                </button>
-              </div>
+                )}
             </div>
-          )}
+          </div>
+        )}
 
-          {/* RESULT VIEW */}
-          {appStep === 'result' && (
-            <div className="mt-8 p-12 bg-accent/5 border border-accent/20 rounded-[40px] text-center max-w-2xl mx-auto backdrop-blur-3xl animate-[fadeIn_0.5s_ease-out] flex flex-col items-center">
-              {errorMessage ? (
-                <>
-                  <div className="w-16 h-16 bg-red-500 rounded-full flex items-center justify-center mb-8"><AlertTriangle className="w-8 h-8 text-white" /></div>
-                  <h3 className="text-3xl font-black mb-4 uppercase italic text-red-500">Error</h3>
-                  <p className="text-white/70 text-xs font-bold uppercase tracking-[2px] leading-relaxed">{errorMessage}</p>
-                </>
-              ) : resultImage ? (
-                <>
-                  <div className="w-16 h-16 bg-accent rounded-full flex items-center justify-center mb-8 shadow-[0_0_30px_rgba(255,85,0,0.4)]"><Check className="w-8 h-8 text-white" /></div>
-                  <h3 className="text-3xl font-black mb-10 uppercase italic text-white">¡Tu Alquimia está Lista!</h3>
-                  <div className="w-64 aspect-[4/5] rounded-3xl overflow-hidden border-2 border-accent shadow-[0_0_40px_rgba(255,85,0,0.3)] mb-10 bg-black">
-                    <img src={resultImage} alt="Resultado" className="w-full h-full object-cover" crossOrigin="anonymous" />
-                  </div>
-
-                  <div className="flex flex-wrap justify-center gap-4">
-                    <button
-                      onClick={handlePrint}
-                      className="group flex items-center gap-3 px-8 py-4 bg-white text-black rounded-xl hover:bg-accent hover:text-white transition-all shadow-lg hover:shadow-accent/50"
-                    >
-                      <Printer className="w-5 h-5" />
-                      <span className="text-xs font-black tracking-[2px] uppercase">Imprimir</span>
-                    </button>
-                    <button
-                      onClick={() => setShowQR(true)}
-                      className="group flex items-center gap-3 px-8 py-4 bg-white/10 text-white border border-white/10 rounded-xl hover:bg-white/20 transition-all shadow-lg"
-                    >
-                      <QrCode className="w-5 h-5 text-accent" />
-                      <span className="text-xs font-black tracking-[2px] uppercase">Generar QR</span>
-                    </button>
-                    <button
-                      onClick={handleDownload}
-                      className="group flex items-center gap-3 px-8 py-4 bg-white/10 text-white border border-white/10 rounded-xl hover:bg-white/20 transition-all shadow-lg"
-                    >
-                      <Download className="w-5 h-5 text-accent" />
-                      <span className="text-xs font-black tracking-[2px] uppercase">Descargar</span>
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="w-16 h-16 bg-yellow-500 rounded-full flex items-center justify-center mb-8">
-                    <AlertTriangle className="w-8 h-8 text-white" />
-                  </div>
-                  <p>Respuesta inesperada del servidor.</p>
-                </>
-              )}
-
-              <button
-                onClick={handleReset}
-                className="mt-12 text-[9px] font-black tracking-[4px] uppercase text-white/30 hover:text-white transition-colors"
-              >
-                Reiniciar Proceso
-              </button>
-            </div>
-          )}
-
-          {/* HISTORY VIEW */}
-          {appStep === 'history' && (
-            <div className="animate-[fadeIn_0.5s_ease-out] max-w-6xl mx-auto">
-              <div className="flex flex-col items-center mb-16 text-center">
-                <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-6">
-                  <LucideHistory className="w-8 h-8 text-accent" />
+        {/* SETUP VIEW: Camera & Aspect Ratio */}
+        {appStep === 'setup' && (
+          <div className="animate-[fadeInDown_0.8s_ease-out]">
+            {/* Selected Style Preview Header */}
+            {formData.selectedIdentity && (
+              <div className="flex flex-col items-center mb-16">
+                <div className="w-32 h-32 rounded-3xl overflow-hidden border-2 border-accent mb-6 shadow-[0_0_30px_rgba(255,85,0,0.3)]">
+                  <img
+                    src={mergedIdentities.find(i => i.id === formData.selectedIdentity)?.url}
+                    className="w-full h-full object-cover"
+                    alt="Estilo"
+                  />
                 </div>
-                <h2 className="text-3xl font-black uppercase italic tracking-tight text-white mb-2">Mis Fotos</h2>
-                <div className="flex items-center gap-2">
-                  <div className="h-[1px] w-8 bg-accent/50" />
-                  <p className="text-[10px] tracking-[4px] text-white/40 uppercase">Historial de Generaciones</p>
-                  <div className="h-[1px] w-8 bg-accent/50" />
+                <div className="text-center">
+                  <span className="text-accent text-[8px] font-black uppercase tracking-[4px]">Transformación Elegida</span>
+                  <h2 className="text-3xl font-black italic uppercase tracking-tighter text-white">
+                    {mergedIdentities.find(i => i.id === formData.selectedIdentity)?.title}
+                  </h2>
                 </div>
               </div>
+            )}
 
-              {loadingGenerations ? (
-                <div className="flex flex-col items-center py-20 opacity-40">
-                  <Loader2 className="w-10 h-10 animate-spin mb-4 text-accent" />
-                  <span className="text-[10px] font-black uppercase tracking-[2px]">Cargando historial...</span>
-                </div>
-              ) : userGenerations.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-32 border-2 border-dashed border-white/5 rounded-[40px] bg-white/[0.02]">
-                  <Camera className="w-12 h-12 text-white/10 mb-6" />
-                  <p className="text-white/30 text-xs font-black uppercase tracking-[4px] mb-8">Aún no has generado imágenes</p>
+            {/* Paso 1: Foto */}
+            <div className="text-center mb-16">
+              <span className="inline-block px-4 py-1 rounded-full bg-accent/10 border border-accent/20 text-accent text-[10px] font-black tracking-[3px] uppercase mb-6">Paso 01</span>
+              <h2 className="text-2xl font-black tracking-[0.2em] uppercase mb-8">Captura tu Rostro</h2>
+              <p className="text-white/30 text-[9px] uppercase tracking-[3px] mb-12">Ubica tu cara en el centro para mejores resultados</p>
+
+              <div className="flex flex-col items-center gap-8">
+                {!capturedImage ? (
                   <button
-                    onClick={() => setAppStep('gallery')}
-                    className="px-8 py-4 bg-accent text-white rounded-xl text-[10px] font-black uppercase tracking-[2px] hover:bg-white hover:text-black transition-all"
+                    onClick={startCameraAction}
+                    className="group relative flex items-center justify-center gap-4 px-12 py-6 bg-white/5 border-2 border-white/10 rounded-2xl hover:bg-accent hover:border-accent transition-all duration-500 hover:scale-105"
                   >
-                    Crear mi primera foto
+                    <Camera className="w-6 h-6 text-accent group-hover:text-white" />
+                    <span className="font-black tracking-[4px] uppercase text-sm text-white">Iniciar Cámara</span>
                   </button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                  {userGenerations.map((gen) => (
-                    <div key={gen.id} className="group relative aspect-[4/5] rounded-[32px] overflow-hidden border border-white/10 bg-[#0a0a0c] hover:border-accent/40 hover:shadow-[0_0_30px_rgba(0,0,0,0.5)] transition-all duration-500">
-                      <img
-                        src={gen.image_url}
-                        alt="Generación"
-                        className="w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-110 transition-all duration-700"
-                        crossOrigin="anonymous"
-                      />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-6">
-                        <span className="text-[8px] font-black uppercase tracking-[2px] text-accent mb-2 block">
-                          {new Date(gen.created_at).toLocaleDateString()}
-                        </span>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => {
-                              setResultImage(gen.image_url);
-                              setIsSuccess(true);
-                              setAppStep('result');
-                              window.scrollTo({ top: 0, behavior: 'smooth' });
-                            }}
-                            className="flex-1 bg-white text-black py-3 rounded-xl text-[8px] font-black uppercase tracking-[1px] hover:bg-accent hover:text-white transition-colors flex items-center justify-center gap-2"
-                          >
-                            <span>Ver</span>
-                          </button>
-                          <a
-                            href={gen.image_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="p-3 bg-white/10 rounded-xl text-white hover:bg-white hover:text-black transition-colors"
-                          >
-                            <Download className="w-4 h-4" />
-                          </a>
-                        </div>
-                      </div>
+                ) : (
+                  <div className="relative group">
+                    <div className="w-64 aspect-[4/5] rounded-3xl overflow-hidden border-2 border-accent shadow-[0_0_40px_rgba(255,85,0,0.3)] relative">
+                      <img src={capturedImage} className="w-full h-full object-cover" alt="Tu foto" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                      <div className="absolute top-0 left-0 w-full h-[1px] bg-accent/50 animate-[scan_2s_linear_infinite]" />
                     </div>
+                    <button
+                      onClick={() => setCapturedImage(null)}
+                      className="absolute -top-3 -right-3 w-10 h-10 bg-white text-black rounded-full flex items-center justify-center hover:bg-accent hover:text-white transition-all shadow-xl z-30"
+                    >
+                      <RefreshCw className="w-5 h-5" />
+                    </button>
+                    <p className="mt-4 text-[9px] font-black tracking-[3px] text-accent uppercase">Foto Capturada</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* DIVIDER */}
+            <div className="relative py-20 flex items-center justify-center">
+              <div className="absolute w-full h-[1px] bg-white/5" />
+              <ArrowDown className={`relative px-4 bg-[#050505] w-12 h-5 transition-colors duration-500 ${capturedImage ? 'text-accent' : 'text-white/10'}`} />
+            </div>
+
+            {/* Paso 2: Aspect Ratio */}
+            <div className={`transition-all duration-700 ${capturedImage ? 'opacity-100' : 'opacity-20 pointer-events-none grayscale'}`}>
+              <div className="text-center mb-16">
+                <span className="inline-block px-4 py-1 rounded-full bg-white/5 border border-white/10 text-white/40 text-[10px] font-black tracking-[3px] uppercase mb-6">Paso 02</span>
+                <h2 className="text-2xl font-black tracking-[0.2em] uppercase mb-12">Formato de Imagen</h2>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 max-w-3xl mx-auto">
+                  {ASPECT_RATIOS.map((ratio) => (
+                    <button
+                      key={ratio.id}
+                      onClick={() => setFormData(p => ({ ...p, aspectRatio: ratio.id }))}
+                      className={`relative group flex flex-col items-center p-8 rounded-[32px] border-2 transition-all duration-500
+                          ${formData.aspectRatio === ratio.id
+                          ? 'border-accent bg-accent/5 shadow-[0_0_40px_rgba(255,85,0,0.2)]'
+                          : 'border-white/5 bg-white/2 bg-[#121215] hover:border-white/20'}`}
+                    >
+                      <div className={`mb-6 p-4 rounded-2xl transition-all duration-500
+                          ${formData.aspectRatio === ratio.id ? 'bg-accent text-white' : 'bg-white/5 text-white/40 group-hover:text-white'}`}>
+                        <ratio.icon className="w-8 h-8" />
+                      </div>
+                      <span className={`text-xl font-black tracking-[4px] mb-2 ${formData.aspectRatio === ratio.id ? 'text-white' : 'text-white/40'}`}>
+                        {ratio.label}
+                      </span>
+                      {formData.aspectRatio === ratio.id && <Check className="absolute top-4 right-4 w-5 h-5 text-accent" />}
+                    </button>
                   ))}
                 </div>
-              )}
+              </div>
             </div>
-          )}
 
+            {/* Submit Button */}
+            <div className={`mt-32 max-w-sm mx-auto transition-all duration-700 ${isReady ? 'opacity-100 scale-100' : 'opacity-30 scale-95 pointer-events-none'}`}>
+              <button
+                onClick={handleSubmit}
+                disabled={isSubmitting || !isReady}
+                className="group relative w-full h-20 rounded-2xl overflow-hidden transition-all duration-500 shadow-2xl"
+              >
+                <div className={`absolute inset-0 transition-all duration-500 ${isReady ? 'bg-accent' : 'bg-white/10'}`} />
+                <div className="relative flex items-center justify-center gap-4 font-black text-sm uppercase tracking-[6px] text-white">
+                  {isSubmitting ? <span>PROCESANDO...</span> : (
+                    <>
+                      <span>GENERAR ALQUIMIA</span>
+                      <Sparkles className="w-5 h-5" />
+                    </>
+                  )}
+                </div>
+              </button>
+            </div>
+          </div>
+        )}
 
-          {/* SETTINGS VIEW */}
-          {appStep === 'settings' && (
-            <SettingsView
-              profile={profile}
-              session={session}
-              onBack={() => setAppStep('gallery')}
-              onAddCredits={() => setShowPricing(true)}
-              onUpdateProfile={updateProfile}
-            />
-          )}
+        {/* RESULT VIEW */}
+        {appStep === 'result' && (
+          <div className="mt-8 p-12 bg-accent/5 border border-accent/20 rounded-[40px] text-center max-w-2xl mx-auto backdrop-blur-3xl animate-[fadeIn_0.5s_ease-out] flex flex-col items-center">
+            {errorMessage ? (
+              <>
+                <div className="w-16 h-16 bg-red-500 rounded-full flex items-center justify-center mb-8"><AlertTriangle className="w-8 h-8 text-white" /></div>
+                <h3 className="text-3xl font-black mb-4 uppercase italic text-red-500">Error</h3>
+                <p className="text-white/70 text-xs font-bold uppercase tracking-[2px] leading-relaxed">{errorMessage}</p>
+              </>
+            ) : resultImage ? (
+              <>
+                <div className="w-16 h-16 bg-accent rounded-full flex items-center justify-center mb-8 shadow-[0_0_30px_rgba(255,85,0,0.4)]"><Check className="w-8 h-8 text-white" /></div>
+                <h3 className="text-3xl font-black mb-10 uppercase italic text-white">¡Tu Alquimia está Lista!</h3>
+                <div className="w-64 aspect-[4/5] rounded-3xl overflow-hidden border-2 border-accent shadow-[0_0_40px_rgba(255,85,0,0.3)] mb-10 bg-black">
+                  <img src={resultImage} alt="Resultado" className="w-full h-full object-cover" crossOrigin="anonymous" />
+                </div>
 
-          {/* PACKS VIEW */}
-          {appStep === 'packs' && (
-            <PacksView
-              identities={IDENTITIES}
-              unlockedPacks={profile?.unlocked_packs}
-              userCredits={profile?.credits || 0}
-              onBack={() => setAppStep('gallery')}
-              onUnlock={handleUnlockPack}
-              isUnlocking={isUnlocking}
-            />
-          )}
+                <div className="flex flex-wrap justify-center gap-4">
+                  <button
+                    onClick={handlePrint}
+                    className="group flex items-center gap-3 px-8 py-4 bg-white text-black rounded-xl hover:bg-accent hover:text-white transition-all shadow-lg hover:shadow-accent/50"
+                  >
+                    <Printer className="w-5 h-5" />
+                    <span className="text-xs font-black tracking-[2px] uppercase">Imprimir</span>
+                  </button>
+                  <button
+                    onClick={() => setShowQR(true)}
+                    className="group flex items-center gap-3 px-8 py-4 bg-white/10 text-white border border-white/10 rounded-xl hover:bg-white/20 transition-all shadow-lg"
+                  >
+                    <QrCode className="w-5 h-5 text-accent" />
+                    <span className="text-xs font-black tracking-[2px] uppercase">Generar QR</span>
+                  </button>
+                  <button
+                    onClick={handleDownload}
+                    className="group flex items-center gap-3 px-8 py-4 bg-white/10 text-white border border-white/10 rounded-xl hover:bg-white/20 transition-all shadow-lg"
+                  >
+                    <Download className="w-5 h-5 text-accent" />
+                    <span className="text-xs font-black tracking-[2px] uppercase">Descargar</span>
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="w-16 h-16 bg-yellow-500 rounded-full flex items-center justify-center mb-8">
+                  <AlertTriangle className="w-8 h-8 text-white" />
+                </div>
+                <p>Respuesta inesperada del servidor.</p>
+              </>
+            )}
 
-          {/* SUPPORT VIEW */}
-          {appStep === 'support' && (
-            <div className="flex flex-col items-center justify-center pt-32 pb-20 animate-[fadeIn_0.5s_ease-out]">
-              <h2 className="text-3xl font-black italic uppercase text-white mb-6">Soporte</h2>
-              <div className="bg-white/5 border border-white/10 rounded-3xl p-8 max-w-md w-full text-center">
-                <p className="text-white/60 text-sm mb-6">
-                  Si tienes algún problema o sugerencia, contáctanos.
-                </p>
-                <a
-                  href="mailto:support@metalab.ai"
-                  className="inline-block px-8 py-4 bg-accent text-white rounded-xl font-black uppercase tracking-[2px] text-xs hover:bg-white hover:text-black transition-all"
-                >
-                  Enviar Email
-                </a>
+            <button
+              onClick={handleReset}
+              className="mt-12 text-[9px] font-black tracking-[4px] uppercase text-white/30 hover:text-white transition-colors"
+            >
+              Reiniciar Proceso
+            </button>
+          </div>
+        )}
+
+        {/* HISTORY VIEW */}
+        {appStep === 'history' && (
+          <div className="animate-[fadeIn_0.5s_ease-out] max-w-6xl mx-auto">
+            <div className="flex flex-col items-center mb-16 text-center">
+              <div className="w-16 h-16 bg-white/5 rounded-full flex items-center justify-center mb-6">
+                <LucideHistory className="w-8 h-8 text-accent" />
+              </div>
+              <h2 className="text-3xl font-black uppercase italic tracking-tight text-white mb-2">Mis Fotos</h2>
+              <div className="flex items-center gap-2">
+                <div className="h-[1px] w-8 bg-accent/50" />
+                <p className="text-[10px] tracking-[4px] text-white/40 uppercase">Historial de Generaciones</p>
+                <div className="h-[1px] w-8 bg-accent/50" />
+              </div>
+            </div>
+
+            {loadingGenerations ? (
+              <div className="flex flex-col items-center py-20 opacity-40">
+                <Loader2 className="w-10 h-10 animate-spin mb-4 text-accent" />
+                <span className="text-[10px] font-black uppercase tracking-[2px]">Cargando historial...</span>
+              </div>
+            ) : userGenerations.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-32 border-2 border-dashed border-white/5 rounded-[40px] bg-white/[0.02]">
+                <Camera className="w-12 h-12 text-white/10 mb-6" />
+                <p className="text-white/30 text-xs font-black uppercase tracking-[4px] mb-8">Aún no has generado imágenes</p>
                 <button
                   onClick={() => setAppStep('gallery')}
-                  className="block w-full mt-6 text-[10px] font-black uppercase tracking-[2px] text-white/30 hover:text-white"
+                  className="px-8 py-4 bg-accent text-white rounded-xl text-[10px] font-black uppercase tracking-[2px] hover:bg-white hover:text-black transition-all"
                 >
-                  Volver
+                  Crear mi primera foto
                 </button>
               </div>
-            </div>
-          )}
-
-        </div>
-      </section >
-
-      {/* Camera Modal */}
-      {
-        showCamera && (
-          <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-xl flex items-center justify-center p-4">
-            <div className="relative w-full max-w-md max-h-[90vh] aspect-[3/4] bg-primary rounded-[40px] overflow-hidden border border-white/10 flex flex-col">
-              <div className="relative flex-1 bg-black overflow-hidden">
-                {isCapturing ? (
-                  <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover scale-x-[-1]" />
-                ) : (
-                  <img src={capturedImage || ''} className="w-full h-full object-cover" alt="Previsualización" />
-                )}
-
-                {/* Error Display inside Camera */}
-                {cameraError && (
-                  <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 p-8 text-center">
-                    <div className="flex flex-col items-center">
-                      <AlertTriangle className="w-12 h-12 text-red-500 mb-4" />
-                      <p className="text-white text-xs font-bold uppercase tracking-widest">{cameraError}</p>
-                      <button
-                        onClick={initCamera}
-                        className="mt-6 px-6 py-3 bg-white/10 hover:bg-white/20 rounded-full text-[10px] font-black uppercase tracking-widest transition-all"
-                      >
-                        Reintentar
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Overlay Técnico */}
-                <div className="absolute inset-0 border-[20px] border-black/40 pointer-events-none">
-                  <div className="w-full h-full border border-white/5 relative flex items-center justify-center">
-                    <div className="w-48 h-64 border border-accent/20 rounded-[100px]" />
-                  </div>
-                </div>
-              </div>
-
-              <div className="absolute bottom-10 left-0 w-full px-10 flex items-center justify-between z-20">
-                {isCapturing ? (
-                  <>
-                    <button onClick={() => setShowCamera(false)} className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center border border-white/10"><X className="w-5 h-5" /></button>
-                    <button onClick={takePhoto} className="w-20 h-20 rounded-full bg-white p-1 shadow-2xl"><div className="w-full h-full rounded-full border-4 border-black bg-black/5 flex items-center justify-center"><div className="w-4 h-4 bg-black rounded-full" /></div></button>
-                    <div className="w-12" />
-                  </>
-                ) : (
-                  <>
-                    <button onClick={() => setIsCapturing(true)} className="flex flex-col items-center gap-2 group"><div className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center group-hover:bg-white/10"><RefreshCw className="w-5 h-5" /></div><span className="text-[8px] font-black tracking-[2px] uppercase opacity-40">Reintentar</span></button>
-                    <button onClick={() => setShowCamera(false)} className="flex flex-col items-center gap-2 group"><div className="w-16 h-16 rounded-full bg-accent flex items-center justify-center shadow-lg"><Check className="w-6 h-6" /></div><span className="text-[8px] font-black tracking-[2px] uppercase">Listo</span></button>
-                    <button onClick={() => { setCapturedImage(null); setShowCamera(false); }} className="flex flex-col items-center gap-2 group"><div className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center group-hover:bg-white/10"><X className="w-5 h-5" /></div><span className="text-[8px] font-black tracking-[2px] uppercase opacity-40">Cerrar</span></button>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        )
-      }
-
-      {/* QR Modal */}
-      {
-        showQR && resultImage && (
-          <div className="fixed inset-0 z-[110] bg-black/95 backdrop-blur-2xl flex items-center justify-center p-4">
-            <div className="relative w-full max-w-sm bg-[#0a0a0c] rounded-[40px] p-12 border border-white/10 text-center flex flex-col items-center">
-              <button
-                onClick={() => setShowQR(false)}
-                className="absolute top-6 right-6 w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-              <div className="w-16 h-16 bg-accent/20 rounded-full flex items-center justify-center mb-8">
-                <QrCode className="w-8 h-8 text-accent" />
-              </div>
-              <h3 className="text-2xl font-black mb-2 uppercase italic">Escanear para Descargar</h3>
-              <p className="text-white/40 text-[10px] uppercase tracking-[2px] mb-8">Escanea con tu cámara para guardar en tu móvil</p>
-
-              <div className="p-4 bg-white rounded-3xl mb-8">
-                <QRCodeCanvas
-                  value={resultImage}
-                  size={200}
-                  level="H"
-                  includeMargin={true}
-                />
-              </div>
-
-              <button
-                onClick={() => setShowQR(false)}
-                className="text-[10px] font-black tracking-[4px] uppercase text-accent hover:text-white transition-colors"
-              >
-                Cerrar
-              </button>
-            </div>
-          </div>
-        )
-      }
-
-      {/* Modal de Precios */}
-      {
-        showPricing && (
-          <div className="fixed inset-0 z-[300] bg-black/40 backdrop-blur-md flex items-center justify-center p-4 animate-[fadeIn_0.3s_ease-out]">
-            <div className="relative w-full max-w-xl bg-white/5 backdrop-blur-[40px] rounded-[32px] p-6 md:p-8 border border-white/10 text-center shadow-2xl overflow-y-auto max-h-[95vh]">
-              <button
-                onClick={() => setShowPricing(false)}
-                className="absolute top-6 right-6 w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-
-              <div className="w-16 h-16 bg-accent/20 rounded-full flex items-center justify-center mb-8 mx-auto">
-                <CreditCard className="w-8 h-8 text-accent" />
-              </div>
-
-              <h3 className="text-xl md:text-2xl font-black mb-1 uppercase italic tracking-tight">Elegí tu Pack</h3>
-              <p className="text-accent text-[7px] font-black uppercase tracking-[2px] mb-1">Desbloquea todos los estilos Premium</p>
-              <p className="text-white/40 text-[6px] uppercase tracking-[2px] mb-6">Obtené créditos para tus retratos con IA</p>
-
-              <div className="flex flex-wrap items-center justify-center gap-3">
-                {[
-                  { name: 'Starter', price: 4000, credits: 500, bonus: '', color: 'white/5', popular: false, premium: false },
-                  { name: 'Standard', price: 8000, credits: 1100, bonus: '+10%', color: 'accent/5', popular: true, premium: false },
-                  { name: 'Business', price: 10000, credits: 1500, bonus: '+20%', color: 'white/5', popular: false, premium: false }
-                ].map((pack) => (
-                  <div
-                    key={pack.name}
-                    className={`relative w-full max-w-[150px] p-4 rounded-[24px] border transition-all duration-500 flex flex-col items-center group
-                    ${pack.popular ? 'bg-accent/10 border-accent shadow-[0_0_20px_rgba(255,85,0,0.1)] scale-105 z-10' : 'bg-white/5 border-white/5 hover:border-white/20'}`}
-                  >
-                    {pack.popular && (
-                      <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-accent text-[8px] font-black uppercase tracking-[2px] px-4 py-1 rounded-full">
-                        Más Popular
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                {userGenerations.map((gen) => (
+                  <div key={gen.id} className="group relative aspect-[4/5] rounded-[32px] overflow-hidden border border-white/10 bg-[#0a0a0c] hover:border-accent/40 hover:shadow-[0_0_30px_rgba(0,0,0,0.5)] transition-all duration-500">
+                    <img
+                      src={gen.image_url}
+                      alt="Generación"
+                      className="w-full h-full object-cover opacity-80 group-hover:opacity-100 group-hover:scale-110 transition-all duration-700"
+                      crossOrigin="anonymous"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-6">
+                      <span className="text-[8px] font-black uppercase tracking-[2px] text-accent mb-2 block">
+                        {new Date(gen.created_at).toLocaleDateString()}
+                      </span>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => {
+                            setResultImage(gen.image_url);
+                            setIsSuccess(true);
+                            setAppStep('result');
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                          }}
+                          className="flex-1 bg-white text-black py-3 rounded-xl text-[8px] font-black uppercase tracking-[1px] hover:bg-accent hover:text-white transition-colors flex items-center justify-center gap-2"
+                        >
+                          <span>Ver</span>
+                        </button>
+                        <a
+                          href={gen.image_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="p-3 bg-white/10 rounded-xl text-white hover:bg-white hover:text-black transition-colors"
+                        >
+                          <Download className="w-4 h-4" />
+                        </a>
                       </div>
-                    )}
-                    {pack.premium && (
-                      <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-amber-500 to-yellow-300 text-[8px] font-black uppercase tracking-[2px] px-4 py-1 rounded-full text-black">
-                        Especial Packs
-                      </div>
-                    )}
-                    <span className="text-[7px] font-black uppercase tracking-[1px] text-white/40 mb-3">{pack.name}</span>
-                    <div className="flex flex-col items-center mb-4">
-                      <span className={`text-3xl font-black italic mb-1 ${pack.premium ? 'text-amber-400' : 'text-white'}`}>{pack.credits}</span>
-                      <span className="text-[7px] font-black uppercase tracking-[1px] text-accent">Créditos</span>
-                      {pack.bonus && (
-                        <div className={`mt-4 flex items-center gap-2 px-3 py-1 rounded-full ${pack.premium ? 'bg-amber-500/20' : 'bg-accent/20'}`}>
-                          <Zap className={`w-3 h-3 ${pack.premium ? 'text-amber-400' : 'text-accent'}`} />
-                          <span className={`text-[8px] font-black uppercase tracking-[1px] ${pack.premium ? 'text-amber-400' : 'text-accent'}`}>{pack.bonus}</span>
-                        </div>
-                      )}
                     </div>
-                    <div className={`text-lg font-black italic mb-4 ${pack.premium ? 'text-amber-400' : 'text-white'}`}>${pack.price.toLocaleString()}</div>
-                    <button
-                      disabled={!!processingPayment}
-                      onClick={() => handlePayment(pack)}
-                      className={`w-full py-4 rounded-xl text-xs font-black uppercase tracking-[2px] transition-all duration-300 flex items-center justify-center gap-2
-                      ${pack.popular ? 'bg-accent text-white hover:bg-white hover:text-black' : 'bg-white text-black hover:bg-accent hover:text-white'}
-                      ${processingPayment === pack.name ? 'opacity-50' : ''}`}
-                    >
-                      {processingPayment === pack.name ? (
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                      ) : (
-                        'Comprar'
-                      )}
-                    </button>
                   </div>
                 ))}
               </div>
-
-              <p className="mt-12 text-[8px] font-black tracking-[4px] uppercase text-white/20">
-                Pagos protegidos por Mercado Pago
-              </p>
-            </div>
+            )}
           </div>
-        )
-      }
+        )}
 
-      {/* Modal de Confirmación de Desbloqueo */}
-      {
-        packToUnlock && (
-          <div className="fixed inset-0 z-[400] bg-black/90 backdrop-blur-2xl flex items-center justify-center p-6 animate-[fadeIn_0.3s_ease-out]">
-            <div className="relative w-full max-w-md bg-[#0a0a0c] rounded-[40px] p-10 border border-white/10 text-center shadow-2xl">
-              <div className="w-16 h-16 bg-accent/20 rounded-full flex items-center justify-center mb-8 mx-auto">
-                <Zap className="w-8 h-8 text-accent animate-pulse" />
-              </div>
 
-              <h3 className="text-2xl font-black mb-2 uppercase italic">Desbloquear Pack</h3>
-              <p className="text-white/40 text-[10px] uppercase tracking-[2px] mb-8">
-                ¿Quieres desbloquear el pack <span className="text-white font-bold">{packToUnlock.subCategory}</span> por <span className="text-accent font-bold">{PREMIUM_PACK_PRICE} créditos</span>?
+        {/* SETTINGS VIEW */}
+        {appStep === 'settings' && (
+          <SettingsView
+            profile={profile}
+            session={session}
+            onBack={() => setAppStep('gallery')}
+            onAddCredits={() => setShowPricing(true)}
+            onUpdateProfile={updateProfile}
+          />
+        )}
+
+        {/* PACKS VIEW */}
+        {appStep === 'packs' && (
+          <PacksView
+            identities={IDENTITIES}
+            unlockedPacks={profile?.unlocked_packs}
+            userCredits={profile?.credits || 0}
+            onBack={() => setAppStep('gallery')}
+            onUnlock={handleUnlockPack}
+            isUnlocking={isUnlocking}
+          />
+        )}
+
+        {/* SUPPORT VIEW */}
+        {appStep === 'support' && (
+          <div className="flex flex-col items-center justify-center pt-32 pb-20 animate-[fadeIn_0.5s_ease-out]">
+            <h2 className="text-3xl font-black italic uppercase text-white mb-6">Soporte</h2>
+            <div className="bg-white/5 border border-white/10 rounded-3xl p-8 max-w-md w-full text-center">
+              <p className="text-white/60 text-sm mb-6">
+                Si tienes algún problema o sugerencia, contáctanos.
               </p>
-
-              <div className="space-y-4">
-                <button
-                  disabled={isUnlocking}
-                  onClick={() => handleUnlockPack(packToUnlock.subCategory)}
-                  className="w-full h-16 bg-accent text-white rounded-2xl font-black uppercase tracking-[4px] text-xs hover:bg-white hover:text-black transition-all flex items-center justify-center gap-3"
-                >
-                  {isUnlocking ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <>
-                      Confirmar Compra
-                      <Sparkles className="w-4 h-4" />
-                    </>
-                  )}
-                </button>
-
-                <button
-                  disabled={isUnlocking}
-                  onClick={() => setPackToUnlock(null)}
-                  className="w-full py-4 text-[10px] font-black uppercase tracking-[3px] text-white/20 hover:text-white transition-colors"
-                >
-                  Cancelar
-                </button>
-              </div>
-
-              <p className="mt-8 text-[8px] font-black tracking-[3px] text-white/10 uppercase">
-                Tu saldo actual: {profile?.credits} créditos
-              </p>
-            </div>
-          </div>
-        )
-      }
-
-      {/* Modal de Oferta Premium Exclusiva - Más delicado y pequeño */}
-      {
-        showPremiumOffer && (
-          <div className="fixed inset-0 z-[400] bg-black/40 backdrop-blur-md flex items-center justify-center p-6 animate-[fadeIn_0.3s_ease-out]">
-            <div className="relative w-full max-w-[260px] bg-white/5 backdrop-blur-[40px] rounded-[32px] p-6 border border-amber-500/20 text-center shadow-[0_0_80px_rgba(251,191,36,0.1)]">
-              <button
-                onClick={() => setShowPremiumOffer(false)}
-                className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
+              <a
+                href="mailto:support@metalab.ai"
+                className="inline-block px-8 py-4 bg-accent text-white rounded-xl font-black uppercase tracking-[2px] text-xs hover:bg-white hover:text-black transition-all"
               >
-                <X className="w-4 h-4 text-white/40" />
+                Enviar Email
+              </a>
+              <button
+                onClick={() => setAppStep('gallery')}
+                className="block w-full mt-6 text-[10px] font-black uppercase tracking-[2px] text-white/30 hover:text-white"
+              >
+                Volver
               </button>
+            </div>
+          </div>
+        )}
 
-              <div className="w-14 h-14 bg-gradient-to-br from-amber-500 to-yellow-300 rounded-2xl flex items-center justify-center mb-6 mx-auto rotate-6 shadow-xl shadow-amber-500/10">
-                <Sparkles className="w-7 h-7 text-black" />
-              </div>
+      </div>
+    </section >
 
-              <h3 className="text-2xl font-black mb-3 uppercase italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-200">
-                Pack Premium
-              </h3>
+    {/* Camera Modal */}
+    {
+      showCamera && (
+        <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-xl flex items-center justify-center p-4">
+          <div className="relative w-full max-w-md max-h-[90vh] aspect-[3/4] bg-primary rounded-[40px] overflow-hidden border border-white/10 flex flex-col">
+            <div className="relative flex-1 bg-black overflow-hidden">
+              {isCapturing ? (
+                <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover scale-x-[-1]" />
+              ) : (
+                <img src={capturedImage || ''} className="w-full h-full object-cover" alt="Previsualización" />
+              )}
 
-              <div className="bg-white/5 border border-white/5 rounded-2xl p-5 mb-6">
-                <div className="text-[8px] font-black text-white/40 uppercase tracking-[3px] mb-4 leading-relaxed">
-                  Desbloquea estilos VIP + 3000 créditos
-                </div>
-
-                <div className="flex flex-col items-center">
-                  <div className="flex items-baseline gap-1.5">
-                    <span className="text-4xl font-black italic text-white leading-none">3000</span>
-                    <span className="text-[8px] font-black uppercase text-amber-500 tracking-widest">Créditos</span>
+              {/* Error Display inside Camera */}
+              {cameraError && (
+                <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/80 p-8 text-center">
+                  <div className="flex flex-col items-center">
+                    <AlertTriangle className="w-12 h-12 text-red-500 mb-4" />
+                    <p className="text-white text-xs font-bold uppercase tracking-widest">{cameraError}</p>
+                    <button
+                      onClick={initCamera}
+                      className="mt-6 px-6 py-3 bg-white/10 hover:bg-white/20 rounded-full text-[10px] font-black uppercase tracking-widest transition-all"
+                    >
+                      Reintentar
+                    </button>
                   </div>
                 </div>
-              </div>
+              )}
 
-              <div className="mb-8">
-                <div className="text-3xl font-black italic mb-1">$20.000</div>
-                <div className="text-[7px] font-black uppercase tracking-[2px] text-white/15">Pago Único</div>
+              {/* Overlay Técnico */}
+              <div className="absolute inset-0 border-[20px] border-black/40 pointer-events-none">
+                <div className="w-full h-full border border-white/5 relative flex items-center justify-center">
+                  <div className="w-48 h-64 border border-accent/20 rounded-[100px]" />
+                </div>
               </div>
+            </div>
 
+            <div className="absolute bottom-10 left-0 w-full px-10 flex items-center justify-between z-20">
+              {isCapturing ? (
+                <>
+                  <button onClick={() => setShowCamera(false)} className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center border border-white/10"><X className="w-5 h-5" /></button>
+                  <button onClick={takePhoto} className="w-20 h-20 rounded-full bg-white p-1 shadow-2xl"><div className="w-full h-full rounded-full border-4 border-black bg-black/5 flex items-center justify-center"><div className="w-4 h-4 bg-black rounded-full" /></div></button>
+                  <div className="w-12" />
+                </>
+              ) : (
+                <>
+                  <button onClick={() => setIsCapturing(true)} className="flex flex-col items-center gap-2 group"><div className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center group-hover:bg-white/10"><RefreshCw className="w-5 h-5" /></div><span className="text-[8px] font-black tracking-[2px] uppercase opacity-40">Reintentar</span></button>
+                  <button onClick={() => setShowCamera(false)} className="flex flex-col items-center gap-2 group"><div className="w-16 h-16 rounded-full bg-accent flex items-center justify-center shadow-lg"><Check className="w-6 h-6" /></div><span className="text-[8px] font-black tracking-[2px] uppercase">Listo</span></button>
+                  <button onClick={() => { setCapturedImage(null); setShowCamera(false); }} className="flex flex-col items-center gap-2 group"><div className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center group-hover:bg-white/10"><X className="w-5 h-5" /></div><span className="text-[8px] font-black tracking-[2px] uppercase opacity-40">Cerrar</span></button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    {/* QR Modal */}
+    {
+      showQR && resultImage && (
+        <div className="fixed inset-0 z-[110] bg-black/95 backdrop-blur-2xl flex items-center justify-center p-4">
+          <div className="relative w-full max-w-sm bg-[#0a0a0c] rounded-[40px] p-12 border border-white/10 text-center flex flex-col items-center">
+            <button
+              onClick={() => setShowQR(false)}
+              className="absolute top-6 right-6 w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <div className="w-16 h-16 bg-accent/20 rounded-full flex items-center justify-center mb-8">
+              <QrCode className="w-8 h-8 text-accent" />
+            </div>
+            <h3 className="text-2xl font-black mb-2 uppercase italic">Escanear para Descargar</h3>
+            <p className="text-white/40 text-[10px] uppercase tracking-[2px] mb-8">Escanea con tu cámara para guardar en tu móvil</p>
+
+            <div className="p-4 bg-white rounded-3xl mb-8">
+              <QRCodeCanvas
+                value={resultImage}
+                size={200}
+                level="H"
+                includeMargin={true}
+              />
+            </div>
+
+            <button
+              onClick={() => setShowQR(false)}
+              className="text-[10px] font-black tracking-[4px] uppercase text-accent hover:text-white transition-colors"
+            >
+              Cerrar
+            </button>
+          </div>
+        </div>
+      )
+    }
+
+    {/* Modal de Precios */}
+    {
+      showPricing && (
+        <div className="fixed inset-0 z-[300] bg-black/40 backdrop-blur-md flex items-center justify-center p-4 animate-[fadeIn_0.3s_ease-out]">
+          <div className="relative w-full max-w-xl bg-white/5 backdrop-blur-[40px] rounded-[32px] p-6 md:p-8 border border-white/10 text-center shadow-2xl overflow-y-auto max-h-[95vh]">
+            <button
+              onClick={() => setShowPricing(false)}
+              className="absolute top-6 right-6 w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="w-16 h-16 bg-accent/20 rounded-full flex items-center justify-center mb-8 mx-auto">
+              <CreditCard className="w-8 h-8 text-accent" />
+            </div>
+
+            <h3 className="text-xl md:text-2xl font-black mb-1 uppercase italic tracking-tight">Elegí tu Pack</h3>
+            <p className="text-accent text-[7px] font-black uppercase tracking-[2px] mb-1">Desbloquea todos los estilos Premium</p>
+            <p className="text-white/40 text-[6px] uppercase tracking-[2px] mb-6">Obtené créditos para tus retratos con IA</p>
+
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              {[
+                { name: 'Starter', price: 4000, credits: 500, bonus: '', color: 'white/5', popular: false, premium: false },
+                { name: 'Standard', price: 8000, credits: 1100, bonus: '+10%', color: 'accent/5', popular: true, premium: false },
+                { name: 'Business', price: 10000, credits: 1500, bonus: '+20%', color: 'white/5', popular: false, premium: false }
+              ].map((pack) => (
+                <div
+                  key={pack.name}
+                  className={`relative w-full max-w-[150px] p-4 rounded-[24px] border transition-all duration-500 flex flex-col items-center group
+                    ${pack.popular ? 'bg-accent/10 border-accent shadow-[0_0_20px_rgba(255,85,0,0.1)] scale-105 z-10' : 'bg-white/5 border-white/5 hover:border-white/20'}`}
+                >
+                  {pack.popular && (
+                    <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-accent text-[8px] font-black uppercase tracking-[2px] px-4 py-1 rounded-full">
+                      Más Popular
+                    </div>
+                  )}
+                  {pack.premium && (
+                    <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-gradient-to-r from-amber-500 to-yellow-300 text-[8px] font-black uppercase tracking-[2px] px-4 py-1 rounded-full text-black">
+                      Especial Packs
+                    </div>
+                  )}
+                  <span className="text-[7px] font-black uppercase tracking-[1px] text-white/40 mb-3">{pack.name}</span>
+                  <div className="flex flex-col items-center mb-4">
+                    <span className={`text-3xl font-black italic mb-1 ${pack.premium ? 'text-amber-400' : 'text-white'}`}>{pack.credits}</span>
+                    <span className="text-[7px] font-black uppercase tracking-[1px] text-accent">Créditos</span>
+                    {pack.bonus && (
+                      <div className={`mt-4 flex items-center gap-2 px-3 py-1 rounded-full ${pack.premium ? 'bg-amber-500/20' : 'bg-accent/20'}`}>
+                        <Zap className={`w-3 h-3 ${pack.premium ? 'text-amber-400' : 'text-accent'}`} />
+                        <span className={`text-[8px] font-black uppercase tracking-[1px] ${pack.premium ? 'text-amber-400' : 'text-accent'}`}>{pack.bonus}</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className={`text-lg font-black italic mb-4 ${pack.premium ? 'text-amber-400' : 'text-white'}`}>${pack.price.toLocaleString()}</div>
+                  <button
+                    disabled={!!processingPayment}
+                    onClick={() => handlePayment(pack)}
+                    className={`w-full py-4 rounded-xl text-xs font-black uppercase tracking-[2px] transition-all duration-300 flex items-center justify-center gap-2
+                      ${pack.popular ? 'bg-accent text-white hover:bg-white hover:text-black' : 'bg-white text-black hover:bg-accent hover:text-white'}
+                      ${processingPayment === pack.name ? 'opacity-50' : ''}`}
+                  >
+                    {processingPayment === pack.name ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      'Comprar'
+                    )}
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <p className="mt-12 text-[8px] font-black tracking-[4px] uppercase text-white/20">
+              Pagos protegidos por Mercado Pago
+            </p>
+          </div>
+        </div>
+      )
+    }
+
+    {/* Modal de Confirmación de Desbloqueo */}
+    {
+      packToUnlock && (
+        <div className="fixed inset-0 z-[400] bg-black/90 backdrop-blur-2xl flex items-center justify-center p-6 animate-[fadeIn_0.3s_ease-out]">
+          <div className="relative w-full max-w-md bg-[#0a0a0c] rounded-[40px] p-10 border border-white/10 text-center shadow-2xl">
+            <div className="w-16 h-16 bg-accent/20 rounded-full flex items-center justify-center mb-8 mx-auto">
+              <Zap className="w-8 h-8 text-accent animate-pulse" />
+            </div>
+
+            <h3 className="text-2xl font-black mb-2 uppercase italic">Desbloquear Pack</h3>
+            <p className="text-white/40 text-[10px] uppercase tracking-[2px] mb-8">
+              ¿Quieres desbloquear el pack <span className="text-white font-bold">{packToUnlock.subCategory}</span> por <span className="text-accent font-bold">{PREMIUM_PACK_PRICE} créditos</span>?
+            </p>
+
+            <div className="space-y-4">
               <button
-                disabled={!!processingPayment}
-                onClick={() => {
-                  handlePayment({ name: 'Unlock Premium', price: 20000, credits: 3000 });
-                  setShowPremiumOffer(false);
-                }}
-                className="w-full h-14 bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-white hover:to-white text-black font-black uppercase tracking-[4px] text-[10px] rounded-xl transition-all duration-500 shadow-[0_10px_20px_rgba(245,158,11,0.2)] active:scale-95 flex items-center justify-center gap-3"
+                disabled={isUnlocking}
+                onClick={() => handleUnlockPack(packToUnlock.subCategory)}
+                className="w-full h-16 bg-accent text-white rounded-2xl font-black uppercase tracking-[4px] text-xs hover:bg-white hover:text-black transition-all flex items-center justify-center gap-3"
               >
-                {processingPayment ? <Loader2 className="w-5 h-5 animate-spin" /> : (
+                {isUnlocking ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
                   <>
-                    DESBLOQUEAR AHORA
-                    <Zap className="w-3.5 h-3.5 fill-black" />
+                    Confirmar Compra
+                    <Sparkles className="w-4 h-4" />
                   </>
                 )}
               </button>
+
+              <button
+                disabled={isUnlocking}
+                onClick={() => setPackToUnlock(null)}
+                className="w-full py-4 text-[10px] font-black uppercase tracking-[3px] text-white/20 hover:text-white transition-colors"
+              >
+                Cancelar
+              </button>
             </div>
+
+            <p className="mt-8 text-[8px] font-black tracking-[3px] text-white/10 uppercase">
+              Tu saldo actual: {profile?.credits} créditos
+            </p>
           </div>
-        )
-      }
+        </div>
+      )
+    }
 
-      <canvas ref={canvasRef} className="hidden" />
-      <footer className="relative py-12 bg-primary border-t border-white/5 text-center z-20">
-        <div className="text-white/10 text-[8px] uppercase tracking-[6px] font-bold italic">© 2024 Creativa Labs — Digital Alchemy Studio</div>
-      </footer>
+    {/* Modal de Oferta Premium Exclusiva - Más delicado y pequeño */}
+    {
+      showPremiumOffer && (
+        <div className="fixed inset-0 z-[400] bg-black/40 backdrop-blur-md flex items-center justify-center p-6 animate-[fadeIn_0.3s_ease-out]">
+          <div className="relative w-full max-w-[260px] bg-white/5 backdrop-blur-[40px] rounded-[32px] p-6 border border-amber-500/20 text-center shadow-[0_0_80px_rgba(251,191,36,0.1)]">
+            <button
+              onClick={() => setShowPremiumOffer(false)}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
+            >
+              <X className="w-4 h-4 text-white/40" />
+            </button>
 
-      {/* Historial Removed from Bottom */}
-    </div >
-  );
+            <div className="w-14 h-14 bg-gradient-to-br from-amber-500 to-yellow-300 rounded-2xl flex items-center justify-center mb-6 mx-auto rotate-6 shadow-xl shadow-amber-500/10">
+              <Sparkles className="w-7 h-7 text-black" />
+            </div>
+
+            <h3 className="text-2xl font-black mb-3 uppercase italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-yellow-200">
+              Pack Premium
+            </h3>
+
+            <div className="bg-white/5 border border-white/5 rounded-2xl p-5 mb-6">
+              <div className="text-[8px] font-black text-white/40 uppercase tracking-[3px] mb-4 leading-relaxed">
+                Desbloquea estilos VIP + 3000 créditos
+              </div>
+
+              <div className="flex flex-col items-center">
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-4xl font-black italic text-white leading-none">3000</span>
+                  <span className="text-[8px] font-black uppercase text-amber-500 tracking-widest">Créditos</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="mb-8">
+              <div className="text-3xl font-black italic mb-1">$20.000</div>
+              <div className="text-[7px] font-black uppercase tracking-[2px] text-white/15">Pago Único</div>
+            </div>
+
+            <button
+              disabled={!!processingPayment}
+              onClick={() => {
+                handlePayment({ name: 'Unlock Premium', price: 20000, credits: 3000 });
+                setShowPremiumOffer(false);
+              }}
+              className="w-full h-14 bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-white hover:to-white text-black font-black uppercase tracking-[4px] text-[10px] rounded-xl transition-all duration-500 shadow-[0_10px_20px_rgba(245,158,11,0.2)] active:scale-95 flex items-center justify-center gap-3"
+            >
+              {processingPayment ? <Loader2 className="w-5 h-5 animate-spin" /> : (
+                <>
+                  DESBLOQUEAR AHORA
+                  <Zap className="w-3.5 h-3.5 fill-black" />
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )
+    }
+
+    <canvas ref={canvasRef} className="hidden" />
+    <footer className="relative py-12 bg-primary border-t border-white/5 text-center z-20">
+      <div className="text-white/10 text-[8px] uppercase tracking-[6px] font-bold italic">© 2024 Creativa Labs — Digital Alchemy Studio</div>
+    </footer>
+
+    {/* Historial Removed from Bottom */}
+  </div >
+);
 };
 
 export default App;
