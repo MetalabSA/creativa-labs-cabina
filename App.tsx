@@ -932,7 +932,10 @@ const App: React.FC = () => {
         }
       });
 
-      if (createError || !createData?.success) throw new Error(createData?.error || "Error al iniciar la IA");
+      if (createError || !createData?.success) {
+        const msg = createError?.message || createData?.error || "Error al iniciar la IA";
+        throw new Error(msg);
+      }
 
       const taskId = createData.taskId;
       console.log("Tarea iniciada en Kie.ai:", taskId);

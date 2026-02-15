@@ -92,13 +92,15 @@ serve(async (req) => {
                     upsert: true
                 });
 
-                if (uploadError) throw new Error(`Error subiendo a Storage: ${uploadError.message}`);
-
-                const { data: { publicUrl } } = supabase.storage.from('user_photos').getPublicUrl(fileName);
-                publicPhotoUrl = publicUrl;
-                console.log("Foto subida correctamente:", publicPhotoUrl);
+                if (!uploadError) {
+                    const { data: { publicUrl } } = supabase.storage.from('user_photos').getPublicUrl(fileName);
+                    publicPhotoUrl = publicUrl;
+                    console.log("[STORAGE] Foto subida:", publicPhotoUrl);
+                } else {
+                    console.warn("[STORAGE] Error subiendo (usando base64):", uploadError.message);
+                }
             } catch (err) {
-                throw new Error("No se pudo procesar tu foto. Intenta de nuevo.");
+                console.warn("[STORAGE] Excepción en upload:", err.message);
             }
         }
 
@@ -137,22 +139,86 @@ serve(async (req) => {
         const createResult = await createResponse.json();
 
         if (createResult.code !== 200) {
-            console.error("Error de Kie.ai:", createResult);
-            throw new Error(`Kie.ai: ${createResult.msg || 'Error desconocido'}`);
+            console.error("Error Kie.ai:", createResult);
+            throw new Error(`IA Error (${createResult.code}): ${createResult.msg || 'Error creando tarea'}`);
         }
+
+        const taskId = createResult.data.taskId;
+        console.log("[ALQUIMISTA] Tarea creada:", taskId);
+
+        // --- 4. Polling Interno (Modo Resiliente) ---
+        // Esperamos un poco antes de responder, para intentar dar la imagen de una vez
+        let attempts = 0;
+        let finalImageUrl = null;
+
+        while (attempts < 20) { // Hasta 80 segundos (4s * 20)
+            await new Promise(r => setTimeout(r, 4000));
+            attempts++;
+
+            const queryRes = await fetch(`https://api.kie.ai/api/v1/jobs/recordInfo?taskId=${taskId}`, {
+                headers: { 'Authorization': `Bearer ${currentApiKey}` }
+            });
+            const queryData = await queryRes.json();
+
+            if (queryData.code === 200) {
+                const state = queryData.data.state;
+                if (state === 'success') {
+                    try {
+                        const resJson = JSON.parse(queryData.data.resultJson);
+                        finalImageUrl = resJson.resultUrls?.[0] || queryData.data.imageUrl;
+                    } catch {
+                        finalImageUrl = queryData.data.resultUrl || queryData.data.imageUrl;
+                    }
+                    console.log("[ALQUIMISTA] Imagen lista en intento", attempts);
+                    break;
+                }
+                if (state === 'fail') throw new Error("La IA falló al procesar.");
+            }
+        }
+
+        if (!finalImageUrl) {
+            // Si agota el tiempo, el front seguirá con su propio polling
+            return new Response(JSON.stringify({
+                success: true,
+                taskId: taskId,
+                state: 'waiting',
+                message: "Tarea en proceso (polling activo)"
+            }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+
+        // --- 5. Persistencia y Registro ---
+        try {
+            const imgRes = await fetch(finalImageUrl);
+            const blob = await imgRes.blob();
+            const fileName = `results/${guest_id || user_id || 'anon'}_${Date.now()}.png`;
+            await supabase.storage.from('generations').upload(fileName, blob, { contentType: 'image/png' });
+            const { data: { publicUrl } } = supabase.storage.from('generations').getPublicUrl(fileName);
+            finalImageUrl = publicUrl;
+        } catch (e) {
+            console.warn("[STORAGE] Error persistiendo resultado final.");
+        }
+
+        await supabase.from('generations').insert({
+            user_id: user_id || null,
+            style_id: model_id,
+            image_url: finalImageUrl,
+            aspect_ratio: aspect_ratio || "9:16",
+            prompt: masterPrompt.substring(0, 500),
+            event_id: event_id || null
+        });
 
         return new Response(JSON.stringify({
             success: true,
-            taskId: createResult.data.taskId,
-            message: "Tarea iniciada"
+            state: 'success',
+            image_url: finalImageUrl,
+            taskId: taskId
         }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
     } catch (error) {
-        console.error("CRASH en Function:", error.message);
+        console.error("CRITICAL ERROR:", error.message);
         return new Response(JSON.stringify({
             error: error.message,
-            success: false,
-            debug: "Ver logs de Supabase para más info"
+            success: false
         }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 })
     }
 
