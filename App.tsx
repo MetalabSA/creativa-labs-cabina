@@ -967,13 +967,18 @@ const App: React.FC = () => {
           continue;
         }
 
+        if (!checkData) {
+          console.warn("Sin respuesta en consulta, reintentando...");
+          continue;
+        }
+
         if (checkData.success && checkData.state === 'success' && checkData.image_url) {
           finalResult = checkData.image_url;
           break;
         }
 
         if (checkData.state === 'fail') {
-          throw new Error("La IA no pudo procesar la imagen.");
+          throw new Error(checkData.error || "La IA no pudo procesar la imagen.");
         }
       }
 
