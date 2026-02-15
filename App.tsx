@@ -809,14 +809,33 @@ const App: React.FC = () => {
     if (videoRef.current && canvasRef.current) {
       const canvas = canvasRef.current;
       const video = videoRef.current;
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+
+      // OPTIMIZACIÓN: Redimensionar para evitar Base64 gigante (evita errores de conexión)
+      const MAX_DIM = 1024;
+      let width = video.videoWidth;
+      let height = video.videoHeight;
+
+      if (width > height) {
+        if (width > MAX_DIM) {
+          height *= MAX_DIM / width;
+          width = MAX_DIM;
+        }
+      } else {
+        if (height > MAX_DIM) {
+          width *= MAX_DIM / height;
+          height = MAX_DIM;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
       const ctx = canvas.getContext('2d');
       if (ctx) {
         ctx.translate(canvas.width, 0);
         ctx.scale(-1, 1);
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        setCapturedImage(canvas.toDataURL('image/jpeg', 0.95));
+        // Calidad 0.8: equilibrio perfecto entre peso y detalle para la IA
+        setCapturedImage(canvas.toDataURL('image/jpeg', 0.8));
         setIsCapturing(false);
         if (streamRef.current) {
           streamRef.current.getTracks().forEach(track => track.stop());
