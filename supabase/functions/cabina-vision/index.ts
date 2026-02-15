@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4"
-import { decode } from "https://deno.land/std@0.168.0/encoding/base64.ts"
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -43,14 +42,12 @@ serve(async (req) => {
 
                     if (kieImageUrl) {
                         try {
-                            // Persistimos resultado
                             const imgRes = await fetch(kieImageUrl);
                             const blob = await imgRes.blob();
                             const fileName = `results/${guest_id || user_id || 'anon'}_${Date.now()}.png`;
                             await supabase.storage.from('generations').upload(fileName, blob, { contentType: 'image/png' });
                             const { data: { publicUrl } } = supabase.storage.from('generations').getPublicUrl(fileName);
 
-                            // Registro en DB
                             await supabase.from('generations').insert({
                                 user_id: user_id || null,
                                 style_id: model_id,
@@ -62,48 +59,56 @@ serve(async (req) => {
 
                             return new Response(JSON.stringify({ success: true, state: 'success', image_url: publicUrl }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
                         } catch (e) {
-                            console.error("[STORAGE] Error persistiendo resultado:", e.message);
-                            // Si falla la persistencia, devolvemos la URL de Kie directamente como emergencia
                             return new Response(JSON.stringify({ success: true, state: 'success', image_url: kieImageUrl }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
                         }
                     }
                 }
                 return new Response(JSON.stringify({ success: true, state: state }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
             }
-            throw new Error(`Kie.ai Status Error: ${queryData.msg}`);
+            return new Response(JSON.stringify({ success: false, error: queryData.msg }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         // --- ACCIÓN: CREATE ---
-        console.log(`[CREATE] Iniciando tarea para modelo: ${model_id}`);
+        console.log(`[CREATE] Iniciando tarea...`);
 
-        // 1. Storage (Solo si es Base64, si es URL la pasamos directo)
-        let publicPhotoUrl = user_photo;
+        // 1. Subir a Kie.ai File Service (Para que ellos tengan la foto en su propio storage)
+        let kieNativeUrl = user_photo;
         if (user_photo && user_photo.startsWith('data:image')) {
+            console.log("[KIE-UPLOAD] Subiendo base64 a Kie.ai...");
             try {
-                console.log("[STORAGE] Procesando Base64...");
-                const base64Content = user_photo.split(',')[1];
-                const binaryData = decode(base64Content);
-                const fileName = `uploads/${guest_id || user_id || 'anon'}_${Date.now()}.png`;
-                const { error: uploadError } = await supabase.storage.from('user_photos').upload(fileName, binaryData, { contentType: 'image/png' });
+                // n8n style upload
+                const uploadRes = await fetch("https://kieai.redpandaai.co/api/file-base64-upload", {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${currentApiKey}`
+                    },
+                    body: JSON.stringify({
+                        base64Data: user_photo,
+                        uploadPath: "images/base64",
+                        fileName: `${Date.now()}.png`
+                    })
+                });
 
-                if (!uploadError) {
-                    const { data: { publicUrl } } = supabase.storage.from('user_photos').getPublicUrl(fileName);
-                    publicPhotoUrl = publicUrl;
+                const uploadData = await uploadRes.json();
+                if (uploadData.code === 200 || uploadData.success) {
+                    kieNativeUrl = uploadData.data?.url || uploadData.url;
+                    console.log("[KIE-UPLOAD] URL obtenida:", kieNativeUrl);
                 } else {
-                    console.error("[STORAGE] Error upload:", uploadError.message);
+                    console.error("[KIE-UPLOAD] Falló:", JSON.stringify(uploadData));
                 }
             } catch (e) {
-                console.warn("[STORAGE] Error subiendo foto, se enviará Base64 a Kie (puede fallar)");
+                console.error("[KIE-UPLOAD] Excepción:", e.message);
             }
         }
 
-        // 2. Prompt
+        // 2. Obtener Prompt
         let masterPrompt = "Professional photo shoot.";
         const { data: promptData } = await supabase.from('identity_prompts').select('master_prompt').eq('id', model_id).maybeSingle();
         if (promptData?.master_prompt) masterPrompt = promptData.master_prompt;
 
-        // 3. Kie.ai Request
-        console.log(`[KIE] Requesting taskId for model nano-banana-pro...`);
+        // 3. Crear Tarea
+        console.log("[KIE] createTask con URL:", kieNativeUrl?.substring(0, 50));
         const createResponse = await fetch("https://api.kie.ai/api/v1/jobs/createTask", {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentApiKey}` },
@@ -111,7 +116,7 @@ serve(async (req) => {
                 model: "nano-banana-pro",
                 input: {
                     prompt: masterPrompt,
-                    image_input: [publicPhotoUrl],
+                    image_input: kieNativeUrl ? [kieNativeUrl] : [],
                     aspect_ratio: aspect_ratio || "9:16",
                     resolution: "2K",
                     output_format: "png"
@@ -119,17 +124,9 @@ serve(async (req) => {
             })
         });
 
-        if (!createResponse.ok) {
-            const errText = await createResponse.text();
-            console.error("[KIE] HTTP Error:", createResponse.status, errText);
-            throw new Error(`Kie.ai API HTTP Error: ${createResponse.status}`);
-        }
-
         const createResult = await createResponse.json();
-        console.log("[KIE] Create result:", JSON.stringify(createResult));
-
         if (createResult.code !== 200) {
-            throw new Error(`Kie.ai App Error: ${createResult.msg || 'Fallo al crear tarea'}`);
+            return new Response(JSON.stringify({ success: false, error: createResult.msg }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         return new Response(JSON.stringify({

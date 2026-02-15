@@ -935,38 +935,10 @@ const App: React.FC = () => {
     setAppStep('processing');
 
     try {
-      // --- PASO 0: SUBIR IMAGEN A STORAGE (OPTIMIZACIÓN PARA EVITAR TIMEOUT Y PAYLOAD LIMIT) ---
-      let photoUrlForIA = capturedImage;
-      if (capturedImage.startsWith('data:image')) {
-        try {
-          const blob = base64ToBlob(capturedImage);
-          if (blob) {
-            const fileName = `uploads/${session?.user?.id || 'anon'}_${Date.now()}.jpg`;
-            const { error: uploadError } = await supabase.storage
-              .from('user_photos')
-              .upload(fileName, blob, {
-                contentType: 'image/jpeg',
-                cacheControl: '3600',
-                upsert: true
-              });
-
-            if (!uploadError) {
-              const { data: { publicUrl } } = supabase.storage.from('user_photos').getPublicUrl(fileName);
-              photoUrlForIA = publicUrl;
-              console.log("Client upload successful:", photoUrlForIA);
-            } else {
-              console.warn("Client upload failed (Storage):", uploadError.message);
-            }
-          }
-        } catch (err) {
-          console.warn("Client side upload error (Exception):", err);
-        }
-      }
-
-      // --- PASO 1: CREAR TAREA ---
+      // --- PASO 1: CREAR TAREA (AHORA USA EL SERVICIO NATIVO DE KIE.AI) ---
       const { data: createData, error: createError } = await supabase.functions.invoke('cabina-vision', {
         body: {
-          user_photo: photoUrlForIA,
+          user_photo: capturedImage,
           model_id: formData.selectedIdentity,
           aspect_ratio: formData.aspectRatio,
           user_id: session?.user?.id,
@@ -1011,18 +983,18 @@ const App: React.FC = () => {
           continue;
         }
 
-        if (!checkData) {
-          console.warn("Sin respuesta en consulta, reintentando...");
-          continue;
+        if (!checkData || checkData.success === false) {
+          const errorMsg = checkData?.error || "Error en la consulta de estado.";
+          throw new Error(errorMsg);
         }
 
-        if (checkData.success && checkData.state === 'success' && checkData.image_url) {
+        if (checkData.state === 'success' && checkData.image_url) {
           finalResult = checkData.image_url;
           break;
         }
 
         if (checkData.state === 'fail') {
-          throw new Error(checkData.error || "La IA no pudo procesar la imagen.");
+          throw new Error(checkData.error || "La IA falló al procesar la imagen en Kie.ai.");
         }
       }
 
