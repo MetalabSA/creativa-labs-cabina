@@ -15,7 +15,7 @@ serve(async (req) => {
 
     try {
         const body = await req.json()
-        const { user_photo, model_id, aspect_ratio, user_id, email, guest_id, action, taskId: existingTaskId } = body
+        const { user_photo, model_id, aspect_ratio, user_id, email, guest_id, action, taskId: existingTaskId, event_id } = body
 
         const SB_URL = Deno.env.get('SUPABASE_URL') || ""
         const SB_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ""
@@ -57,7 +57,8 @@ serve(async (req) => {
                             style_id: model_id,
                             image_url: publicUrl,
                             aspect_ratio: aspect_ratio || "9:16",
-                            prompt: "Kie.ai Generated"
+                            prompt: "Kie.ai Generated",
+                            event_id: event_id || null
                         });
 
                         return new Response(JSON.stringify({ success: true, state: 'success', image_url: publicUrl }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -73,23 +74,46 @@ serve(async (req) => {
         // 1. Procesar Foto -> Storage
         let publicPhotoUrl = user_photo;
         if (user_photo && user_photo.startsWith('data:image')) {
-            const base64Content = user_photo.split(',')[1];
-            const binaryData = decode(base64Content);
-            const fileName = `uploads/${guest_id || user_id || 'anon'}_${Date.now()}.png`;
-            await supabase.storage.from('user_photos').upload(fileName, binaryData, { contentType: 'image/png' });
-            const { data: { publicUrl } } = supabase.storage.from('user_photos').getPublicUrl(fileName);
-            publicPhotoUrl = publicUrl;
+            try {
+                const base64Content = user_photo.split(',')[1];
+                const binaryData = decode(base64Content);
+                const fileName = `uploads/${guest_id || user_id || 'anon'}_${Date.now()}.png`;
+
+                const { error: uploadError } = await supabase.storage.from('user_photos').upload(fileName, binaryData, {
+                    contentType: 'image/png',
+                    upsert: true
+                });
+
+                if (uploadError) throw new Error(`Error subiendo a Storage: ${uploadError.message}`);
+
+                const { data: { publicUrl } } = supabase.storage.from('user_photos').getPublicUrl(fileName);
+                publicPhotoUrl = publicUrl;
+                console.log("Foto subida correctamente:", publicPhotoUrl);
+            } catch (err) {
+                throw new Error("No se pudo procesar tu foto. Intenta de nuevo.");
+            }
         }
 
         // 2. Obtener Prompt
         let masterPrompt = "Professional photo shoot.";
-        const { data: promptData } = await supabase.from('identity_prompts').select('master_prompt').eq('id', model_id).maybeSingle();
+        const { data: promptData, error: promptError } = await supabase
+            .from('identity_prompts')
+            .select('master_prompt')
+            .eq('id', model_id)
+            .maybeSingle();
+
+        if (promptError) console.error("Error buscando prompt:", promptError);
         if (promptData?.master_prompt) masterPrompt = promptData.master_prompt;
 
-        // 3. Crear Tarea
+        console.log("Iniciando tarea para modelo:", model_id);
+
+        // 3. Crear Tarea en Kie.ai
         const createResponse = await fetch("https://api.kie.ai/api/v1/jobs/createTask", {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentApiKey}` },
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${currentApiKey}`
+            },
             body: JSON.stringify({
                 model: "nano-banana-pro",
                 input: {
@@ -103,17 +127,27 @@ serve(async (req) => {
         });
 
         const createResult = await createResponse.json();
-        if (createResult.code !== 200) throw new Error(createResult.msg || "Error creando tarea");
+
+        if (createResult.code !== 200) {
+            console.error("Error de Kie.ai:", createResult);
+            throw new Error(`Kie.ai: ${createResult.msg || 'Error desconocido'}`);
+        }
 
         return new Response(JSON.stringify({
             success: true,
             taskId: createResult.data.taskId,
-            message: "Tarea iniciada correctamente"
+            message: "Tarea iniciada"
         }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
     } catch (error) {
-        return new Response(JSON.stringify({ error: error.message, success: false }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 })
+        console.error("CRASH en Function:", error.message);
+        return new Response(JSON.stringify({
+            error: error.message,
+            success: false,
+            debug: "Ver logs de Supabase para más info"
+        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 })
     }
+
 })
 
 

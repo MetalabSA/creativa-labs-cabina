@@ -427,6 +427,8 @@ const App: React.FC = () => {
   const [appStep, setAppStep] = useState<'gallery' | 'setup' | 'processing' | 'result' | 'history' | 'settings' | 'packs' | 'support'>('gallery');
   const [notifications, setNotifications] = useState<{ id: string, message: string, type: 'success' | 'error', action?: () => void }[]>([]);
   const [backgroundJob, setBackgroundJob] = useState<{ active: boolean, id: string | null, startTime: number } | null>(null);
+  const [eventConfig, setEventConfig] = useState<any>(null);
+  const [eventLoading, setEventLoading] = useState(false);
 
   const PREMIUM_PACK_PRICE = 3000;
 
@@ -434,7 +436,7 @@ const App: React.FC = () => {
   const mergedIdentities = React.useMemo(() => {
     return IDENTITIES.map(style => {
       // Check for individual override OR category-level override
-      const meta = stylesMetadata.find(m => m.id === style.id || m.id === style.subCategory);
+      const meta = stylesMetadata.find((m: any) => m.id === style.id || m.id === style.subCategory);
       return {
         ...style,
         isPremium: meta ? meta.is_premium : style.isPremium,
@@ -443,18 +445,25 @@ const App: React.FC = () => {
     });
   }, [stylesMetadata]);
 
+  const availableIdentities = React.useMemo(() => {
+    if (eventConfig?.selected_styles && eventConfig.selected_styles.length > 0) {
+      return mergedIdentities.filter(style => eventConfig.selected_styles.includes(style.id));
+    }
+    return mergedIdentities;
+  }, [mergedIdentities, eventConfig]);
+
   // Lógica "Para Vos": Seleccionamos 4 estilos destacados (aleatorios pero consistentes por sesión)
   const recommendedIdentities = React.useMemo(() => {
     // Definimos algunos IDs que queremos que aparezcan seguro o priorizamos
     const priorityIds = ['jhonw_a', 'sup_a', 'pb_a', 'f1_a', 'magic_a'];
-    return mergedIdentities
-      .filter(id => priorityIds.includes(id.id))
+    return availableIdentities
+      .filter((id: any) => priorityIds.includes(id.id))
       .sort(() => Math.random() - 0.5)
       .slice(0, 4);
-  }, [mergedIdentities]);
+  }, [availableIdentities]);
 
   const topIdentities = React.useMemo(() => {
-    return [...mergedIdentities]
+    return [...availableIdentities]
       .sort((a, b) => (b.usageCount || 0) - (a.usageCount || 0))
       .slice(0, 5)
       .filter(id => (id.usageCount || 0) > 0);
@@ -501,6 +510,42 @@ const App: React.FC = () => {
       fetchFavorites();
     }
   }, [session]);
+
+  // --- DETECTOR DE EVENTOS ---
+  useEffect(() => {
+    const fetchEvent = async () => {
+      const params = new URLSearchParams(window.location.search);
+      const eventSlug = params.get('event');
+
+      if (eventSlug) {
+        setEventLoading(true);
+        try {
+          const { data, error } = await supabase
+            .from('events')
+            .select('*')
+            .eq('event_slug', eventSlug)
+            .maybeSingle();
+
+          if (error) throw error;
+
+          if (data) {
+            console.log("Evento detectado:", data.event_name);
+            setEventConfig(data);
+            // Si el evento tiene colores personalizados, los aplicamos al theme
+            if (data.config?.primary_color) {
+              document.documentElement.style.setProperty('--primary-color', data.config.primary_color);
+            }
+          }
+        } catch (err) {
+          console.error("Error cargando evento:", err);
+        } finally {
+          setEventLoading(false);
+        }
+      }
+    };
+
+    fetchEvent();
+  }, []);
 
   const fetchFavorites = async () => {
     try {
@@ -863,7 +908,8 @@ const App: React.FC = () => {
           aspect_ratio: formData.aspectRatio,
           user_id: session?.user?.id,
           email: session?.user?.email,
-          guest_id: `cabina_${Date.now()}`
+          guest_id: `cabina_${Date.now()}`,
+          event_id: eventConfig?.id
         }
       });
 
@@ -889,7 +935,8 @@ const App: React.FC = () => {
             taskId: taskId,
             model_id: formData.selectedIdentity,
             user_id: session?.user?.id,
-            guest_id: `cabina_${Date.now()}`
+            guest_id: `cabina_${Date.now()}`,
+            event_id: eventConfig?.id
           }
         });
 
@@ -1300,11 +1347,11 @@ const App: React.FC = () => {
           <section className="relative h-[40vh] w-full flex flex-col items-center justify-center z-10 px-4">
             <div className="text-center pointer-events-none">
               <h1 className="font-black text-[clamp(2.5rem,10vw,10rem)] leading-none tracking-tighter uppercase select-none">
-                Creativa <span className="text-white/20">Labs</span>
+                {eventConfig?.event_name || 'Creativa'} <span className="text-white/20">{eventConfig ? '' : 'Labs'}</span>
               </h1>
               <div className="mt-4 flex flex-col items-center gap-2">
                 <div className="h-[1px] w-16 bg-accent" />
-                <div className="text-[10px] tracking-[0.5rem] text-white/40 uppercase">Photo Booth Experience</div>
+                <div className="text-[10px] tracking-[0.5rem] text-white/40 uppercase">{eventConfig?.config?.welcome_text || 'Photo Booth Experience'}</div>
               </div>
             </div>
           </section>
@@ -1338,8 +1385,8 @@ const App: React.FC = () => {
             <div className="animate-[fadeIn_1s_ease-out]">
               <div className="text-center mb-16">
                 <span className="inline-block px-4 py-1 rounded-full bg-accent/10 border border-accent/20 text-accent text-[10px] font-black tracking-[3px] uppercase mb-6">Discovery</span>
-                <h2 className="text-4xl font-black tracking-tight uppercase mb-4 italic text-white">Elige tu destino</h2>
-                <p className="text-white/30 text-[10px] uppercase tracking-[4px]">Navega por los universos visuales disponibles</p>
+                <h2 className="text-4xl font-black tracking-tight uppercase mb-4 italic text-white">{eventConfig ? 'Selecciona tu Estilo' : 'Elige tu destino'}</h2>
+                <p className="text-white/30 text-[10px] uppercase tracking-[4px]">{eventConfig ? 'Personaliza tu experiencia exclusiva' : 'Navega por los universos visuales disponibles'}</p>
               </div>
 
               {/* Smart Search (Lupa) */}
@@ -1485,7 +1532,7 @@ const App: React.FC = () => {
               {/* Grouped Identities */}
               <div className="space-y-20">
                 {Array.from(new Set(
-                  mergedIdentities
+                  availableIdentities
                     .filter(id => {
                       const matchesCategory = activeCategory === 'favorites'
                         ? favorites.includes(id.id)
@@ -1535,7 +1582,7 @@ const App: React.FC = () => {
                         }
                       };
 
-                      const subCatIdentities = mergedIdentities.filter(id => {
+                      const subCatIdentities = availableIdentities.filter(id => {
                         const matchesCategory = activeCategory === 'favorites'
                           ? favorites.includes(id.id)
                           : (activeCategory === 'all' || id.category === activeCategory);
