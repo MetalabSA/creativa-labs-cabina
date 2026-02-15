@@ -87,7 +87,10 @@ serve(async (req) => {
 
         // 1. Procesar Foto del Usuario -> Subir a KIE.AI (primario) + Supabase Storage (backup)
         let publicPhotoUrl = user_photo;
+        let uploadDebugInfo = '';
         if (user_photo && user_photo.startsWith('data:image')) {
+            const b64Length = user_photo.length;
+            console.log(`[CABINA] Foto recibida: ${b64Length} chars, API Key: ${currentApiKey.substring(0, 8)}...`);
 
             // Método PRIMARIO: Uploader nativo de KIE.AI (probado y confiable)
             try {
@@ -97,15 +100,23 @@ serve(async (req) => {
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentApiKey}` },
                     body: JSON.stringify({ base64Data: user_photo, uploadPath: "images/base64", fileName: `cabina_${Date.now()}.png` })
                 });
-                const uploadData = await uploadRes.json();
-                if (uploadData.code === 200 && uploadData.data?.url) {
-                    publicPhotoUrl = uploadData.data.url;
-                    console.log("[CABINA] ✅ Foto subida via KIE.AI:", publicPhotoUrl);
-                } else {
-                    console.warn("[KIE-UPLOAD] Respuesta inesperada:", JSON.stringify(uploadData));
+                console.log(`[KIE-UPLOAD] HTTP Status: ${uploadRes.status}`);
+                const uploadText = await uploadRes.text();
+                console.log(`[KIE-UPLOAD] Response: ${uploadText.substring(0, 500)}`);
+                try {
+                    const uploadData = JSON.parse(uploadText);
+                    if (uploadData.code === 200 && uploadData.data?.url) {
+                        publicPhotoUrl = uploadData.data.url;
+                        console.log("[CABINA] ✅ Foto subida via KIE.AI:", publicPhotoUrl);
+                    } else {
+                        uploadDebugInfo += `KIE(${uploadData.code}): ${uploadData.msg || uploadData.message || 'sin detalle'}. `;
+                    }
+                } catch (parseErr) {
+                    uploadDebugInfo += `KIE: No-JSON response (HTTP ${uploadRes.status}). `;
                 }
             } catch (e) {
-                console.error("[KIE-UPLOAD] Falló uploader nativo:", e.message);
+                console.error("[KIE-UPLOAD] Excepción:", e.message);
+                uploadDebugInfo += `KIE Exception: ${e.message}. `;
             }
 
             // Método SECUNDARIO: Supabase Storage (para persistencia/backup)
@@ -122,15 +133,18 @@ serve(async (req) => {
                         console.log("[CABINA] ✅ Foto subida a Supabase Storage:", publicPhotoUrl);
                     } else {
                         console.warn("[STORAGE] Error en upload:", uploadError.message);
+                        uploadDebugInfo += `Storage: ${uploadError.message}. `;
                     }
                 } catch (e) {
-                    console.warn("[STORAGE] Falló subida a Supabase Storage:", e.message);
+                    console.warn("[STORAGE] Falló:", e.message);
+                    uploadDebugInfo += `Storage Exception: ${e.message}. `;
                 }
             }
 
             // Safety check: si después de ambos intentos sigue siendo base64, abortar
             if (publicPhotoUrl.startsWith('data:image')) {
-                throw new Error("No se pudo subir la foto a ningún servidor. Intenta de nuevo.");
+                console.error(`[CABINA] ❌ AMBOS UPLOADS FALLARON. Debug: ${uploadDebugInfo}`);
+                throw new Error(`No se pudo subir la foto. Detalles: ${uploadDebugInfo}`);
             }
         }
 
