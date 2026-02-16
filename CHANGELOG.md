@@ -2,6 +2,110 @@
 
 ---
 
+## 🗺️ PRÓXIMOS PASOS — Roadmap
+
+### Fase 2: Dashboard del Organizador (~2-3 hs)
+1. **Componente `EventDashboard.tsx`**
+   - Vista para el organizador del evento (Reseller/Cliente)
+   - Login con PIN del evento (sin Supabase Auth)
+   - Ver galería del evento en tiempo real
+   - Estadísticas: fotos generadas, créditos usados/restantes
+   - Descargar todas las fotos (ZIP)
+   - Generar/descargar QR del evento
+
+2. **Migración DB: tabla `profiles` + campos `events`**
+   ```sql
+   -- Agregar rol a profiles
+   ALTER TABLE profiles ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user';
+   -- Agregar PIN a events para acceso del organizador
+   ALTER TABLE events ADD COLUMN IF NOT EXISTS client_pin TEXT;
+   ALTER TABLE events ADD COLUMN IF NOT EXISTS client_name TEXT;
+   ALTER TABLE events ADD COLUMN IF NOT EXISTS client_email TEXT;
+   ```
+
+3. **Ruta dedicada**: `/dashboard?event=slug&pin=1234`
+
+### Fase 3: Dashboard Master (~2-3 hs)
+1. **Vista global** para Leo (Master)
+   - Listar todos los partners y sus eventos
+   - Crear/editar partners y eventos
+   - Asignar créditos a eventos
+   - Ver analytics globales
+2. **Requiere** login con Supabase Auth + verificar `is_master`
+
+### Mejoras Pendientes
+- [ ] **Branded Experience**: Colores y tipografía personalizados por evento (`eventConfig.config.theme`)
+- [ ] **Watermark**: Logo del evento en las fotos generadas
+- [ ] **Descarga Masiva**: ZIP con todas las fotos del evento
+- [ ] **Analytics**: Dashboard con estadísticas de uso
+- [ ] **Notificaciones**: Push al organizador cuando se genera una foto
+- [ ] **Compartir Galería**: URL pública de la galería del evento (sin QR)
+
+---
+
+## v3.1.0 — 16 de Febrero de 2026
+
+### 📸 Galería del Evento + WhatsApp + QR Generator
+
+---
+
+### ✅ Nuevas funcionalidades
+
+#### 📸 Galería del Evento (`EventGallery.tsx`)
+- Componente dedicado para mostrar todas las fotos generadas en un evento.
+- Grid responsive (2/3/4 columnas) con hover effects y timestamps.
+- **Auto-refresh cada 30 segundos**: las fotos aparecen solas sin recargar.
+- Stats en vivo: cantidad de fotos + créditos restantes.
+- Botón 📸 en el header del evento para acceso rápido.
+- Indicador verde parpadeante de "actualización automática".
+- Estado vacío con mensaje amigable.
+
+#### 📱 Botón Compartir WhatsApp
+- En **móviles**: Web Share API nativa → comparte la imagen real + texto personalizado.
+- En **desktop**: Abre WhatsApp Web con mensaje pre-armado (`wa.me`).
+- Color verde WhatsApp (#25D366) con icono.
+- Texto: "📸 Mi foto del evento [nombre] ✨"
+
+#### 🔗 QR Generator para Eventos (`EventQRGenerator.tsx`)
+- Modal elegante con QR apuntando a la URL del evento.
+- **Descargar PNG**: Imagen con branding completo:
+  - Nombre del evento en el header
+  - Instrucciones "Escaneá y creá tu foto con IA"
+  - QR código con logo de la app en el centro
+  - Footer "Powered by MetaLab IA"
+- **Imprimir**: Ventana de impresión lista con layout limpio.
+- Botón 🔗 en header del evento para acceso rápido.
+- Tip: "Imprimí este QR y colocalo en las mesas del evento."
+
+#### 🎯 Fix: Filtros en Modo Evento
+- **"Los Más Buscados"** se oculta en modo evento (mostraba estilos globales irrelevantes).
+- **Categorías** se filtran dinámicamente según estilos disponibles del evento.
+- **"Recomendados para vos"** muestra estilos aleatorios del evento (antes usaba IDs fijos).
+- **`topIdentities`** corregido: dependencia era `mergedIdentities`, ahora `availableIdentities`.
+
+#### 🐛 Fix: Logo roto del evento
+- Si `config.logo_url` existe pero la imagen no carga, se oculta automáticamente (`onError`).
+
+#### 🔒 RLS: Galería pública para eventos
+- Política `public_read_event_generations`: permite leer generaciones con `event_id` sin login.
+- Las fotos personales de usuarios siguen siendo privadas.
+
+```sql
+CREATE POLICY "public_read_event_generations" ON public.generations
+FOR SELECT USING (event_id IS NOT NULL);
+```
+
+### 🔧 Archivos modificados/creados
+
+| Archivo | Cambio |
+|---------|--------|
+| `App.tsx` | Import EventGallery/EventQRGenerator, appStep 'event-gallery', filtros evento, botones header, WhatsApp share |
+| `components/EventGallery.tsx` | **NUEVO** — Galería del evento con auto-refresh |
+| `components/EventQRGenerator.tsx` | **NUEVO** — QR Generator con descarga PNG e impresión |
+| Supabase DB | Política RLS `public_read_event_generations` |
+
+---
+
 ## v3.0.0 — 16 de Febrero de 2026
 
 ### 🎟️ Event Mode — "Zero Friction" para Invitados
