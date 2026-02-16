@@ -444,6 +444,7 @@ const App: React.FC = () => {
   const [notifications, setNotifications] = useState<{ id: string, message: string, type: 'success' | 'error', action?: () => void }[]>([]);
   const [backgroundJob, setBackgroundJob] = useState<{ active: boolean, id: string | null, startTime: number } | null>(null);
   const [eventConfig, setEventConfig] = useState<any>(null);
+  const [eventError, setEventError] = useState<string | null>(null);
   const [eventLoading, setEventLoading] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     return !!params.get('event'); // true si hay ?event= en la URL → evita flash de login
@@ -549,11 +550,35 @@ const App: React.FC = () => {
 
           if (data) {
             console.log("Evento detectado:", data.event_name);
+
+            // --- VALIDACIÓN DE FECHAS ---
+            const now = new Date();
+            if (data.start_date && new Date(data.start_date) > now) {
+              const startFormatted = new Date(data.start_date).toLocaleDateString('es-AR', {
+                day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
+              });
+              setEventError(`🗓️ Este evento aún no comenzó. Arranca el ${startFormatted}`);
+              return;
+            }
+            if (data.end_date && new Date(data.end_date) < now) {
+              setEventError(`🎬 Este evento ya finalizó. ¡Gracias por participar!`);
+              return;
+            }
+
+            // --- VALIDACIÓN DE CRÉDITOS ---
+            const remaining = (data.credits_allocated || 0) - (data.credits_used || 0);
+            if (remaining <= 0) {
+              setEventError(`🎟️ Los créditos de "${data.event_name}" se agotaron.`);
+              return;
+            }
+
             setEventConfig(data);
             // Si el evento tiene colores personalizados, los aplicamos al theme
             if (data.config?.primary_color) {
               document.documentElement.style.setProperty('--primary-color', data.config.primary_color);
             }
+          } else {
+            setEventError("❌ Evento no encontrado. Verificá el link.");
           }
         } catch (err) {
           console.error("Error cargando evento:", err);
@@ -1212,6 +1237,27 @@ const App: React.FC = () => {
     return (
       <div className="flex items-center justify-center min-h-screen bg-primary">
         <div className="text-white/50 text-sm animate-pulse">Cargando experiencia...</div>
+      </div>
+    );
+  }
+
+  // --- EVENT MODE: Error de validación (fechas, créditos, slug inválido) ---
+  if (eventError) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-primary">
+        <div className="text-center max-w-md mx-auto px-6">
+          <div className="text-6xl mb-6">🎭</div>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', color: 'white', marginBottom: '12px' }}>
+            Cabina de Fotos
+          </h2>
+          <p style={{ color: 'rgba(255,255,255,0.7)', fontSize: '1.1rem', lineHeight: '1.6', marginBottom: '24px' }}>
+            {eventError}
+          </p>
+          <a href="https://metalab30.com"
+            style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.8rem', textDecoration: 'underline' }}>
+            metalab30.com
+          </a>
+        </div>
       </div>
     );
   }
