@@ -862,16 +862,29 @@ const App: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.selectedIdentity || !capturedImage || !session?.user) return;
 
-    // 1. Check total credits (skip if master)
+    const isEventMode = !!eventConfig;
     const isMaster = profile?.is_master;
-    if (!isMaster && (!profile || profile.credits < 100)) {
-      if (profile && profile.total_generations >= 5) {
-        setErrorMessage("Ya gastaste tus 500 créditos.");
-      } else {
-        setErrorMessage("Saldo insuficiente.");
+
+    // Guard: necesitamos foto + estilo siempre. En modo normal, necesitamos sesión.
+    if (!formData.selectedIdentity || !capturedImage) return;
+    if (!isEventMode && !session?.user) return;
+
+    // --- VERIFICACIÓN DE CRÉDITOS ---
+    if (isEventMode) {
+      // Modo Evento: verificar créditos del evento (la deducción real es atómica en Edge Function)
+      const remaining = (eventConfig.credits_allocated || 0) - (eventConfig.credits_used || 0);
+      if (remaining <= 0) {
+        setErrorMessage("🎟️ Los créditos del evento se agotaron.");
+        setIsSuccess(true);
+        setAppStep('result');
+        return;
       }
+    } else if (!isMaster && (!profile || profile.credits < 100)) {
+      // Modo Normal: verificar créditos del usuario
+      setErrorMessage(profile && profile.total_generations >= 5
+        ? "Ya gastaste tus 500 créditos."
+        : "Saldo insuficiente.");
       setIsSuccess(true);
       setAppStep('result');
       return;
@@ -881,8 +894,8 @@ const App: React.FC = () => {
     setResultImage(null);
     setErrorMessage(null);
 
-    // 2. Check daily limit (2 per day) - Skip if Master
-    if (!isMaster) {
+    // --- LÍMITE DIARIO (solo usuarios registrados, no eventos ni masters) ---
+    if (!isEventMode && !isMaster && session?.user) {
       try {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
@@ -899,6 +912,7 @@ const App: React.FC = () => {
           setErrorMessage("Máximo de impresiones del día alcanzado.");
           setIsSuccess(true);
           setAppStep('result');
+          setIsSubmitting(false);
           return;
         }
       } catch (err) {
@@ -906,26 +920,17 @@ const App: React.FC = () => {
       }
     }
 
-    const data = new FormData();
-    data.append('user_photo', capturedImage);
-    data.append('model_id', formData.selectedIdentity);
-    data.append('aspect_ratio', formData.aspectRatio);
-    data.append('email', session.user.email);
-    data.append('user_id', session.user.id);
-    data.append('timestamp', new Date().toISOString());
-
-    // DASHBOARD UPDATE: Deduct credit before starting (unless master)
-    if (!isMaster) {
+    // --- DEDUCCIÓN DE CRÉDITOS (solo modo usuario — eventos se deducen atómicamente en Edge Function) ---
+    if (!isEventMode && !isMaster && session?.user) {
       try {
         const { error: deductError } = await supabase
           .from('profiles')
-          .update({ credits: profile.credits - 100 })
+          .update({ credits: profile!.credits - 100 })
           .eq('id', session.user.id);
         if (deductError) throw deductError;
-        // Optimization: update local state so UI reflects it immediately
         setProfile(prev => prev ? { ...prev, credits: prev.credits - 100 } : null);
       } catch (err) {
-        console.error('Error early deducting credit:', err);
+        console.error('Error deducting credit:', err);
         setErrorMessage("Error al procesar créditos. Intenta de nuevo.");
         setIsSubmitting(false);
         return;
@@ -934,21 +939,20 @@ const App: React.FC = () => {
 
     setAppStep('processing');
     try {
-      // (Nota: La Edge Function ahora hace polling interno modo fútbol)
+      // Edge Function con polling interno (modo fútbol)
       const { data: resultData, error: invokeError } = await supabase.functions.invoke('cabina-vision', {
         body: {
           user_photo: capturedImage,
           model_id: formData.selectedIdentity,
           aspect_ratio: formData.aspectRatio,
-          user_id: session?.user?.id,
-          email: session?.user?.email,
+          user_id: session?.user?.id || null,
+          email: session?.user?.email || null,
           guest_id: `cabina_${Date.now()}`,
-          event_id: eventConfig?.id
+          event_id: eventConfig?.id || null
         }
       });
 
       if (invokeError) {
-        // Estilo Fútbol: Si hay timeout, asumimos que sigue en proceso
         console.warn("Invoke error (posible timeout), modo background activado.");
         throw new Error("VAR: Se perdió la conexión, pero tu Alquimia ya está en proceso en la nube. 🇦🇷");
       }
@@ -959,13 +963,11 @@ const App: React.FC = () => {
 
       let finalResult = resultData.image_url;
 
-      // Si por alguna razón la función devolvió éxito pero no la URL todavía (timeout interno)
+      // Rescate: si la función no terminó a tiempo, mini-polling
       if (!finalResult && resultData.taskId) {
-        console.log("La función no terminó a tiempo, iniciando mini-polling de rescate...");
-        let rescueAttempts = 0;
-        while (rescueAttempts < 10) {
+        console.log("Modo rescate activado para taskId:", resultData.taskId);
+        for (let i = 0; i < 10; i++) {
           await new Promise(r => setTimeout(r, 5000));
-          rescueAttempts++;
           const { data: rescueData } = await supabase.functions.invoke('cabina-vision', {
             body: { action: 'check', taskId: resultData.taskId, model_id: formData.selectedIdentity }
           });
@@ -977,22 +979,26 @@ const App: React.FC = () => {
       }
 
       if (!finalResult) {
-        throw new Error("La IA está tardando más de lo habitual. Revisa tu historia en un minuto.");
+        throw new Error("VAR: Alquimia en proceso en la nube... ✨");
       }
 
-      // --- PASO 3: ÉXITO Y ACTUALIZACIÓN ---
+      // --- ÉXITO ---
       setResultImage(finalResult);
 
-      // Actualizar estadísticas
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({ total_generations: (profile.total_generations || 0) + 1 })
-        .eq('id', session.user.id);
+      // Actualizar estadísticas (solo usuarios con cuenta)
+      if (session?.user && profile) {
+        await supabase
+          .from('profiles')
+          .update({ total_generations: (profile.total_generations || 0) + 1 })
+          .eq('id', session.user.id);
+        fetchProfile();
+      }
 
-      if (profileError) console.error('Error updating stats:', profileError);
+      // Actualizar créditos del evento localmente
+      if (isEventMode) {
+        setEventConfig((prev: any) => prev ? { ...prev, credits_used: (prev.credits_used || 0) + 1 } : prev);
+      }
 
-      // Notificación de éxito
-      fetchProfile();
       fetchGenerations();
       setIsSuccess(true);
       setAppStep('result');
@@ -1009,14 +1015,16 @@ const App: React.FC = () => {
     } catch (error: any) {
       console.error('Submission error:', error);
 
-      // Si es un error de timeout o conexión (non-2xx), usamos mensaje amigable de "VAR"
-      const isNetworkError = error.message?.includes('non-2xx') || error.message?.includes('timeout') || error.message?.includes('Failed to fetch');
+      const isConnectionError = error.message?.includes('non-2xx') ||
+        error.message?.includes('timeout') ||
+        error.message?.includes('Failed to fetch') ||
+        error.message?.includes('VAR');
 
-      if (isNetworkError) {
+      if (isConnectionError) {
         setErrorMessage("VAR: Se perdió la conexión, pero tu Alquimia ya está en proceso en la nube. 🇦🇷✨");
       } else {
-        // REEMBOLSO: Solo si no es un error de red/timeout
-        if (!isMaster && profile) {
+        // Reembolso solo en modo usuario (no evento — el evento se deduce en Edge Function)
+        if (!isEventMode && !isMaster && profile && session?.user) {
           await supabase
             .from('profiles')
             .update({ credits: profile.credits })
@@ -1196,7 +1204,17 @@ const App: React.FC = () => {
     }
   };
 
-  if (!session) {
+  // --- EVENT MODE: Loading mientras se verifica si hay evento ---
+  if (eventLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-primary">
+        <div className="text-white/50 text-sm animate-pulse">Cargando experiencia...</div>
+      </div>
+    );
+  }
+
+  // --- AUTH GATE: bypass si estamos en modo evento ---
+  if (!session && !eventConfig) {
     return <Auth />;
   }
 
@@ -1227,31 +1245,55 @@ const App: React.FC = () => {
       <Background3D />
 
       {/* Bubble Menu */}
-      <BubbleMenu
-        user={session.user}
-        profile={profile}
-        onNavigate={(view) => {
-          if (view.startsWith('category_')) {
-            setActiveCategory(view.replace('category_', ''));
-            setAppStep('gallery');
-          } else if (view === 'favorites') {
-            setActiveCategory('favorites');
-            setAppStep('gallery');
-          } else if (view === 'admin') {
-            setShowAdmin(true);
-          } else {
-            // @ts-ignore
-            setAppStep(view);
-          }
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        }}
-        onLogout={async () => {
-          await supabase.auth.signOut();
-          window.location.href = '/';
-        }}
-        categories={CATEGORIES}
-        currentView={appStep}
-      />
+      {/* Bubble Menu - solo para usuarios con sesión */}
+      {session ? (
+        <BubbleMenu
+          user={session.user}
+          profile={profile}
+          onNavigate={(view) => {
+            if (view.startsWith('category_')) {
+              setActiveCategory(view.replace('category_', ''));
+              setAppStep('gallery');
+            } else if (view === 'favorites') {
+              setActiveCategory('favorites');
+              setAppStep('gallery');
+            } else if (view === 'admin') {
+              setShowAdmin(true);
+            } else {
+              // @ts-ignore
+              setAppStep(view);
+            }
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          onLogout={async () => {
+            await supabase.auth.signOut();
+            window.location.href = '/';
+          }}
+          categories={CATEGORIES}
+          currentView={appStep}
+        />
+      ) : eventConfig ? (
+        /* Header minimalista para invitados de evento */
+        <div className="fixed top-0 left-0 w-full z-[100] p-4">
+          <div className="max-w-md mx-auto flex items-center justify-between bg-black/30 backdrop-blur-xl rounded-2xl px-5 py-3 border border-white/10">
+            <div className="flex items-center gap-3">
+              {eventConfig.config?.logo_url && (
+                <img src={eventConfig.config.logo_url} alt="" className="w-8 h-8 rounded-full object-cover" />
+              )}
+              <div>
+                <p className="text-white text-sm font-bold">{eventConfig.event_name}</p>
+                <p className="text-white/40 text-[10px] uppercase tracking-widest">Modo Evento</p>
+              </div>
+            </div>
+            <div className="text-right">
+              <p className="text-accent text-sm font-bold">
+                {Math.max(0, (eventConfig.credits_allocated || 0) - (eventConfig.credits_used || 0))}
+              </p>
+              <p className="text-white/30 text-[9px] uppercase tracking-wider">créditos</p>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {/* Floating Notifications */}
       <div className="fixed bottom-10 right-10 z-[500] flex flex-col gap-4">

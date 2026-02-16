@@ -85,6 +85,19 @@ serve(async (req) => {
 
         // --- ACCIÓN: CREATE ---
 
+        // 0.5 DEDUCCIÓN ATÓMICA DE CRÉDITO DE EVENTO (si aplica)
+        if (event_id) {
+            const { data: creditOk, error: creditErr } = await supabase.rpc('increment_event_credit', { p_event_id: event_id });
+            if (creditErr) {
+                console.error("[EVENT-CREDIT] Error RPC:", creditErr.message);
+                throw new Error("Error al verificar créditos del evento.");
+            }
+            if (!creditOk) {
+                throw new Error("🎟️ Los créditos del evento se agotaron.");
+            }
+            console.log("[EVENT-CREDIT] ✅ Crédito deducido atómicamente del evento:", event_id);
+        }
+
         // 1. Procesar Foto del Usuario -> Subir a KIE.AI (primario) + Supabase Storage (backup)
         let publicPhotoUrl = user_photo;
         let uploadDebugInfo = '';
@@ -295,14 +308,17 @@ serve(async (req) => {
                 userName = guest_id ? `Guest_${guest_id.slice(-4)}` : 'Usuario';
             }
 
-            // Registrar generación en DB
+            // Registrar generación en DB (user_id es nullable para invitados de evento)
             supabase.from('generations').insert({
                 user_id: user_id || null,
                 style_id: model_id,
                 image_url: finalImageUrl,
                 aspect_ratio: aspect_ratio,
-                prompt: masterPrompt.substring(0, 500)
-            }).then(() => console.log("[CABINA] Registro DB OK"));
+                event_id: event_id || null
+            }).then(({ error: insertErr }) => {
+                if (insertErr) console.error("[CABINA] Error registro DB:", insertErr.message);
+                else console.log("[CABINA] Registro DB OK");
+            });
 
             // Push Notification
             if (user_id) {
