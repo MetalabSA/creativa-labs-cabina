@@ -444,7 +444,10 @@ const App: React.FC = () => {
   const [notifications, setNotifications] = useState<{ id: string, message: string, type: 'success' | 'error', action?: () => void }[]>([]);
   const [backgroundJob, setBackgroundJob] = useState<{ active: boolean, id: string | null, startTime: number } | null>(null);
   const [eventConfig, setEventConfig] = useState<any>(null);
-  const [eventLoading, setEventLoading] = useState(false);
+  const [eventLoading, setEventLoading] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return !!params.get('event'); // true si hay ?event= en la URL → evita flash de login
+  });
 
   const PREMIUM_PACK_PRICE = 3000;
 
