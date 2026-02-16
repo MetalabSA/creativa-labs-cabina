@@ -1334,7 +1334,12 @@ const App: React.FC = () => {
           <div className="max-w-md mx-auto flex items-center justify-between bg-black/30 backdrop-blur-xl rounded-2xl px-5 py-3 border border-white/10">
             <div className="flex items-center gap-3">
               {eventConfig.config?.logo_url && (
-                <img src={eventConfig.config.logo_url} alt="" className="w-8 h-8 rounded-full object-cover" />
+                <img
+                  src={eventConfig.config.logo_url}
+                  alt=""
+                  className="w-8 h-8 rounded-full object-cover"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
               )}
               <div>
                 <p className="text-white text-sm font-bold">{eventConfig.event_name}</p>
