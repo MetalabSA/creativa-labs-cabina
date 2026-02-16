@@ -11,6 +11,7 @@ import confetti from 'canvas-confetti';
 import { BubbleMenu } from './components/BubbleMenu';
 import { SettingsView } from './components/SettingsView';
 import { PacksView } from './components/PacksView';
+import { EventGallery } from './components/EventGallery';
 
 const PREFERRED_PACK_ORDER = [
   'La Ley de los Audaces',
@@ -440,7 +441,7 @@ const App: React.FC = () => {
   const [showPremiumOffer, setShowPremiumOffer] = useState(false);
   const [isUnlocking, setIsUnlocking] = useState(false);
   const [stylesMetadata, setStylesMetadata] = useState<any[]>([]);
-  const [appStep, setAppStep] = useState<'gallery' | 'setup' | 'processing' | 'result' | 'history' | 'settings' | 'packs' | 'support'>('gallery');
+  const [appStep, setAppStep] = useState<'gallery' | 'setup' | 'processing' | 'result' | 'history' | 'settings' | 'packs' | 'support' | 'event-gallery'>('gallery');
   const [notifications, setNotifications] = useState<{ id: string, message: string, type: 'success' | 'error', action?: () => void }[]>([]);
   const [backgroundJob, setBackgroundJob] = useState<{ active: boolean, id: string | null, startTime: number } | null>(null);
   const [eventConfig, setEventConfig] = useState<any>(null);
@@ -472,22 +473,28 @@ const App: React.FC = () => {
     return mergedIdentities;
   }, [mergedIdentities, eventConfig]);
 
-  // Lógica "Para Vos": Seleccionamos 4 estilos destacados (aleatorios pero consistentes por sesión)
+  // Lógica "Para Vos": Seleccionamos 4 estilos destacados
   const recommendedIdentities = React.useMemo(() => {
-    // Definimos algunos IDs que queremos que aparezcan seguro o priorizamos
+    if (eventConfig) {
+      // En modo evento: mostrar estilos aleatorios de los disponibles
+      return [...availableIdentities]
+        .sort(() => Math.random() - 0.5)
+        .slice(0, 4);
+    }
+    // Modo normal: IDs priorizados
     const priorityIds = ['jhonw_a', 'sup_a', 'pb_a', 'f1_a', 'magic_a'];
     return availableIdentities
       .filter((id: any) => priorityIds.includes(id.id))
       .sort(() => Math.random() - 0.5)
       .slice(0, 4);
-  }, [availableIdentities]);
+  }, [availableIdentities, eventConfig]);
 
   const topIdentities = React.useMemo(() => {
     return [...availableIdentities]
       .sort((a, b) => (b.usageCount || 0) - (a.usageCount || 0))
       .slice(0, 5)
       .filter(id => (id.usageCount || 0) > 0);
-  }, [mergedIdentities]);
+  }, [availableIdentities]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -1334,11 +1341,20 @@ const App: React.FC = () => {
                 <p className="text-white/40 text-[10px] uppercase tracking-widest">Modo Evento</p>
               </div>
             </div>
-            <div className="text-right">
-              <p className="text-accent text-sm font-bold">
-                {Math.max(0, (eventConfig.credits_allocated || 0) - (eventConfig.credits_used || 0))}
-              </p>
-              <p className="text-white/30 text-[9px] uppercase tracking-wider">créditos</p>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setAppStep('event-gallery')}
+                className="text-lg hover:scale-110 transition-transform"
+                title="Galería del evento"
+              >
+                📸
+              </button>
+              <div className="text-right">
+                <p className="text-accent text-sm font-bold">
+                  {Math.max(0, (eventConfig.credits_allocated || 0) - (eventConfig.credits_used || 0))}
+                </p>
+                <p className="text-white/30 text-[9px] uppercase tracking-wider">créditos</p>
+              </div>
             </div>
           </div>
         </div>
@@ -1578,7 +1594,7 @@ const App: React.FC = () => {
               )}
 
               {/* Top 5 Most Used Styles */}
-              {!searchQuery && topIdentities.length > 0 && (
+              {!searchQuery && !eventConfig && topIdentities.length > 0 && (
                 <div className="mb-20 animate-[fadeIn_1.2s_ease-out]">
                   <div className="flex items-center justify-center gap-4 mb-10">
                     <div className="h-[1px] w-12 bg-gradient-to-r from-transparent to-accent" />
@@ -1623,7 +1639,10 @@ const App: React.FC = () => {
 
               {/* Category Selector */}
               <div className="flex flex-wrap justify-center gap-4 mb-16">
-                {CATEGORIES.map((cat) => (
+                {(eventConfig
+                  ? CATEGORIES.filter(cat => cat.id === 'all' || availableIdentities.some((id: any) => id.category === cat.id))
+                  : CATEGORIES
+                ).map((cat) => (
                   <button
                     key={cat.id}
                     onClick={() => setActiveCategory(cat.id)}
@@ -1961,20 +1980,62 @@ const App: React.FC = () => {
                       <span className="text-xs font-black tracking-[2px] uppercase">Imprimir</span>
                     </button>
                     <button
-                      onClick={() => setShowQR(true)}
-                      className="group flex items-center gap-3 px-8 py-4 bg-white/10 text-white border border-white/10 rounded-xl hover:bg-white/20 transition-all shadow-lg"
-                    >
-                      <QrCode className="w-5 h-5 text-accent" />
-                      <span className="text-xs font-black tracking-[2px] uppercase">Generar QR</span>
-                    </button>
-                    <button
                       onClick={handleDownload}
                       className="group flex items-center gap-3 px-8 py-4 bg-white/10 text-white border border-white/10 rounded-xl hover:bg-white/20 transition-all shadow-lg"
                     >
                       <Download className="w-5 h-5 text-accent" />
                       <span className="text-xs font-black tracking-[2px] uppercase">Descargar</span>
                     </button>
+                    <button
+                      onClick={async () => {
+                        if (!resultImage) return;
+                        try {
+                          const response = await fetch(resultImage, { mode: 'cors' });
+                          const blob = await response.blob();
+                          const file = new File([blob], `creativa-${Date.now()}.png`, { type: 'image/png' });
+                          if (navigator.share && navigator.canShare?.({ files: [file] })) {
+                            await navigator.share({
+                              files: [file],
+                              title: eventConfig?.event_name || 'Mi Foto Creativa',
+                              text: eventConfig
+                                ? `📸 Mi foto del evento ${eventConfig.event_name} ✨ Creada con IA por metalab30.com`
+                                : '📸 ¡Mi foto generada con IA! ✨ metalab30.com'
+                            });
+                          } else {
+                            // Fallback desktop: abrir WhatsApp web
+                            const text = encodeURIComponent(
+                              eventConfig
+                                ? `📸 ¡Mirá mi foto del evento ${eventConfig.event_name}! ✨ Creada con IA por metalab30.com`
+                                : '📸 ¡Mirá mi foto generada con IA! ✨ metalab30.com'
+                            );
+                            window.open(`https://wa.me/?text=${text}`, '_blank');
+                          }
+                        } catch (err: any) {
+                          if (err.name !== 'AbortError') {
+                            const text = encodeURIComponent('📸 ¡Mirá mi foto generada con IA! ✨ metalab30.com');
+                            window.open(`https://wa.me/?text=${text}`, '_blank');
+                          }
+                        }
+                      }}
+                      className="group flex items-center gap-3 px-8 py-4 bg-[#25D366]/20 text-[#25D366] border border-[#25D366]/30 rounded-xl hover:bg-[#25D366]/30 transition-all shadow-lg"
+                    >
+                      <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />
+                      </svg>
+                      <span className="text-xs font-black tracking-[2px] uppercase">Compartir</span>
+                    </button>
                   </div>
+
+                  {/* Botón Galería del Evento - solo en modo evento */}
+                  {eventConfig && (
+                    <button
+                      onClick={() => { setAppStep('event-gallery'); }}
+                      className="mt-6 flex items-center gap-2 px-6 py-3 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all text-white/60 hover:text-white mx-auto"
+                    >
+                      <span className="text-lg">📸</span>
+                      <span className="text-[10px] font-bold tracking-[2px] uppercase">Ver galería del evento</span>
+                    </button>
+                  )}
                 </>
               ) : (
                 <>
@@ -2068,7 +2129,20 @@ const App: React.FC = () => {
             </div>
           )}
 
-
+          {/* EVENT GALLERY VIEW */}
+          {appStep === 'event-gallery' && eventConfig && (
+            <EventGallery
+              eventConfig={eventConfig}
+              supabase={supabase}
+              onBack={() => setAppStep('gallery')}
+              onViewPhoto={(url: string) => {
+                setResultImage(url);
+                setIsSuccess(true);
+                setAppStep('result');
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+            />
+          )}
           {/* SETTINGS VIEW */}
           {appStep === 'settings' && (
             <SettingsView
