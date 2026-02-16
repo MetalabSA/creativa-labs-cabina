@@ -12,6 +12,7 @@ import { BubbleMenu } from './components/BubbleMenu';
 import { SettingsView } from './components/SettingsView';
 import { PacksView } from './components/PacksView';
 import { EventGallery } from './components/EventGallery';
+import { EventQRGenerator } from './components/EventQRGenerator';
 
 const PREFERRED_PACK_ORDER = [
   'La Ley de los Audaces',
@@ -415,6 +416,7 @@ const App: React.FC = () => {
   const [isCapturing, setIsCapturing] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [showQR, setShowQR] = useState(false);
+  const [showEventQR, setShowEventQR] = useState(false);
 
   // New state variables for webhook response
   const [resultImage, setResultImage] = useState<string | null>(null);
@@ -1347,6 +1349,13 @@ const App: React.FC = () => {
               </div>
             </div>
             <div className="flex items-center gap-3">
+              <button
+                onClick={() => setShowEventQR(true)}
+                className="text-lg hover:scale-110 transition-transform"
+                title="QR del evento"
+              >
+                🔗
+              </button>
               <button
                 onClick={() => setAppStep('event-gallery')}
                 className="text-lg hover:scale-110 transition-transform"
@@ -2290,6 +2299,14 @@ const App: React.FC = () => {
           </div>
         )
       }
+
+      {/* Modal QR del Evento */}
+      {showEventQR && eventConfig && (
+        <EventQRGenerator
+          eventConfig={eventConfig}
+          onClose={() => setShowEventQR(false)}
+        />
+      )}
 
       {/* Modal de Precios */}
       {
