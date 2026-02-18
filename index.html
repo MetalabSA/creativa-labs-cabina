@@ -43,8 +43,8 @@
           },
           colors: {
             primary: '#050505',
-            accent: '#ff5500',
-            'accent-glow': 'rgba(255, 85, 0, 0.4)',
+            accent: 'var(--accent-color, #ff5500)',
+            'accent-glow': 'var(--accent-glow, rgba(255, 85, 0, 0.4))',
             glass: 'rgba(20, 20, 25, 0.4)',
             'glass-border': 'rgba(255, 255, 255, 0.15)',
           },
@@ -57,6 +57,11 @@
     }
   </script>
   <style>
+    :root {
+      --accent-color: #ff5500;
+      --accent-glow: rgba(255, 85, 0, 0.4);
+    }
+
     body {
       background-color: #050505;
       overflow-x: hidden;
@@ -99,7 +104,7 @@
     }
 
     ::-webkit-scrollbar-thumb:hover {
-      background: #ff5500;
+      background: var(--accent-color);
     }
   </style>
   <link rel="stylesheet" href="./index.css">

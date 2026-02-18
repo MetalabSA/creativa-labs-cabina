@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Menu, X, User, Shield, LayoutGrid, Heart, History,
-    ShoppingBag, Settings, HelpCircle, LogOut, ChevronDown, Sparkles
+    ShoppingBag, Settings, HelpCircle, LogOut, ChevronDown, Sparkles,
+    QrCode, Share2
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -13,6 +14,7 @@ interface BubbleMenuProps {
     onLogout: () => void;
     categories: { id: string, label: string }[];
     currentView: string;
+    eventConfig?: any;
 }
 
 export const BubbleMenu: React.FC<BubbleMenuProps> = ({
@@ -21,7 +23,8 @@ export const BubbleMenu: React.FC<BubbleMenuProps> = ({
     onNavigate,
     onLogout,
     categories,
-    currentView
+    currentView,
+    eventConfig
 }) => {
     const [isOpen, setIsOpen] = useState(false);
     const [showCategories, setShowCategories] = useState(false);
@@ -64,9 +67,14 @@ export const BubbleMenu: React.FC<BubbleMenuProps> = ({
                                 {/* Collapsed Info - Only show when closed */}
                                 {!isOpen && (
                                     <div className="flex flex-col pr-4 cursor-pointer" onClick={toggleMenu}>
-                                        <span className="text-[10px] uppercase font-bold text-white/50 tracking-wider">Créditos</span>
+                                        <span className="text-[10px] uppercase font-bold text-white/50 tracking-wider">
+                                            {eventConfig ? 'Event Credits' : 'Créditos'}
+                                        </span>
                                         <span className="text-sm font-black text-white leading-none">
-                                            {profile?.is_master ? '∞' : profile?.credits || 0}
+                                            {eventConfig
+                                                ? Math.max(0, (eventConfig.credits_allocated || 0) - (eventConfig.credits_used || 0))
+                                                : profile?.is_master ? '∞' : profile?.credits || 0
+                                            }
                                         </span>
                                     </div>
                                 )}
@@ -74,9 +82,14 @@ export const BubbleMenu: React.FC<BubbleMenuProps> = ({
                                 {/* Expanded User Info */}
                                 {isOpen && (
                                     <div className="flex flex-col">
-                                        <span className="text- font-bold text-white leading-tight">Hola, {user.email?.split('@')[0]}</span>
+                                        <span className="text-sm font-bold text-white leading-tight">
+                                            {eventConfig ? eventConfig.event_name : (user ? `Hola, ${user.email?.split('@')[0]}` : 'Invitado')}
+                                        </span>
                                         <span className="text-[10px] text-accent font-black uppercase tracking-wider">
-                                            {profile?.is_master ? 'Master Admin' : `${profile?.credits} Créditos`}
+                                            {eventConfig
+                                                ? `${Math.max(0, (eventConfig.credits_allocated || 0) - (eventConfig.credits_used || 0))} Disponibles`
+                                                : (profile?.is_master ? 'Master Admin' : `${profile?.credits || 0} Créditos`)
+                                            }
                                         </span>
                                     </div>
                                 )}
@@ -144,33 +157,55 @@ export const BubbleMenu: React.FC<BubbleMenuProps> = ({
                                                                     onClick={() => handleNav(`category_${cat.id}`)}
                                                                 />
                                                             ))}
-                                                            <div className="h-px bg-white/10 my-1" />
-                                                            <SubMenuItem
-                                                                label="Mis Favoritos"
-                                                                icon={Heart}
-                                                                onClick={() => handleNav('favorites')}
-                                                                className="text-pink-400 hover:text-pink-300"
-                                                            />
-                                                            <SubMenuItem
-                                                                label="Mis Fotos"
-                                                                icon={History}
-                                                                onClick={() => handleNav('history')}
-                                                                className="text-blue-400 hover:text-blue-300"
-                                                            />
+                                                            {!eventConfig && (
+                                                                <>
+                                                                    <div className="h-px bg-white/10 my-1" />
+                                                                    <SubMenuItem
+                                                                        label="Mis Favoritos"
+                                                                        icon={Heart}
+                                                                        onClick={() => handleNav('favorites')}
+                                                                        className="text-pink-400 hover:text-pink-300"
+                                                                    />
+                                                                    <SubMenuItem
+                                                                        label="Mis Fotos"
+                                                                        icon={History}
+                                                                        onClick={() => handleNav('history')}
+                                                                        className="text-blue-400 hover:text-blue-300"
+                                                                    />
+                                                                </>
+                                                            )}
                                                         </div>
                                                     </motion.div>
                                                 )}
                                             </AnimatePresence>
                                         </div>
 
+                                        {/* Event Specific Menu Items */}
+                                        {eventConfig && (
+                                            <>
+                                                <MenuItem
+                                                    icon={History}
+                                                    label="Galería del Evento"
+                                                    onClick={() => handleNav('event-gallery')}
+                                                    active={currentView === 'event-gallery'}
+                                                    highlight
+                                                />
+                                                <MenuItem
+                                                    icon={QrCode}
+                                                    label="Compartir Evento"
+                                                    onClick={() => handleNav('show-qr')}
+                                                />
+                                            </>
+                                        )}
 
-
-                                        <MenuItem
-                                            icon={Sparkles}
-                                            label="Comprar Créditos"
-                                            onClick={() => handleNav('buy_credits')}
-                                            highlight={true}
-                                        />
+                                        {!eventConfig && (
+                                            <MenuItem
+                                                icon={Sparkles}
+                                                label="Comprar Créditos"
+                                                onClick={() => handleNav('buy_credits')}
+                                                highlight={true}
+                                            />
+                                        )}
 
                                         <MenuItem
                                             icon={ShoppingBag}
@@ -179,12 +214,24 @@ export const BubbleMenu: React.FC<BubbleMenuProps> = ({
                                             active={currentView === 'packs'}
                                         />
 
-                                        <MenuItem
-                                            icon={Settings}
-                                            label="Ajustes"
-                                            onClick={() => handleNav('settings')}
-                                            active={currentView === 'settings'}
-                                        />
+                                        {!eventConfig && (
+                                            <MenuItem
+                                                icon={Settings}
+                                                label="Ajustes"
+                                                onClick={() => handleNav('settings')}
+                                                active={currentView === 'settings'}
+                                            />
+                                        )}
+
+                                        {(profile?.is_master || profile?.role === 'partner') && (
+                                            <MenuItem
+                                                icon={Shield}
+                                                label="Administración"
+                                                onClick={() => handleNav('admin')}
+                                                active={currentView === 'admin'}
+                                                highlight
+                                            />
+                                        )}
 
                                         <MenuItem
                                             icon={HelpCircle}
@@ -193,15 +240,18 @@ export const BubbleMenu: React.FC<BubbleMenuProps> = ({
                                             active={currentView === 'support'}
                                         />
 
-                                        <div className="h-px bg-white/10 my-2" />
-
-                                        <button
-                                            onClick={onLogout}
-                                            className="w-full flex items-center gap-3 p-3 rounded-xl text-sm font-medium text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors"
-                                        >
-                                            <LogOut className="w-4 h-4" />
-                                            <span>Cerrar Sesión</span>
-                                        </button>
+                                        {user && (
+                                            <>
+                                                <div className="h-px bg-white/10 my-2" />
+                                                <button
+                                                    onClick={onLogout}
+                                                    className="w-full flex items-center gap-3 p-3 rounded-xl text-sm font-medium text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-colors"
+                                                >
+                                                    <LogOut className="w-4 h-4" />
+                                                    <span>Cerrar Sesión</span>
+                                                </button>
+                                            </>
+                                        )}
 
                                     </div>
                                 </motion.div>

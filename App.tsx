@@ -5,6 +5,7 @@ import Background3D from './components/Background3D';
 import UploadCard from './components/UploadCard';
 import { Auth } from './components/Auth';
 import { Admin } from './components/Admin';
+import { PartnerDashboard } from './components/PartnerDashboard';
 import { supabase } from './lib/supabaseClient';
 import { FormState } from './types';
 import confetti from 'canvas-confetti';
@@ -13,6 +14,14 @@ import { SettingsView } from './components/SettingsView';
 import { PacksView } from './components/PacksView';
 import { EventGallery } from './components/EventGallery';
 import { EventQRGenerator } from './components/EventQRGenerator';
+
+const hexToRgba = (hex: string, alpha: number) => {
+  if (!hex || hex[0] !== '#') return `rgba(255, 85, 0, ${alpha})`;
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
 
 const PREFERRED_PACK_ORDER = [
   'La Ley de los Audaces',
@@ -582,10 +591,6 @@ const App: React.FC = () => {
             }
 
             setEventConfig(data);
-            // Si el evento tiene colores personalizados, los aplicamos al theme
-            if (data.config?.primary_color) {
-              document.documentElement.style.setProperty('--primary-color', data.config.primary_color);
-            }
           } else {
             setEventError("❌ Evento no encontrado. Verificá el link.");
           }
@@ -598,9 +603,27 @@ const App: React.FC = () => {
     };
 
     fetchEvent();
-  }, []);
+  }, [session]);
+
+  // --- APLICADOR DE BRANDING (MARCA BLANCA) ---
+  useEffect(() => {
+    if (eventConfig?.config?.primary_color) {
+      const primary = eventConfig.config.primary_color;
+      const glow = hexToRgba(primary, 0.4);
+
+      document.documentElement.style.setProperty('--accent-color', primary);
+      document.documentElement.style.setProperty('--accent-glow', glow);
+
+      console.log("🎨 Branding aplicado:", primary);
+    } else {
+      // Reset a valores por defecto si no hay evento o no hay color
+      document.documentElement.style.setProperty('--accent-color', '#ff5500');
+      document.documentElement.style.setProperty('--accent-glow', 'rgba(255, 85, 0, 0.4)');
+    }
+  }, [eventConfig]);
 
   const fetchFavorites = async () => {
+    if (!session?.user) return;
     try {
       setLoadingFavorites(true);
       const { data, error } = await supabase
@@ -635,6 +658,30 @@ const App: React.FC = () => {
     }
   };
 
+  // Dynamic Coloring Effect
+  useEffect(() => {
+    const primaryColor = eventConfig?.partner?.config?.primary_color || profile?.partner?.config?.primary_color || '#ff5500';
+
+    // Convert hex to semi-transparent glow
+    const hexToRgba = (hex: string, alpha: number) => {
+      const r = parseInt(hex.slice(1, 4).length === 2 ? hex.slice(1, 3) : hex.slice(1, 3), 16); // basic hex parser
+      // For robustness, handle different hex formats if needed, but let's keep it simple for now
+      const hr = parseInt(hex.substring(1, 3), 16);
+      const hg = parseInt(hex.substring(3, 5), 16);
+      const hb = parseInt(hex.substring(5, 7), 16);
+      return `rgba(${hr}, ${hg}, ${hb}, ${alpha})`;
+    };
+
+    try {
+      const glowColor = hexToRgba(primaryColor, 0.4);
+      document.documentElement.style.setProperty('--accent-color', primaryColor);
+      document.documentElement.style.setProperty('--accent-glow', glowColor);
+    } catch (e) {
+      console.error('Error applying dynamic colors:', e);
+    }
+  }, [eventConfig, profile]);
+
+
   const fetchStylesMetadata = async () => {
     try {
       const { data, error } = await supabase
@@ -652,7 +699,7 @@ const App: React.FC = () => {
       setLoadingProfile(true);
       const { data, error } = await supabase
         .from('profiles')
-        .select('credits, total_generations, is_master, unlocked_packs, full_name')
+        .select('credits, total_generations, is_master, role, partner_id, unlocked_packs, full_name')
         .eq('id', session.user.id)
         .single();
 
@@ -1276,24 +1323,35 @@ const App: React.FC = () => {
     return <Auth />;
   }
 
-  if (showAdmin && profile?.is_master) {
+  if (showAdmin && (profile?.is_master || profile?.role === 'partner')) {
     return (
       <div className="relative w-full min-h-screen bg-primary z-[200]">
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[-1]" />
-        <div className="fixed top-0 left-0 w-full z-[250] p-6">
-          <div className="max-w-[1400px] mx-auto flex justify-end items-center">
-            <button
-              onClick={() => setShowAdmin(false)}
-              className="flex items-center gap-3 px-6 py-3 rounded-full bg-accent text-white border border-accent shadow-lg shadow-accent/20"
-            >
-              <Shield className="w-4 h-4" />
-              <span className="text-[10px] font-black uppercase tracking-[2px]">Volver a la App</span>
-            </button>
-          </div>
-        </div>
-        <div className="relative z-[210]">
-          <Admin onBack={() => setShowAdmin(false)} IDENTITIES={mergedIdentities} />
-        </div>
+
+        {profile?.is_master && profile?.role !== 'partner' ? (
+          <>
+            <div className="fixed top-0 left-0 w-full z-[250] p-6">
+              <div className="max-w-[1400px] mx-auto flex justify-end items-center">
+                <button
+                  onClick={() => setShowAdmin(false)}
+                  className="flex items-center gap-3 px-6 py-3 rounded-full bg-accent text-white border border-accent shadow-lg shadow-accent/20"
+                >
+                  <Shield className="w-4 h-4" />
+                  <span className="text-[10px] font-black uppercase tracking-[2px]">Volver a la App</span>
+                </button>
+              </div>
+            </div>
+            <div className="relative z-[210]">
+              <Admin onBack={() => setShowAdmin(false)} IDENTITIES={mergedIdentities} />
+            </div>
+          </>
+        ) : (
+          <PartnerDashboard
+            user={session?.user}
+            profile={profile}
+            onBack={() => setShowAdmin(false)}
+          />
+        )}
       </div>
     );
   }
@@ -1303,11 +1361,12 @@ const App: React.FC = () => {
       <Background3D />
 
       {/* Bubble Menu */}
-      {/* Bubble Menu - solo para usuarios con sesión */}
-      {session ? (
+      {/* Bubble Menu - para usuarios con sesión O en modo evento */}
+      {(session || eventConfig) ? (
         <BubbleMenu
-          user={session.user}
+          user={session?.user || null}
           profile={profile}
+          eventConfig={eventConfig}
           onNavigate={(view) => {
             if (view.startsWith('category_')) {
               setActiveCategory(view.replace('category_', ''));
@@ -1319,6 +1378,8 @@ const App: React.FC = () => {
               setShowAdmin(true);
             } else if (view === 'buy_credits') {
               setShowPricing(true);
+            } else if (view === 'show-qr') {
+              setShowEventQR(true);
             } else {
               // @ts-ignore
               setAppStep(view);
@@ -1332,48 +1393,6 @@ const App: React.FC = () => {
           categories={CATEGORIES}
           currentView={appStep}
         />
-      ) : eventConfig ? (
-        /* Header minimalista para invitados de evento */
-        <div className="fixed top-0 left-0 w-full z-[100] p-4">
-          <div className="max-w-md mx-auto flex items-center justify-between bg-black/30 backdrop-blur-xl rounded-2xl px-5 py-3 border border-white/10">
-            <div className="flex items-center gap-3">
-              {eventConfig.config?.logo_url && (
-                <img
-                  src={eventConfig.config.logo_url}
-                  alt=""
-                  className="w-8 h-8 rounded-full object-cover"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                />
-              )}
-              <div>
-                <p className="text-white text-sm font-bold">{eventConfig.event_name}</p>
-                <p className="text-white/40 text-[10px] uppercase tracking-widest">Modo Evento</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setShowEventQR(true)}
-                className="text-lg hover:scale-110 transition-transform"
-                title="QR del evento"
-              >
-                🔗
-              </button>
-              <button
-                onClick={() => setAppStep('event-gallery')}
-                className="text-lg hover:scale-110 transition-transform"
-                title="Galería del evento"
-              >
-                📸
-              </button>
-              <div className="text-right">
-                <p className="text-accent text-sm font-bold">
-                  {Math.max(0, (eventConfig.credits_allocated || 0) - (eventConfig.credits_used || 0))}
-                </p>
-                <p className="text-white/30 text-[9px] uppercase tracking-wider">créditos</p>
-              </div>
-            </div>
-          </div>
-        </div>
       ) : null}
 
       {/* Floating Notifications */}
@@ -1540,6 +1559,16 @@ const App: React.FC = () => {
                 <span className="inline-block px-4 py-1 rounded-full bg-accent/10 border border-accent/20 text-accent text-[10px] font-black tracking-[3px] uppercase mb-6">Discovery</span>
                 <h2 className="text-4xl font-black tracking-tight uppercase mb-4 italic text-white">{eventConfig ? 'Selecciona tu Estilo' : 'Elige tu destino'}</h2>
                 <p className="text-white/30 text-[10px] uppercase tracking-[4px]">{eventConfig ? 'Personaliza tu experiencia exclusiva' : 'Navega por los universos visuales disponibles'}</p>
+
+                {eventConfig && (
+                  <button
+                    onClick={() => setAppStep('event-gallery')}
+                    className="mt-8 inline-flex items-center gap-2 px-6 py-3 bg-white/5 border border-white/10 rounded-2xl hover:bg-white/10 transition-all text-white/40 hover:text-white text-[10px] font-black tracking-[2px] uppercase blur-none"
+                  >
+                    <LucideHistory className="w-4 h-4" />
+                    <span>Ver Galería del Evento</span>
+                  </button>
+                )}
               </div>
 
               {/* Smart Search (Lupa) */}
@@ -1672,17 +1701,18 @@ const App: React.FC = () => {
                   </button>
                 ))}
 
-                {/* Favorites Tab */}
-                <button
-                  onClick={() => setActiveCategory('favorites')}
-                  className={`flex items-center gap-3 px-8 py-4 rounded-2xl border-2 transition-all duration-500
-                      ${activeCategory === 'favorites'
-                      ? 'bg-gradient-to-r from-pink-500 to-rose-500 border-pink-500 text-white shadow-[0_0_30px_rgba(244,63,94,0.3)] scale-105'
-                      : 'bg-white/5 border-white/5 text-white/40 hover:text-pink-400 hover:border-pink-500/30'}`}
-                >
-                  <Heart className={`w-5 h-5 ${activeCategory === 'favorites' ? 'fill-current animate-pulse' : ''}`} />
-                  <span className="font-black tracking-[2px] uppercase text-xs">Favoritos</span>
-                </button>
+                {!eventConfig && (
+                  <button
+                    onClick={() => setActiveCategory('favorites')}
+                    className={`flex items-center gap-3 px-8 py-4 rounded-2xl border-2 transition-all duration-500
+                        ${activeCategory === 'favorites'
+                        ? 'bg-gradient-to-r from-pink-500 to-rose-500 border-pink-500 text-white shadow-[0_0_30px_rgba(244,63,94,0.3)] scale-105'
+                        : 'bg-white/5 border-white/5 text-white/40 hover:text-pink-400 hover:border-pink-500/30'}`}
+                  >
+                    <Heart className={`w-5 h-5 ${activeCategory === 'favorites' ? 'fill-current animate-pulse' : ''}`} />
+                    <span className="font-black tracking-[2px] uppercase text-xs">Favoritos</span>
+                  </button>
+                )}
               </div>
 
               {/* Grouped Identities */}
