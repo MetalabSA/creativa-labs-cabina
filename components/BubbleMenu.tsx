@@ -168,7 +168,7 @@ export const BubbleMenu: React.FC<BubbleMenuProps> = ({
                                         <MenuItem
                                             icon={Sparkles}
                                             label="Comprar Créditos"
-                                            onClick={() => handleNav('packs')}
+                                            onClick={() => handleNav('buy_credits')}
                                             highlight={true}
                                         />
 

@@ -1317,6 +1317,8 @@ const App: React.FC = () => {
               setAppStep('gallery');
             } else if (view === 'admin') {
               setShowAdmin(true);
+            } else if (view === 'buy_credits') {
+              setShowPricing(true);
             } else {
               // @ts-ignore
               setAppStep(view);
