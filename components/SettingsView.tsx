@@ -101,14 +101,14 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ profile, session, on
                         </div>
                     </div>
 
-                    {!profile?.is_master && (
-                        <button
-                            onClick={onAddCredits}
-                            className="mt-6 w-full bg-white text-black font-black uppercase tracking-widest py-3 rounded-xl hover:bg-accent hover:text-white transition-all duration-300"
-                        >
-                            Cargar Más Créditos
-                        </button>
-                    )}
+                    {/* {!profile?.is_master && ( */}
+                    <button
+                        onClick={onAddCredits}
+                        className="mt-6 w-full bg-white text-black font-black uppercase tracking-widest py-3 rounded-xl hover:bg-accent hover:text-white transition-all duration-300"
+                    >
+                        Cargar Más Créditos
+                    </button>
+                    {/* )} */}
                 </div>
             </div>
         </div>
