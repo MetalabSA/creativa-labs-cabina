@@ -163,6 +163,15 @@ export const BubbleMenu: React.FC<BubbleMenuProps> = ({
                                             </AnimatePresence>
                                         </div>
 
+
+
+                                        <MenuItem
+                                            icon={Sparkles}
+                                            label="Comprar Créditos"
+                                            onClick={() => handleNav('packs')}
+                                            highlight={true}
+                                        />
+
                                         <MenuItem
                                             icon={ShoppingBag}
                                             label="Packs"
@@ -199,8 +208,8 @@ export const BubbleMenu: React.FC<BubbleMenuProps> = ({
                             )}
                         </AnimatePresence>
                     </motion.div>
-                </div>
-            </div>
+                </div >
+            </div >
         </>
     );
 };
