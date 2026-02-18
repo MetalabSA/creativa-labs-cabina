@@ -4,42 +4,63 @@
 
 ## 🗺️ PRÓXIMOS PASOS — Roadmap
 
-### Fase 2: Dashboard del Organizador (~2-3 hs)
-1. **Componente `EventDashboard.tsx`**
-   - Vista para el organizador del evento (Reseller/Cliente)
-   - Login con PIN del evento (sin Supabase Auth)
-   - Ver galería del evento en tiempo real
-   - Estadísticas: fotos generadas, créditos usados/restantes
-   - Descargar todas las fotos (ZIP)
-   - Generar/descargar QR del evento
+### Fase 2: Dashboard del Organizador ✅ / 🔄
+1. **Componente `PartnerDashboard.tsx`** ✅
+   - Vista para el revendedor (Partner)
+   - Resumen de créditos, eventos activos y fotos generadas
+   - Crear eventos nuevos asignando slug y créditos
+   - Ver/Editar SUS propios eventos
+2. **Marca Blanca (Branding) Dinámico** ✅
+   - Colores y glow dinámico por socio/evento (`--accent-color`)
+   - Logo dinámico en el menú
+3. **Migración DB: tabla `profiles` + campos `partners`** ✅
+   - `role` ('master', 'partner', 'user') y `partner_id` en `profiles`
 
-2. **Migración DB: tabla `profiles` + campos `events`**
-   ```sql
-   -- Agregar rol a profiles
-   ALTER TABLE profiles ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'user';
-   -- Agregar PIN a events para acceso del organizador
-   ALTER TABLE events ADD COLUMN IF NOT EXISTS client_pin TEXT;
-   ALTER TABLE events ADD COLUMN IF NOT EXISTS client_name TEXT;
-   ALTER TABLE events ADD COLUMN IF NOT EXISTS client_email TEXT;
-   ```
-
-3. **Ruta dedicada**: `/dashboard?event=slug&pin=1234`
-
-### Fase 3: Dashboard Master (~2-3 hs)
+### Fase 3: Dashboard Master (Ojo de Águila) 🔄
 1. **Vista global** para Leo (Master)
    - Listar todos los partners y sus eventos
-   - Crear/editar partners y eventos
-   - Asignar créditos a eventos
-   - Ver analytics globales
+   - Crear/editar partners y eventos globales
+   - Ver analytics consolidados de toda la plataforma
 2. **Requiere** login con Supabase Auth + verificar `is_master`
 
-### Mejoras Pendientes
-- [ ] **Branded Experience**: Colores y tipografía personalizados por evento (`eventConfig.config.theme`)
-- [ ] **Watermark**: Logo del evento en las fotos generadas
-- [ ] **Descarga Masiva**: ZIP con todas las fotos del evento
-- [ ] **Analytics**: Dashboard con estadísticas de uso
-- [ ] **Notificaciones**: Push al organizador cuando se genera una foto
-- [ ] **Compartir Galería**: URL pública de la galería del evento (sin QR)
+---
+
+## v3.2.0 — 18 de Febrero de 2026
+
+### 🏢 Partner Dashboard + Marca Blanca (White Label)
+
+---
+
+### ✅ Nuevas funcionalidades
+
+#### 🏢 Panel Partner (`PartnerDashboard.tsx`)
+- **Gestión Autónoma**: Los socios ahora pueden crear sus propios eventos sin intervención manual.
+- **Bolsa de Créditos**: Monitoreo de créditos totales, usados y disponibles del partner.
+- **CRUD de Eventos**:
+    - Modal de creación elegante con validación de slug.
+    - Listado de eventos con barras de progreso de consumo de créditos.
+    - Acceso rápido a las URLs de los eventos mediante `ExternalLink`.
+- **Modo Tablet/Desktop**: Diseño optimizado para pantallas grandes para facilitar la gestión.
+
+#### 🎨 Marca Blanca Dinámica (Dynamic UI)
+- **Primary Color Variable**: La app ahora inyecta variables CSS (`--accent-color`, `--accent-glow`) basadas en la configuración del socio o evento.
+- **White Label**: Si el socio cambia su color en su dashboard, todos sus eventos y su panel cambian de color automáticamente.
+- **Filtro de Logotipos**: Los logos de los clientes se muestran dinámicamente en el menú circular si están configurados en Supabase.
+
+#### 🚦 Navegación por Roles
+- Se ha unificado el acceso en el `BubbleMenu`:
+    - **Súper Admin**: Entra al Panel Master ("Ojo de Águila").
+    - **Partners**: Entran directo a su Panel Partner.
+    - **Usuarios**: Siguen con el flujo normal de la App.
+
+### 🔧 Archivos modificados/creados
+
+| Archivo | Cambio |
+|---------|--------|
+| `App.tsx` | Enrutamiento de administración por roles, efecto de colores dinámicos, import `PartnerDashboard` |
+| `components/PartnerDashboard.tsx` | **NUEVO** — Interfaz de administración para socios |
+| `components/BubbleMenu.tsx` | Acceso condicional a "Administración" para roles master/partner |
+| `index.html` | Definición de variables CSS para el sistema de Marca Blanca |
 
 ---
 

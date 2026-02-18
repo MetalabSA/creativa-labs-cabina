@@ -35,8 +35,8 @@ Cliente configura su evento → Invitados generan fotos (sin login)
 - **Monetización**: Venta de paquetes de créditos a revendedores
 - **Auth**: NO requerido para invitados (Zero Friction)
 - **Créditos**: Se deducen del `events.credits_allocated` (atómico)
-- **Dashboard**: 3 dashboards diferenciados (ver abajo)
-- **Estado**: 🟡 FASE 1 EN DESARROLLO
+- **Dashboard**: 3 dashboards diferenciados (Master, Partner, Cliente)
+- **Estado**: ✅ FASE 1 Y 2 COMPLETADAS
 
 ---
 
@@ -139,7 +139,7 @@ generations
 ### Columnas a agregar (futuro — Fase 2/3)
 
 ```sql
--- En profiles: rol del usuario
+-- En profiles: rol del usuario (YA IMPLEMENTADO)
 ALTER TABLE profiles ADD COLUMN role text DEFAULT 'user';
 -- Valores: 'master', 'partner', 'client', 'user'
 
@@ -192,20 +192,19 @@ Revendedor → Compra créditos al Master
 
 ## 📅 Fases de Desarrollo
 
-### Fase 1 — Lógica del Evento ✅ / 🔄
+### Fase 1 — Lógica del Evento ✅
 - [x] Event Mode (Zero Friction)
 - [x] Auth Bypass
 - [x] Créditos atómicos
 - [x] RLS public_read_events
-- [ ] Filtrado de estilos por evento
-- [ ] Validación de fechas
-- [ ] Galería del evento
+- [x] Filtrado de estilos por evento
+- [x] Galería del evento
 
-### Fase 2 — Dashboard Organizador
-- [ ] Panel del Revendedor
-- [ ] Creación de eventos
-- [ ] Compra de créditos (MP)
-- [ ] QR Generator
+### Fase 2 — Dashboard Organizador ✅
+- [x] Panel del Revendedor (PartnerDashboard)
+- [x] Creación autónoma de eventos
+- [x] Marca Blanca (Colores Dinámicos)
+- [x] QR Generator integrado
 
 ### Fase 3 — Dashboard Master
 - [ ] Vista global de partners y eventos
