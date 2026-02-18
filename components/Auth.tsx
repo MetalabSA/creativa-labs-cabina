@@ -2,7 +2,11 @@ import React, { useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { Mail, Lock, Loader2, Sparkles, User, AlertTriangle, Camera, ChevronLeft } from 'lucide-react';
 
-export const Auth: React.FC = () => {
+interface AuthProps {
+    onAuthSuccess?: () => void;
+}
+
+export const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
     const [loading, setLoading] = useState(false);
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
