@@ -20,7 +20,10 @@ import {
     Globe,
     QrCode,
     Trash2,
-    Edit2
+    Edit2,
+    Users,
+    Mail,
+    ExternalLink
 } from 'lucide-react';
 import { IDENTITIES, PREFERRED_PACK_ORDER } from '../lib/constants';
 
@@ -41,6 +44,7 @@ interface Event {
     id: string;
     event_name: string;
     event_slug: string;
+    client_email?: string;
     start_date: string;
     end_date: string;
     credits_allocated: number;
@@ -76,6 +80,7 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
     const [newEvent, setNewEvent] = useState({
         name: '',
         slug: '',
+        client_email: '',
         credits: 500,
         start_date: new Date().toISOString().split('T')[0],
         end_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
@@ -148,6 +153,7 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
                 {
                     partner_id: partner.id,
                     event_name: newEvent.name,
+                    client_email: newEvent.client_email,
                     event_slug: newEvent.slug || newEvent.name.toLowerCase().replace(/\s+/g, '-'),
                     credits_allocated: creditsNeeded,
                     credits_used: 0,
@@ -168,7 +174,7 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
             if (pError) throw pError;
 
             setShowCreateEventModal(false);
-            setNewEvent({ name: '', slug: '', credits: 500, start_date: '', end_date: '' });
+            setNewEvent({ name: '', slug: '', client_email: '', credits: 500, start_date: '', end_date: '' });
             fetchPartnerData();
         } catch (error) {
             console.error('Error creating event:', error);
@@ -233,7 +239,7 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
                         className="flex items-center gap-2 px-6 py-2.5 bg-[#135bec] hover:bg-[#135bec]/90 rounded-lg text-sm font-bold text-white shadow-lg shadow-[#135bec]/25 transition-all group"
                     >
                         <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform" />
-                        Crear Nuevo Evento
+                        Activar Instancia
                     </button>
                 </div>
             </header>
@@ -420,8 +426,8 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
                     {/* Partner Branding Card */}
                     <div className="glass-card rounded-xl p-6 border border-white/5">
                         <div className="flex items-center gap-2 mb-6">
-                            <Palette className="size-5 text-[#135bec]" />
-                            <h2 className="text-lg font-black text-white uppercase tracking-tight">Marca Blanca</h2>
+                            <Users className="size-5 text-[#135bec]" />
+                            <h2 className="text-lg font-black text-white uppercase tracking-tight">Clientes & Marca</h2>
                         </div>
                         <div className="space-y-6">
                             <div>
@@ -508,7 +514,8 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
                                         <img
                                             alt={style}
                                             className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                                            src={`https://api.dicebear.com/7.x/identicon/svg?seed=${style}`}
+                                            src={`https://images.unsplash.com/photo-1550989460-0adf9ea622e2?q=80&w=280&auto=format&fit=crop`}
+                                        /* Placeholder for packs */
                                         />
                                         <span className="absolute bottom-2.5 left-2.5 z-20 text-[9px] font-black uppercase text-white tracking-[1px] leading-tight">{style}</span>
                                         <div className="absolute top-2 right-2 z-20 opacity-0 peer-checked:opacity-100 transition-all transform scale-50 peer-checked:scale-100">
@@ -551,6 +558,22 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
                                         value={newEvent.name}
                                         onChange={e => setNewEvent({ ...newEvent, name: e.target.value })}
                                     />
+                                </div>
+                                {/* Client Email Input */}
+                                <div>
+                                    <label className="text-[10px] font-black uppercase tracking-[2px] text-slate-500 mb-2 block">Email del Cliente (Asignación)</label>
+                                    <div className="relative">
+                                        <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-700 size-4" />
+                                        <input
+                                            required
+                                            type="email"
+                                            placeholder="cliente@ejemplo.com"
+                                            className="w-full bg-[#0a0a0b] border border-white/10 rounded-xl pl-11 pr-5 py-4 text-white focus:border-[#135bec] outline-none transition-all placeholder:text-slate-800 text-xs"
+                                            value={newEvent.client_email}
+                                            onChange={e => setNewEvent({ ...newEvent, client_email: e.target.value })}
+                                        />
+                                    </div>
+                                    <p className="text-[9px] text-slate-500 mt-1.5 ml-1">Este email se usará para que el cliente acceda a su panel.</p>
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>

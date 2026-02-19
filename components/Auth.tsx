@@ -53,22 +53,48 @@ export const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
         const testPass = '12345678';
 
         try {
-            const { error: signInError } = await supabase.auth.signInWithPassword({
+            const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
                 email: testEmail,
                 password: testPass,
             });
 
+            let userId = signInData.user?.id;
+
             if (signInError && signInError.message.includes('Invalid login credentials')) {
-                const { error: signUpError } = await supabase.auth.signUp({
+                const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
                     email: testEmail,
                     password: testPass,
                 });
                 if (signUpError) throw signUpError;
+                userId = signUpData.user?.id;
                 setMessage({ type: 'success', text: 'Usuario de prueba creado. ¡Ya puedes entrar!' });
             } else if (signInError) {
                 throw signInError;
             }
+
+            // Ensure profile exists with partner role for testing
+            if (userId) {
+                const { data: profile } = await supabase.from('profiles').select('id').eq('id', userId).single();
+                if (!profile) {
+                    await supabase.from('profiles').insert([
+                        { id: userId, email: testEmail, full_name: 'Test Partner', role: 'partner', is_master: false }
+                    ]);
+
+                    // Also ensure partner record
+                    const { data: partnerRec } = await supabase.from('partners').select('id').eq('user_id', userId).single();
+                    if (!partnerRec) {
+                        await supabase.from('partners').insert([
+                            { name: 'Test Partner Agency', user_id: userId, credits_total: 5000, credits_used: 0 }
+                        ]);
+                    }
+                }
+            }
+
+            if (onAuthSuccess) onAuthSuccess();
+            else window.location.reload();
+
         } catch (error: any) {
+            console.error('Test access error:', error);
             setMessage({ type: 'error', text: error.message });
         } finally {
             setLoading(false);

@@ -33,6 +33,7 @@ export const Admin: React.FC<AdminProps> = ({ IDENTITIES, onBack, initialView = 
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [showAddUserModal, setShowAddUserModal] = useState(false);
+    const [editingUser, setEditingUser] = useState<any>(null); // State for editing
 
     // Form state for new user
     const [newUser, setNewUser] = useState({
@@ -144,6 +145,41 @@ export const Admin: React.FC<AdminProps> = ({ IDENTITIES, onBack, initialView = 
             fetchData();
         } catch (error) {
             console.error('Error deleting user:', error);
+        }
+    };
+
+    const handleEditUser = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingUser) return;
+
+        try {
+            setLoading(true);
+            const { error } = await supabase
+                .from('profiles')
+                .update({
+                    full_name: editingUser.full_name,
+                    role: editingUser.role,
+                    is_master: editingUser.is_master
+                })
+                .eq('id', editingUser.id);
+
+            if (error) throw error;
+
+            // If role changed to partner, ensure partner record exists (basic check)
+            if (editingUser.role === 'partner') {
+                const { data: partnerData } = await supabase.from('partners').select('id').eq('user_id', editingUser.id).single();
+                if (!partnerData) {
+                    await supabase.from('partners').insert([{ name: editingUser.full_name, user_id: editingUser.id, credits_total: 1000, credits_used: 0 }]);
+                }
+            }
+
+            setEditingUser(null);
+            fetchData();
+        } catch (error) {
+            console.error('Error updating user:', error);
+            alert('Error updating user: ' + (error as any).message);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -343,7 +379,7 @@ export const Admin: React.FC<AdminProps> = ({ IDENTITIES, onBack, initialView = 
                                         </td>
                                         <td className="px-6 py-5 text-right">
                                             <div className="flex items-center justify-end gap-2">
-                                                <button className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white"><Edit2 className="w-4 h-4" /></button>
+                                                <button onClick={() => setEditingUser(profile)} className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white"><Edit2 className="w-4 h-4" /></button>
                                                 <button onClick={() => handleDeleteUser(profile.id)} className="p-2 hover:bg-rose-500/20 rounded-lg text-slate-400 hover:text-rose-500"><Trash2 className="w-4 h-4" /></button>
                                             </div>
                                         </td>
@@ -351,6 +387,62 @@ export const Admin: React.FC<AdminProps> = ({ IDENTITIES, onBack, initialView = 
                                 ))}
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            )}
+
+            {/* Edit User Modal */}
+            {editingUser && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+                    <div className="glass-card w-full max-w-md bg-slate-900 rounded-2xl border border-white/10 shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+                        <div className="flex items-center justify-between p-6 border-b border-white/5">
+                            <h3 className="text-xl font-black text-white">EDIT USER</h3>
+                            <button onClick={() => setEditingUser(null)} className="text-slate-500 hover:text-white"><X className="w-6 h-6" /></button>
+                        </div>
+                        <form onSubmit={handleEditUser} className="p-6 space-y-4">
+                            <div>
+                                <label className="text-[10px] font-black uppercase tracking-[2px] text-slate-500 mb-2 block">Full Name</label>
+                                <input
+                                    required
+                                    type="text"
+                                    className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-[#135bec] outline-none transition-all"
+                                    value={editingUser.full_name}
+                                    onChange={e => setEditingUser({ ...editingUser, full_name: e.target.value })}
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-[10px] font-black uppercase tracking-[2px] text-slate-500 mb-2 block">Role</label>
+                                    <select
+                                        className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-[#135bec] outline-none transition-all"
+                                        value={editingUser.role}
+                                        onChange={e => setEditingUser({ ...editingUser, role: e.target.value })}
+                                    >
+                                        <option value="client">Client</option>
+                                        <option value="partner">Partner</option>
+                                    </select>
+                                </div>
+                                <div className="flex flex-col">
+                                    <label className="text-[10px] font-black uppercase tracking-[2px] text-slate-500 mb-2 block">Access Level</label>
+                                    <label className="flex items-center gap-2 cursor-pointer mt-2">
+                                        <input
+                                            type="checkbox"
+                                            className="form-checkbox bg-slate-800 border-white/10 text-[#135bec] rounded"
+                                            checked={editingUser.is_master}
+                                            onChange={e => setEditingUser({ ...editingUser, is_master: e.target.checked })}
+                                        />
+                                        <span className="text-xs text-white">Master Admin</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <button
+                                type="submit"
+                                disabled={loading}
+                                className="w-full py-4 bg-[#135bec] hover:bg-[#135bec]/90 text-white font-black rounded-xl shadow-xl shadow-[#135bec]/20 transition-all uppercase tracking-[2px] text-xs"
+                            >
+                                {loading ? 'SAVING...' : 'SAVE CHANGES'}
+                            </button>
+                        </form>
                     </div>
                 </div>
             )}
@@ -369,7 +461,7 @@ export const Admin: React.FC<AdminProps> = ({ IDENTITIES, onBack, initialView = 
                                 <input
                                     required
                                     type="text"
-                                    className="w-full bg-background-dark border border-white/10 rounded-xl px-4 py-3 text-white focus:border-[#135bec] outline-none transition-all"
+                                    className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-[#135bec] outline-none transition-all"
                                     value={newUser.full_name}
                                     onChange={e => setNewUser({ ...newUser, full_name: e.target.value })}
                                 />
@@ -379,7 +471,7 @@ export const Admin: React.FC<AdminProps> = ({ IDENTITIES, onBack, initialView = 
                                 <input
                                     required
                                     type="email"
-                                    className="w-full bg-background-dark border border-white/10 rounded-xl px-4 py-3 text-white focus:border-[#135bec] outline-none transition-all"
+                                    className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-[#135bec] outline-none transition-all"
                                     value={newUser.email}
                                     onChange={e => setNewUser({ ...newUser, email: e.target.value })}
                                 />
@@ -388,7 +480,7 @@ export const Admin: React.FC<AdminProps> = ({ IDENTITIES, onBack, initialView = 
                                 <div>
                                     <label className="text-[10px] font-black uppercase tracking-[2px] text-slate-500 mb-2 block">Role</label>
                                     <select
-                                        className="w-full bg-background-dark border border-white/10 rounded-xl px-4 py-3 text-white focus:border-[#135bec] outline-none transition-all"
+                                        className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-[#135bec] outline-none transition-all"
                                         value={newUser.role}
                                         onChange={e => setNewUser({ ...newUser, role: e.target.value })}
                                     >

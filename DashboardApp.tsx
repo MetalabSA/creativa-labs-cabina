@@ -124,7 +124,7 @@ const DashboardApp: React.FC = () => {
                             <>
                                 {renderSidebarItem('events', 'Events', Calendar)}
                                 {/* 'credits' tab redirects to overview or a specific credits view, for now reuse overview or placeholder */}
-                                {renderSidebarItem('branding', 'White Label', Palette)}
+                                {renderSidebarItem('branding', 'Clientes', Palette)}
                             </>
                         )}
 
