@@ -21,6 +21,7 @@ interface UserProfile {
     total_generations: number;
     role: string;
     unlocked_packs?: string[];
+    full_name?: string;
     created_at?: string;
 }
 
