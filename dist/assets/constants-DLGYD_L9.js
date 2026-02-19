@@ -1,4 +1,4 @@
-import{c as x,r as a,j as w,S as A,e as $}from"./DashboardApp-BkqDl9z4.js";import{M as F,i as I,u as H,P as U,a as W,b as J,L as N}from"./proxy-0psUB-DZ.js";/**
+import{c as x,r as a,j as w,S as A,e as $}from"./DashboardApp-C4WUhTMs.js";import{M as F,i as I,u as H,P as U,a as W,b as J,L as N}from"./proxy-BnQbemhq.js";/**
  * @license lucide-react v0.554.0 - ISC
  *
  * This source code is licensed under the ISC license.

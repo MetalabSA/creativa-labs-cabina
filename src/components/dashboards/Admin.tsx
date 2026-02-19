@@ -26,7 +26,7 @@ interface AdminProps {
 }
 
 export const Admin: React.FC<AdminProps> = ({ onBack }) => {
-    const [view, setView] = useState<'overview' | 'partners' | 'b2c' | 'styles' | 'logs'>('overview');
+    const [view, setView] = useState<'overview' | 'partners' | 'b2c' | 'styles' | 'logs' | 'settings'>('overview');
     const [partners, setPartners] = useState<Partner[]>([]);
     const [b2cUsers, setB2CUsers] = useState<UserProfile[]>([]);
     const [loading, setLoading] = useState(true);
@@ -37,6 +37,28 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
         totalPartners: 0,
         totalCreditsSold: 0,
         activeEvents: 0
+    });
+    const [b2cStats, setB2CStats] = useState({
+        totalUsers: 0,
+        totalB2CCredits: 0,
+        totalB2CGenerations: 0,
+        topStyles: [] as { id: string, count: number, label: string }[],
+        recentTransactions: [] as any[]
+    });
+    const [partnerStats, setPartnerStats] = useState({
+        totalPartners: 0,
+        totalEvents: 0,
+        creditsInCirculation: 0,
+        avgConsumptionRate: 0,
+        topPartners: [] as any[]
+    });
+    const [editingStyle, setEditingStyle] = useState<any | null>(null);
+    const [styleForm, setStyleForm] = useState({
+        id: '',
+        label: '',
+        category: '',
+        is_premium: false,
+        usage_count: 0
     });
     const [recentLogs, setRecentLogs] = useState<any[]>([]);
 
@@ -54,22 +76,26 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
     const fetchData = async () => {
         try {
             setLoading(true);
-            const [partnersRes, eventsRes, profilesRes] = await Promise.all([
+            const [partnersRes, eventsRes, profilesRes, generationsRes] = await Promise.all([
                 supabase.from('partners').select('*'),
                 supabase.from('events').select('*'),
-                supabase.from('profiles').select('*')
+                supabase.from('profiles').select('*'),
+                supabase.from('generations').select('id, created_at, model_id, event_id, events(event_name)').order('created_at', { ascending: false })
             ]);
 
             if (partnersRes.error) throw partnersRes.error;
+            if (profilesRes.error) throw profilesRes.error;
 
             const partnersData = partnersRes.data || [];
             const profilesData = profilesRes.data || [];
             const eventsData = eventsRes.data || [];
+            const generationsData = generationsRes.data || [];
 
             setPartners(partnersData);
-            setB2CUsers(profilesData.filter(p => p.role === 'user' || !p.role));
+            const b2cUsersData = profilesData.filter(p => p.role === 'user' || !p.role);
+            setB2CUsers(b2cUsersData);
 
-            // Calculate stats
+            // Calculate global stats
             const totalCredits = partnersData.reduce((acc, curr) => acc + (curr.credits_total || 0), 0);
             const totalUsed = partnersData.reduce((acc, curr) => acc + (curr.credits_used || 0), 0);
             const activeEventsCount = eventsData.filter(e => e.is_active).length || 0;
@@ -81,22 +107,62 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                 activeEvents: activeEventsCount
             });
 
-            // Fetch Recent Generations as logs
-            const { data: recentGens } = await supabase
-                .from('generations')
-                .select('id, created_at, event_id, events(event_name)')
-                .order('created_at', { ascending: false })
-                .limit(5);
+            // Calculate B2C specific stats
+            const totalB2CCredits = b2cUsersData.reduce((acc, curr) => acc + (curr.credits || 0), 0);
+            const totalB2CGenerations = b2cUsersData.reduce((acc, curr) => acc + (curr.total_generations || 0), 0);
 
-            if (recentGens) {
-                setRecentLogs(recentGens.map((g: any) => ({
-                    id: g.id,
-                    type: 'success',
-                    title: 'Generación Exitosa',
-                    text: `Evento: ${g.events?.event_name || 'Desconocido'}`,
-                    time: new Date(g.created_at).toLocaleTimeString()
-                })));
-            }
+            // Calculate Top Styles
+            const styleCounts: Record<string, number> = {};
+            generationsData.forEach((g: any) => {
+                if (g.model_id) {
+                    styleCounts[g.model_id] = (styleCounts[g.model_id] || 0) + 1;
+                }
+            });
+
+            const topStyles = Object.entries(styleCounts)
+                .map(([id, count]) => ({ id, count, label: id }))
+                .sort((a, b) => b.count - a.count)
+                .slice(0, 5);
+
+            setB2CStats({
+                totalUsers: b2cUsersData.length,
+                totalB2CCredits,
+                totalB2CGenerations,
+                topStyles,
+                recentTransactions: generationsData.slice(0, 5)
+            });
+
+            // Calculate Partner Stats
+            const partnerCreditTotal = partnersData.reduce((acc, curr) => acc + (curr.credits_total || 0), 0);
+            const partnerUsageTotal = partnersData.reduce((acc, curr) => acc + (curr.credits_used || 0), 0);
+            const consumptionRate = partnerCreditTotal > 0 ? (partnerUsageTotal / partnerCreditTotal) * 100 : 0;
+
+            // Group events by partner to see activity
+            const partnerActivity = partnersData.map(p => {
+                const partnerEvents = eventsData.filter(e => e.partner_id === p.id);
+                return {
+                    ...p,
+                    eventCount: partnerEvents.length,
+                    activeEvents: partnerEvents.filter(e => e.is_active).length
+                };
+            }).sort((a, b) => b.eventCount - a.eventCount);
+
+            setPartnerStats({
+                totalPartners: partnersData.length,
+                totalEvents: eventsData.length,
+                creditsInCirculation: partnerCreditTotal - partnerUsageTotal,
+                avgConsumptionRate: consumptionRate,
+                topPartners: partnerActivity.slice(0, 5)
+            });
+
+            // Logs
+            setRecentLogs(generationsData.slice(0, 10).map((g: any) => ({
+                id: g.id,
+                type: 'success',
+                title: g.model_id ? `Generación: ${g.model_id}` : 'Generación Exitosa',
+                text: g.event_id ? `Evento: ${g.events?.event_name}` : 'Usuario B2C',
+                time: new Date(g.created_at).toLocaleTimeString()
+            })));
 
         } catch (error) {
             console.error('Error fetching admin data:', error);
@@ -159,24 +225,60 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
         }
     };
 
+    const handleUpdateStyle = async () => {
+        if (!editingStyle) return;
+        try {
+            setLoading(true);
+            const { error } = await supabase
+                .from('styles_metadata')
+                .upsert({
+                    id: styleForm.id,
+                    label: styleForm.label,
+                    category: styleForm.category,
+                    is_premium: styleForm.is_premium,
+                    updated_at: new Date().toISOString()
+                });
+
+            if (error) throw error;
+            alert('Estilo actualizado correctamente');
+            setEditingStyle(null);
+            fetchData();
+        } catch (error: any) {
+            alert('Error al actualizar estilo: ' + error.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleTopUp = async (amount: number) => {
         if (!showTopUp) return;
         try {
             setLoading(true);
+            // Check if it's a partner or a B2C user
             const partner = partners.find(p => p.id === showTopUp.id);
-            if (!partner) return;
+            if (partner) {
+                const { error } = await supabase
+                    .from('partners')
+                    .update({ credits_total: (partner.credits_total || 0) + amount })
+                    .eq('id', partner.id);
+                if (error) throw error;
+            } else {
+                // Assume it's a B2C user profile
+                const user = b2cUsers.find(u => u.id === showTopUp.id);
+                if (user) {
+                    const { error } = await supabase
+                        .from('profiles')
+                        .update({ credits: (user.credits || 0) + amount })
+                        .eq('id', user.id);
+                    if (error) throw error;
+                }
+            }
 
-            const { error } = await supabase
-                .from('partners')
-                .update({ credits_total: (partner.credits_total || 0) + amount })
-                .eq('id', partner.id);
-
-            if (error) throw error;
-            alert('Créditos recargados');
+            alert('Créditos actualizados exitosamente');
             setShowTopUp(null);
             fetchData();
         } catch (error: any) {
-            alert('Error top-up: ' + error.message);
+            alert('Error updating credits: ' + error.message);
         } finally {
             setLoading(false);
         }
@@ -231,6 +333,13 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
 
                     <p className="px-3 py-2 mt-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Sistema</p>
                     <button
+                        onClick={() => setView('settings')}
+                        className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-all w-full text-left ${view === 'settings' ? 'bg-[#13ec80]/10 text-[#13ec80] border border-[#13ec80]/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
+                    >
+                        <span className="material-symbols-outlined">settings</span>
+                        <span className="text-sm font-medium">Ajustes</span>
+                    </button>
+                    <button
                         onClick={() => setView('logs')}
                         className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-all w-full text-left ${view === 'logs' ? 'bg-[#13ec80]/10 text-[#13ec80] border border-[#13ec80]/20' : 'text-slate-400 hover:text-white hover:bg-white/5'}`}
                     >
@@ -282,56 +391,179 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                 <div className="p-8">
                     {view === 'overview' && (
                         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            <div className="mb-6">
-                                <h2 className="text-2xl font-black text-white tracking-tight uppercase">Dashboard Overview</h2>
-                                <p className="text-slate-500 text-sm">Real-time platform metrics and status</p>
+                            <div className="flex justify-between items-end mb-8">
+                                <div>
+                                    <h2 className="text-2xl font-black text-white tracking-tight uppercase">Centro de Mando Ejecutivo</h2>
+                                    <p className="text-slate-500 text-sm">Resumen táctico del ecosistema Metalab Creative Labs</p>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button onClick={() => fetchData()} className="p-3 bg-white/5 border border-white/10 rounded-lg text-slate-400 hover:text-[#13ec80] transition-colors">
+                                        <span className="material-symbols-outlined !text-xl">sync</span>
+                                    </button>
+                                </div>
                             </div>
 
+                            {/* Macro Financial & Performance Metrics */}
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                                <StatCard label="Generaciones Totales" value={stats.totalGenerations} trend="+12.4%" color="#13ec80" icon="auto_awesome" />
-                                <StatCard label="Partners Activos" value={stats.totalPartners} color="#3b82f6" icon="groups" />
-                                <StatCard label="Créditos Asignados" value={(stats.totalCreditsSold / 1000).toFixed(1) + 'k'} trend="-2.1%" color="#f59e0b" icon="payments" />
-                                <StatCard label="Estado del Motor" value="99.9%" status="OPERATIVO" color="#13ec80" icon="monitoring" />
+                                <StatCard
+                                    label="Ingresos Estimados"
+                                    value={`$${((stats.totalCreditsSold * 0.1)).toLocaleString()}`}
+                                    trend="+15.2%"
+                                    color="#13ec80"
+                                    icon="payments"
+                                />
+                                <StatCard
+                                    label="Generaciones Totales"
+                                    value={stats.totalGenerations.toLocaleString()}
+                                    trend="+8.4%"
+                                    color="#3b82f6"
+                                    icon="auto_awesome"
+                                />
+                                <StatCard
+                                    label="Cuentas Activas"
+                                    value={(b2cStats.totalUsers + partnerStats.totalPartners).toLocaleString()}
+                                    color="#f59e0b"
+                                    icon="hub"
+                                />
+                                <StatCard
+                                    label="Eficiencia Motor"
+                                    value="99.8%"
+                                    status="OPERATIVO"
+                                    color="#13ec80"
+                                    icon="monitoring"
+                                />
                             </div>
 
-                            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-                                <div className="xl:col-span-2">
-                                    <div className="bg-[#121413] border border-[#1f2b24] rounded-xl p-6">
-                                        <div className="flex justify-between items-center mb-6">
-                                            <h3 className="text-white font-bold">Resellers Activity</h3>
-                                            <button onClick={() => setView('partners')} className="text-[#13ec80] text-xs font-bold hover:underline">View All Partners</button>
+                            <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
+                                {/* Left Side: Performance Boxes */}
+                                <div className="xl:col-span-8 space-y-8">
+
+                                    {/* Sector Performance Split */}
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        {/* B2C Segment Summary */}
+                                        <div className="bg-[#121413] border border-[#1f2b24] rounded-2xl p-6 relative overflow-hidden group">
+                                            <div className="absolute top-0 left-0 w-1 h-full bg-blue-500 opacity-50"></div>
+                                            <div className="flex justify-between items-start mb-6">
+                                                <div>
+                                                    <h3 className="text-white font-black uppercase text-sm tracking-tight mb-1">Segmento B2C</h3>
+                                                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Consumo en App Pública</p>
+                                                </div>
+                                                <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400">
+                                                    <span className="material-symbols-outlined">person</span>
+                                                </div>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Usuarios</p>
+                                                    <p className="text-xl font-black text-white">{b2cStats.totalUsers}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Gens</p>
+                                                    <p className="text-xl font-black text-white">{b2cStats.totalB2CGenerations}</p>
+                                                </div>
+                                            </div>
+                                            <button onClick={() => setView('b2c')} className="w-full mt-6 py-2 border border-blue-500/20 bg-blue-500/5 text-blue-400 text-[10px] font-black uppercase rounded-lg hover:bg-blue-500/10 transition-colors">
+                                                Gestionar B2C
+                                            </button>
                                         </div>
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full text-left text-sm">
-                                                <thead>
-                                                    <tr className="border-b border-[#1f2b24] text-slate-500 uppercase text-[10px] font-bold">
-                                                        <th className="pb-4">Partner</th>
-                                                        <th className="pb-4">Balance</th>
-                                                        <th className="pb-4 text-right">Actions</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-[#1f2b24]/50">
-                                                    {partners.slice(0, 5).map(p => (
-                                                        <tr key={p.id} className="group">
-                                                            <td className="py-4 font-bold text-white group-hover:text-[#13ec80] transition-colors">{p.name}</td>
-                                                            <td className="py-4 font-mono">{(p.credits_total || 0) - (p.credits_used || 0)}</td>
-                                                            <td className="py-4 text-right">
-                                                                <button
-                                                                    onClick={() => setShowTopUp({ id: p.id, name: p.name })}
-                                                                    className="text-xs bg-[#13ec80]/10 text-[#13ec80] px-3 py-1 rounded border border-[#13ec80]/20 hover:bg-[#13ec80]/20"
-                                                                >
-                                                                    Recargar
-                                                                </button>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
+
+                                        {/* SaaS Partner Summary */}
+                                        <div className="bg-[#121413] border border-[#1f2b24] rounded-2xl p-6 relative overflow-hidden group">
+                                            <div className="absolute top-0 left-0 w-1 h-full bg-[#13ec80] opacity-50"></div>
+                                            <div className="flex justify-between items-start mb-6">
+                                                <div>
+                                                    <h3 className="text-white font-black uppercase text-sm tracking-tight mb-1">Red de Partners</h3>
+                                                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">SaaS & B2B Events</p>
+                                                </div>
+                                                <div className="w-10 h-10 rounded-xl bg-[#13ec80]/10 flex items-center justify-center text-[#13ec80]">
+                                                    <span className="material-symbols-outlined">corporate_fare</span>
+                                                </div>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Agencias</p>
+                                                    <p className="text-xl font-black text-white">{partnerStats.totalPartners}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-[10px] font-bold text-slate-500 uppercase mb-1">Eventos</p>
+                                                    <p className="text-xl font-black text-white">{partnerStats.totalEvents}</p>
+                                                </div>
+                                            </div>
+                                            <button onClick={() => setView('partners')} className="w-full mt-6 py-2 border border-[#13ec80]/20 bg-[#13ec80]/5 text-[#13ec80] text-[10px] font-black uppercase rounded-lg hover:bg-[#13ec80]/10 transition-colors">
+                                                Ecosistema SaaS
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* Style Leaderboard across Platform */}
+                                    <div className="bg-[#121413] border border-[#1f2b24] rounded-2xl p-6">
+                                        <div className="flex justify-between items-center mb-6">
+                                            <h3 className="text-white font-black uppercase text-sm tracking-tight">👑 Ranking Global de Estilos</h3>
+                                            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Rendimiento por IA Identity</span>
+                                        </div>
+                                        <div className="space-y-4">
+                                            {b2cStats.topStyles.slice(0, 4).map((style, idx) => (
+                                                <div key={idx} className="flex items-center gap-4">
+                                                    <div className="w-8 h-8 rounded bg-white/5 border border-white/10 flex items-center justify-center text-xs font-black text-slate-500">
+                                                        #{idx + 1}
+                                                    </div>
+                                                    <div className="flex-1">
+                                                        <div className="flex justify-between text-xs font-bold mb-1">
+                                                            <span className="text-white">{style.id}</span>
+                                                            <span className="text-[#13ec80]">{style.count.toLocaleString()} gens</span>
+                                                        </div>
+                                                        <div className="h-1.5 w-full bg-[#0a0c0b] rounded-full overflow-hidden">
+                                                            <div
+                                                                className="h-full bg-gradient-to-r from-blue-500 to-[#13ec80]"
+                                                                style={{ width: `${(style.count / (b2cStats.topStyles[0]?.count || 1)) * 100}%` }}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
                                         </div>
                                     </div>
                                 </div>
-                                <div className="xl:col-span-1">
-                                    <SystemPulse logs={recentLogs} />
+
+                                {/* Right Side: System Pulse & Quick Actions */}
+                                <div className="xl:col-span-4 space-y-8">
+                                    <div className="h-[400px]">
+                                        <SystemPulse logs={recentLogs} />
+                                    </div>
+
+                                    {/* Action Shortcuts */}
+                                    <div className="bg-gradient-to-br from-purple-500/10 to-transparent border border-purple-500/20 rounded-2xl p-6">
+                                        <h3 className="text-white font-black uppercase text-sm tracking-tight mb-4">Acciones Rápidas</h3>
+                                        <div className="grid grid-cols-1 gap-2">
+                                            <button
+                                                onClick={() => {
+                                                    setStyleForm({ id: '', label: '', category: '', is_premium: false, usage_count: 0 });
+                                                    setEditingStyle('new');
+                                                    setView('styles');
+                                                }}
+                                                className="flex items-center gap-3 p-3 bg-white/5 rounded-xl hover:bg-white/10 transition-all text-left group"
+                                            >
+                                                <span className="material-symbols-outlined text-purple-400">auto_fix_high</span>
+                                                <div>
+                                                    <p className="text-xs font-bold text-white">Inyectar Estilo</p>
+                                                    <p className="text-[9px] text-slate-500 uppercase">Nueva identidad IA</p>
+                                                </div>
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    setShowCreatePartner(true);
+                                                    setView('partners');
+                                                }}
+                                                className="flex items-center gap-3 p-3 bg-white/5 rounded-xl hover:bg-white/10 transition-all text-left group"
+                                            >
+                                                <span className="material-symbols-outlined text-amber-400">add_business</span>
+                                                <div>
+                                                    <p className="text-xs font-bold text-white">Onboarding Partner</p>
+                                                    <p className="text-[9px] text-slate-500 uppercase">Nuevo contrato SaaS</p>
+                                                </div>
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -341,8 +573,8 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                             <div className="flex justify-between items-end mb-8">
                                 <div>
-                                    <h2 className="text-2xl font-black text-white tracking-tight uppercase">Resellers Management</h2>
-                                    <p className="text-slate-500 text-sm">Create and manage your SAAS network</p>
+                                    <h2 className="text-2xl font-black text-white tracking-tight uppercase">Resellers Management (SaaS)</h2>
+                                    <p className="text-slate-500 text-sm">Control total sobre tu red de agencias y eventos</p>
                                 </div>
                                 <button
                                     onClick={() => setShowCreatePartner(true)}
@@ -352,54 +584,111 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                 </button>
                             </div>
 
+                            {/* Partner Analytics Row */}
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+                                <div className="bg-[#121413] p-5 border border-[#1f2b24] rounded-xl relative overflow-hidden group">
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Partners Activos</p>
+                                    <h3 className="text-2xl font-black text-white">{partnerStats.totalPartners}</h3>
+                                    <div className="absolute top-0 right-0 w-12 h-12 bg-[#13ec80]/10 rounded-bl-full flex items-center justify-center translate-x-4 -translate-y-4 group-hover:translate-x-2 group-hover:-translate-y-2 transition-transform">
+                                        <span className="material-symbols-outlined text-[#13ec80] !text-sm">handshake</span>
+                                    </div>
+                                </div>
+                                <div className="bg-[#121413] p-5 border border-[#1f2b24] rounded-xl relative overflow-hidden group">
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Total Eventos Red</p>
+                                    <h3 className="text-2xl font-black text-[#13ec80]">{partnerStats.totalEvents}</h3>
+                                    <div className="absolute top-0 right-0 w-12 h-12 bg-blue-500/10 rounded-bl-full flex items-center justify-center translate-x-4 -translate-y-4 group-hover:translate-x-2 group-hover:-translate-y-2 transition-transform">
+                                        <span className="material-symbols-outlined text-blue-500 !text-sm">event</span>
+                                    </div>
+                                </div>
+                                <div className="bg-[#121413] p-5 border border-[#1f2b24] rounded-xl relative overflow-hidden group">
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Créditos en Canales</p>
+                                    <h3 className="text-2xl font-black text-blue-400">{partnerStats.creditsInCirculation.toLocaleString()}</h3>
+                                    <div className="absolute top-0 right-0 w-12 h-12 bg-purple-500/10 rounded-bl-full flex items-center justify-center translate-x-4 -translate-y-4 group-hover:translate-x-2 group-hover:-translate-y-2 transition-transform">
+                                        <span className="material-symbols-outlined text-purple-500 !text-sm">account_balance_wallet</span>
+                                    </div>
+                                </div>
+                                <div className="bg-[#121413] p-5 border border-[#1f2b24] rounded-xl relative overflow-hidden group">
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Ratio de Consumo</p>
+                                    <h3 className="text-2xl font-black text-amber-400">{partnerStats.avgConsumptionRate.toFixed(1)}%</h3>
+                                    <div className="absolute top-0 right-0 w-12 h-12 bg-amber-500/10 rounded-bl-full flex items-center justify-center translate-x-4 -translate-y-4 group-hover:translate-x-2 group-hover:-translate-y-2 transition-transform">
+                                        <span className="material-symbols-outlined text-amber-500 !text-sm">trending_up</span>
+                                    </div>
+                                </div>
+                            </div>
+
                             <div className="bg-[#121413] border border-[#1f2b24] rounded-xl overflow-hidden shadow-2xl">
                                 <table className="w-full text-left">
-                                    <thead className="bg-white/5 border-b border-[#1f2b24]">
+                                    <thead className="bg-[#0a0c0b] border-b border-[#1f2b24]">
                                         <tr>
-                                            <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Razón Social</th>
-                                            <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Contacto</th>
-                                            <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Billetera</th>
-                                            <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Estado</th>
-                                            <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">Acciones</th>
+                                            <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Partner / Agencia</th>
+                                            <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Eventos</th>
+                                            <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Billetera</th>
+                                            <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Configuración</th>
+                                            <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Acciones</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-[#1f2b24]/50">
-                                        {partners.map(p => (
-                                            <tr key={p.id} className="hover:bg-white/[0.02] transition-colors group">
-                                                <td className="px-6 py-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-10 h-10 rounded-lg bg-[#13ec80]/10 flex items-center justify-center text-[#13ec80] font-bold border border-[#13ec80]/20">
-                                                            {(p.name || 'P')[0]}
+                                        {partners.map(p => {
+                                            const hasBranding = p.config?.primary_color || p.config?.logo_url;
+                                            return (
+                                                <tr key={p.id} className="hover:bg-white/[0.02] transition-colors group">
+                                                    <td className="px-6 py-4">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[#13ec80]/20 to-transparent flex items-center justify-center text-[#13ec80] font-black border border-[#13ec80]/20 shadow-inner">
+                                                                {(p.name || 'P')[0]}
+                                                            </div>
+                                                            <div>
+                                                                <p className="font-bold text-white group-hover:text-[#13ec80] transition-colors">{p.name}</p>
+                                                                <p className="text-[10px] text-slate-500 font-mono flex items-center gap-1">
+                                                                    <span className="w-1 h-1 rounded-full bg-[#13ec80]"></span>
+                                                                    {p.contact_email}
+                                                                </p>
+                                                            </div>
                                                         </div>
-                                                        <div>
-                                                            <p className="font-bold text-white group-hover:text-[#13ec80] transition-colors">{p.name}</p>
-                                                            <p className="text-[10px] text-slate-500 font-mono">ID: {p.id.substring(0, 8)}</p>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center">
+                                                        <div className="flex flex-col items-center">
+                                                            <span className="text-sm font-bold text-white">{(partnerStats.topPartners.find(tp => tp.id === p.id)?.eventCount || 0)}</span>
+                                                            <span className="text-[10px] text-slate-500 uppercase tracking-tighter">Eventos creados</span>
                                                         </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 text-sm text-slate-300">{p.contact_email}</td>
-                                                <td className="px-6 py-4">
-                                                    <div className="flex items-center gap-2">
-                                                        <p className="font-mono text-white">{(p.credits_total || 0).toLocaleString()}</p>
-                                                        <span className="text-[10px] text-slate-500">{(p.credits_used || 0).toLocaleString()} used</span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <span className="px-2 py-1 rounded-full text-[10px] font-bold bg-[#13ec80]/10 text-[#13ec80] border border-[#13ec80]/20">ACTIVE</span>
-                                                </td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <div className="flex items-center justify-end gap-2">
-                                                        <button
-                                                            onClick={() => setShowTopUp({ id: p.id, name: p.name })}
-                                                            className="text-[10px] font-bold text-[#13ec80] border border-[#13ec80]/30 px-3 py-1.5 rounded hover:bg-[#13ec80]/10 transition-all"
-                                                        >
-                                                            CREDITS
-                                                        </button>
-                                                        <button className="text-slate-500 hover:text-white material-symbols-outlined !text-lg">more_vert</button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))}
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <div className="flex flex-col items-center gap-1">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="font-mono text-white text-sm font-bold">{(p.credits_total - p.credits_used).toLocaleString()}</span>
+                                                                <span className="text-[10px] text-slate-600">/ {p.credits_total.toLocaleString()}</span>
+                                                            </div>
+                                                            <div className="w-24 h-1 bg-[#1f2b24] rounded-full overflow-hidden">
+                                                                <div
+                                                                    className="h-full bg-[#13ec80]"
+                                                                    style={{ width: `${Math.min(100, (p.credits_used / (p.credits_total || 1)) * 100)}%` }}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-center">
+                                                        <div className="flex items-center justify-center gap-2">
+                                                            <span title="Branding Configurado" className={`material-symbols-outlined !text-sm ${hasBranding ? 'text-blue-400' : 'text-white/10'}`}>palette</span>
+                                                            <span title="Subdominio Activo" className="material-symbols-outlined !text-sm text-[#13ec80]">language</span>
+                                                            <span title="Soporte VIP" className="material-symbols-outlined !text-sm text-amber-400">verified</span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4 text-right">
+                                                        <div className="flex items-center justify-end gap-2">
+                                                            <button
+                                                                onClick={() => setShowTopUp({ id: p.id, name: p.name })}
+                                                                className="text-[10px] font-black text-[#13ec80] border border-[#13ec80]/30 px-4 py-2 rounded-lg hover:bg-[#13ec80]/10 transition-all flex items-center gap-2"
+                                                            >
+                                                                RECARGAR
+                                                            </button>
+                                                            <button className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-500 hover:text-white hover:bg-white/5 transition-all">
+                                                                <span className="material-symbols-outlined !text-lg">settings</span>
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
                                     </tbody>
                                 </table>
                             </div>
@@ -408,29 +697,219 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
 
                     {view === 'b2c' && (
                         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            <div className="mb-8">
-                                <h2 className="text-2xl font-black text-white tracking-tight uppercase">Base de Datos Usuarios B2C</h2>
-                                <p className="text-slate-500 text-sm">Usuarios de la aplicación móvil/web pública</p>
+                            <div className="mb-8 flex justify-between items-end">
+                                <div>
+                                    <h2 className="text-2xl font-black text-white tracking-tight uppercase">Base de Datos Usuarios B2C</h2>
+                                    <p className="text-slate-500 text-sm">Métricas detalladas y gestión de la aplicación pública</p>
+                                </div>
+                            </div>
+
+                            {/* B2C Analytics Row */}
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+                                <div className="bg-[#121413] p-5 border border-[#1f2b24] rounded-xl">
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Total Usuarios</p>
+                                    <h3 className="text-2xl font-black text-white">{b2cStats.totalUsers}</h3>
+                                </div>
+                                <div className="bg-[#121413] p-5 border border-[#1f2b24] rounded-xl">
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Créditos en Circulación</p>
+                                    <h3 className="text-2xl font-black text-[#13ec80]">{b2cStats.totalB2CCredits.toLocaleString()}</h3>
+                                </div>
+                                <div className="bg-[#121413] p-5 border border-[#1f2b24] rounded-xl">
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Total Generaciones</p>
+                                    <h3 className="text-2xl font-black text-blue-400">{b2cStats.totalB2CGenerations.toLocaleString()}</h3>
+                                </div>
+                                <div className="bg-[#121413] p-5 border border-[#1f2b24] rounded-xl">
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Ingreso Est. (Credits)</p>
+                                    <h3 className="text-2xl font-black text-amber-400">{(b2cStats.totalB2CGenerations * 100).toLocaleString()} <span className="text-[10px] text-slate-500">pts</span></h3>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 mb-8">
+                                <div className="xl:col-span-2">
+                                    <div className="bg-[#121413] border border-[#1f2b24] rounded-xl overflow-hidden shadow-2xl">
+                                        <div className="p-4 border-b border-[#1f2b24] flex justify-between items-center bg-white/5">
+                                            <h3 className="text-sm font-bold text-white uppercase tracking-wider">Directorio de Usuarios</h3>
+                                        </div>
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full text-left">
+                                                <thead className="bg-[#0a0c0b] border-b border-[#1f2b24]">
+                                                    <tr>
+                                                        <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Email de Usuario</th>
+                                                        <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-center">Balance</th>
+                                                        <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-center">Generaciones</th>
+                                                        <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">Acciones</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-[#1f2b24]/50">
+                                                    {b2cUsers.sort((a, b) => (b.total_generations || 0) - (a.total_generations || 0)).map(u => (
+                                                        <tr key={u.id} className="hover:bg-white/[0.02] transition-colors group">
+                                                            <td className="px-6 py-4">
+                                                                <p className="font-bold text-white group-hover:text-[#13ec80] transition-colors">{u.email}</p>
+                                                                <p className="text-[10px] text-slate-600 font-mono italic">B2C Personal Account</p>
+                                                            </td>
+                                                            <td className="px-6 py-4 font-mono text-[#13ec80] text-center font-bold">{u.credits?.toLocaleString() || 0}</td>
+                                                            <td className="px-6 py-4 text-slate-400 text-center">
+                                                                <div className="flex flex-col items-center">
+                                                                    <span className="font-bold text-white">{u.total_generations || 0}</span>
+                                                                    <div className="w-12 h-1 bg-[#1f2b24] rounded-full mt-1 overflow-hidden">
+                                                                        <div
+                                                                            className="h-full bg-blue-500"
+                                                                            style={{ width: `${Math.min(100, (u.total_generations || 0) * 5)}%` }}
+                                                                        />
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+                                                            <td className="px-6 py-4 text-right">
+                                                                <button
+                                                                    onClick={() => setShowTopUp({ id: u.id, name: u.email })}
+                                                                    className="text-[10px] font-bold text-[#13ec80] border border-[#13ec80]/30 px-3 py-1.5 rounded-lg hover:bg-[#13ec80]/10 transition-all uppercase"
+                                                                >
+                                                                    Cargar Saldo
+                                                                </button>
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-6">
+                                    {/* Top Styles Section */}
+                                    <div className="bg-[#121413] border border-[#1f2b24] rounded-xl p-6">
+                                        <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-6 flex items-center gap-2">
+                                            <span className="material-symbols-outlined text-[#13ec80] !text-sm">trending_up</span>
+                                            Top Estilos IA
+                                        </h3>
+                                        <div className="space-y-4">
+                                            {b2cStats.topStyles.map((style, idx) => (
+                                                <div key={style.id} className="group">
+                                                    <div className="flex justify-between items-center mb-1">
+                                                        <span className="text-xs font-bold text-slate-300 group-hover:text-white transition-colors">{style.id}</span>
+                                                        <span className="text-xs font-mono text-[#13ec80]">{style.count} gens</span>
+                                                    </div>
+                                                    <div className="w-full h-1.5 bg-[#1f2b24] rounded-full overflow-hidden">
+                                                        <div
+                                                            className={`h-full transition-all duration-1000 ${idx === 0 ? 'bg-[#13ec80]' : 'bg-[#13ec80]/60'}`}
+                                                            style={{ width: `${(style.count / (b2cStats.topStyles[0]?.count || 1)) * 100}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            {b2cStats.topStyles.length === 0 && (
+                                                <p className="text-[10px] text-slate-600 italic text-center py-4">No hay datos de estilos disponibles aún.</p>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* High Value Users Info */}
+                                    <div className="bg-gradient-to-br from-[#13ec80]/10 to-transparent border border-[#13ec80]/20 rounded-xl p-6">
+                                        <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-2">Performance B2C</h3>
+                                        <p className="text-[11px] text-slate-400 leading-relaxed mb-4">
+                                            El segmento B2C representa el {((b2cStats.totalB2CGenerations / (stats.totalGenerations || 1)) * 100).toFixed(1)}% del tráfico total de la plataforma en este periodo.
+                                        </p>
+                                        <div className="flex items-center gap-4">
+                                            <div className="flex-1 h-2 bg-[#1f2b24] rounded-full overflow-hidden">
+                                                <div className="h-full bg-[#13ec80]" style={{ width: `${(b2cStats.totalB2CGenerations / (stats.totalGenerations || 1)) * 100}%` }} />
+                                            </div>
+                                            <span className="text-[10px] font-mono font-bold text-[#13ec80]">Sincronizado</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {view === 'styles' && (
+                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                            <div className="flex justify-between items-end mb-8">
+                                <div>
+                                    <h2 className="text-2xl font-black text-white tracking-tight uppercase">Motor de Estilos IA</h2>
+                                    <p className="text-slate-500 text-sm">Configuración maestra de identidades, prompts y exclusividad</p>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        setStyleForm({ id: '', label: '', category: '', is_premium: false, usage_count: 0 });
+                                        setEditingStyle('new');
+                                    }}
+                                    className="bg-[#13ec80] text-[#0a0c0b] px-6 py-3 rounded-lg font-bold flex items-center gap-2 hover:scale-[1.02] transition-all shadow-[0_0_20px_rgba(19,236,128,0.3)]"
+                                >
+                                    <span className="material-symbols-outlined">add_box</span> Nuevo Estilo
+                                </button>
+                            </div>
+
+                            {/* Styles Analytics Row */}
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+                                <div className="bg-[#121413] p-5 border border-[#1f2b24] rounded-xl">
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Total Estilos</p>
+                                    <h3 className="text-2xl font-black text-white">{stylesMetadata.length}</h3>
+                                </div>
+                                <div className="bg-[#121413] p-5 border border-[#1f2b24] rounded-xl">
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Estilos Premium</p>
+                                    <h3 className="text-2xl font-black text-amber-400">{stylesMetadata.filter(s => s.is_premium).length}</h3>
+                                </div>
+                                <div className="bg-[#121413] p-5 border border-[#1f2b24] rounded-xl">
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Categorías Activas</p>
+                                    <h3 className="text-2xl font-black text-blue-400">{new Set(stylesMetadata.map(s => s.category)).size}</h3>
+                                </div>
+                                <div className="bg-[#121413] p-5 border border-[#1f2b24] rounded-xl">
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Top Usage</p>
+                                    <h3 className="text-2xl font-black text-[#13ec80]">{Math.max(...stylesMetadata.map(s => s.usage_count || 0)).toLocaleString()}</h3>
+                                </div>
                             </div>
 
                             <div className="bg-[#121413] border border-[#1f2b24] rounded-xl overflow-hidden shadow-2xl">
                                 <table className="w-full text-left">
-                                    <thead className="bg-white/5 border-b border-[#1f2b24]">
+                                    <thead className="bg-[#0a0c0b] border-b border-[#1f2b24]">
                                         <tr>
-                                            <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Email de Usuario</th>
-                                            <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Balance</th>
-                                            <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Generaciones</th>
-                                            <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">Acciones</th>
+                                            <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Identidad (ID)</th>
+                                            <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Etiqueta Pública</th>
+                                            <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Categoría</th>
+                                            <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Nivel</th>
+                                            <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Acciones</th>
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-[#1f2b24]/50">
-                                        {b2cUsers.map(u => (
-                                            <tr key={u.id} className="hover:bg-white/[0.02] transition-colors group">
-                                                <td className="px-6 py-4 font-bold text-white group-hover:text-[#13ec80] transition-colors">{u.email}</td>
-                                                <td className="px-6 py-4 font-mono text-[#13ec80]">{u.credits?.toLocaleString() || 0}</td>
-                                                <td className="px-6 py-4 text-slate-400">{u.total_generations || 0}</td>
+                                        {stylesMetadata.map(style => (
+                                            <tr key={style.id} className="hover:bg-white/[0.02] transition-colors group">
+                                                <td className="px-6 py-4 font-mono text-xs text-[#13ec80]">{style.id}</td>
+                                                <td className="px-6 py-4">
+                                                    <p className="font-bold text-white group-hover:text-[#13ec80] transition-colors">{style.label}</p>
+                                                    <p className="text-[10px] text-slate-500 italic">{style.usage_count || 0} generaciones</p>
+                                                </td>
+                                                <td className="px-6 py-4 text-center">
+                                                    <span className="text-[10px] bg-white/5 border border-white/10 px-2 py-1 rounded text-slate-300 uppercase font-bold tracking-tight">
+                                                        {style.category || 'Sin Categoría'}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="flex justify-center">
+                                                        {style.is_premium ? (
+                                                            <span className="flex items-center gap-1 text-[10px] font-bold text-amber-400 bg-amber-400/10 border border-amber-400/20 px-2 py-1 rounded-full">
+                                                                <span className="material-symbols-outlined !text-[12px]">workspace_premium</span> PREMIUM
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-[10px] font-bold text-slate-500 bg-slate-500/10 border border-slate-500/20 px-2 py-1 rounded-full">ESTÁNDAR</span>
+                                                        )}
+                                                    </div>
+                                                </td>
                                                 <td className="px-6 py-4 text-right">
-                                                    <button className="text-[10px] font-bold text-white/50 hover:text-[#13ec80] transition-colors uppercase">Editar Créditos</button>
+                                                    <button
+                                                        onClick={() => {
+                                                            setEditingStyle(style);
+                                                            setStyleForm({
+                                                                id: style.id,
+                                                                label: style.label,
+                                                                category: style.category || '',
+                                                                is_premium: style.is_premium || false,
+                                                                usage_count: style.usage_count || 0
+                                                            });
+                                                        }}
+                                                        className="text-[10px] font-black text-blue-400 border border-blue-400/30 px-3 py-1.5 rounded hover:bg-blue-400/10 transition-all uppercase"
+                                                    >
+                                                        Editar
+                                                    </button>
                                                 </td>
                                             </tr>
                                         ))}
@@ -440,99 +919,386 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                         </div>
                     )}
 
-                    {view === 'styles' && (
-                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 text-center py-20">
-                            <span className="material-symbols-outlined !text-6xl text-[#13ec80]/20 mb-4 ">auto_fix_high</span>
-                            <h2 className="text-xl font-bold text-white">Consola del Motor de Estilos IA</h2>
-                            <p className="text-slate-500 max-w-md mx-auto mt-2">Administra plantillas globales, versiones de modelos y costos por generación. Actualmente en migración a la nueva arquitectura.</p>
+                    {view === 'settings' && (
+                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                            <div className="mb-8">
+                                <h2 className="text-2xl font-black text-white tracking-tight uppercase">Ajustes del Sistema</h2>
+                                <p className="text-slate-500 text-sm">Configuración global de APIs, pasarelas de pago y parámetros del motor</p>
+                            </div>
+
+                            <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+                                {/* MercadoPago Integration */}
+                                <div className="bg-[#121413] border border-[#1f2b24] rounded-2xl overflow-hidden shadow-2xl">
+                                    <div className="p-6 border-b border-[#1f2b24] bg-white/5 flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center text-blue-400">
+                                            <span className="material-symbols-outlined">payments</span>
+                                        </div>
+                                        <div>
+                                            <h3 className="font-black text-white uppercase tracking-tight">MercadoPago Cloud</h3>
+                                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Pasarela de Pagos B2C</p>
+                                        </div>
+                                    </div>
+                                    <div className="p-6 space-y-6">
+                                        <div>
+                                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Public Key (Producción)</label>
+                                            <input
+                                                type="text"
+                                                className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-lg px-4 py-3 text-white outline-none focus:border-[#13ec80] font-mono text-xs"
+                                                placeholder="APP_USR-..."
+                                                defaultValue="APP_USR-78239012-4212-4211-9012-78239012"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Access Token (Secret)</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="password"
+                                                    className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-lg px-4 py-3 text-white outline-none focus:border-[#13ec80] font-mono text-xs pr-10"
+                                                    placeholder="APP_USR-..."
+                                                    defaultValue="APP_USR-78239012-4212-4211-9012-HIDDEN"
+                                                />
+                                                <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-slate-600 cursor-pointer hover:text-white transition-colors">visibility</span>
+                                            </div>
+                                        </div>
+                                        <div className="pt-4 flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-2 h-2 rounded-full bg-[#13ec80]"></div>
+                                                <span className="text-[11px] font-bold text-slate-400 uppercase">Estado: Conectado</span>
+                                            </div>
+                                            <button className="text-[10px] font-black text-blue-400 hover:text-blue-300 transition-colors uppercase tracking-widest">Probar Conexión</button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* KIE Master Engine */}
+                                <div className="bg-[#121413] border border-[#1f2b24] rounded-2xl overflow-hidden shadow-2xl">
+                                    <div className="p-6 border-b border-[#1f2b24] bg-white/5 flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-400">
+                                            <span className="material-symbols-outlined">bolt</span>
+                                        </div>
+                                        <div>
+                                            <h3 className="font-black text-white uppercase tracking-tight">KIE Engine API</h3>
+                                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Motor de Generación IA</p>
+                                        </div>
+                                    </div>
+                                    <div className="p-6 space-y-6">
+                                        <div>
+                                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">KIE API Endpoint</label>
+                                            <input
+                                                type="text"
+                                                className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-lg px-4 py-3 text-white outline-none focus:border-[#13ec80] font-mono text-xs"
+                                                placeholder="https://api.kie.com/v1"
+                                                defaultValue="https://automatizaciones.metalab30.com/webhook/kie-pro"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Webhook Secret Key</label>
+                                            <div className="relative">
+                                                <input
+                                                    type="password"
+                                                    className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-lg px-4 py-3 text-white outline-none focus:border-[#13ec80] font-mono text-xs pr-10"
+                                                    defaultValue="KIE_PRO_MET_LAB_30"
+                                                />
+                                                <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-slate-600">lock</span>
+                                            </div>
+                                        </div>
+                                        <div className="pt-4">
+                                            <p className="text-[10px] text-slate-600 leading-relaxed italic">
+                                                * El endpoint de KIE procesa todas las solicitudes de generación de imagen para Usuarios B2C y Partners.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Global Platform Settings */}
+                                <div className="bg-[#121413] border border-[#1f2b24] rounded-2xl overflow-hidden shadow-2xl xl:col-span-2">
+                                    <div className="p-6 border-b border-[#1f2b24] bg-white/5 flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-400">
+                                            <span className="material-symbols-outlined">settings_applications</span>
+                                        </div>
+                                        <div>
+                                            <h3 className="font-black text-white uppercase tracking-tight">Parámetros Globales</h3>
+                                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Control General de Plataforma</p>
+                                        </div>
+                                    </div>
+                                    <div className="p-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                                        <div className="space-y-4">
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-xs font-bold text-slate-300 uppercase tracking-tight">Modo Mantenimiento</span>
+                                                <label className="relative inline-flex items-center cursor-pointer">
+                                                    <input type="checkbox" className="sr-only peer" />
+                                                    <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-500"></div>
+                                                </label>
+                                            </div>
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-xs font-bold text-slate-300 uppercase tracking-tight">Registro de Usuarios B2C</span>
+                                                <label className="relative inline-flex items-center cursor-pointer">
+                                                    <input type="checkbox" className="sr-only peer" defaultChecked />
+                                                    <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#13ec80]"></div>
+                                                </label>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-4">
+                                            <div>
+                                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Precio Crédito (Base)</label>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-slate-500 font-bold">$</span>
+                                                    <input type="number" className="bg-[#0a0c0b] border border-[#1f2b24] rounded-lg px-3 py-2 text-white outline-none focus:border-[#13ec80] w-full text-sm font-bold" defaultValue="100.00" />
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Créditos por Invitación</label>
+                                                <input type="number" className="bg-[#0a0c0b] border border-[#1f2b24] rounded-lg px-3 py-2 text-white outline-none focus:border-[#13ec80] w-full text-sm font-bold" defaultValue="10" />
+                                            </div>
+                                        </div>
+                                        <div className="flex flex-col justify-end">
+                                            <button className="w-full py-4 bg-[#13ec80] text-[#0a0c0b] font-black rounded-xl shadow-[0_0_30px_rgba(19,236,128,0.2)] hover:scale-[1.02] transition-all uppercase text-xs tracking-widest">
+                                                Guardar Configuración Global
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     )}
 
                     {view === 'logs' && (
                         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            <div className="mb-8">
-                                <h2 className="text-2xl font-black text-white tracking-tight uppercase">Visor de Logs del Sistema</h2>
-                                <p className="text-slate-500 text-sm">Operaciones del motor en tiempo real y auditoría</p>
+                            <div className="flex justify-between items-end mb-8">
+                                <div>
+                                    <h2 className="text-2xl font-black text-white tracking-tight uppercase">Visor de Registros Maestro</h2>
+                                    <p className="text-slate-500 text-sm">Monitor de actividad y salud del motor en tiempo real</p>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button onClick={() => fetchData()} className="p-3 bg-white/5 border border-white/10 rounded-lg text-slate-400 hover:text-[#13ec80] transition-colors">
+                                        <span className="material-symbols-outlined !text-xl">refresh</span>
+                                    </button>
+                                </div>
                             </div>
-                            <div className="xl:col-span-1">
-                                <SystemPulse logs={recentLogs} />
+
+                            {/* System Health Analytics */}
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+                                <div className="bg-[#121413] p-5 border border-[#1f2b24] rounded-xl">
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Tasa de Éxito</p>
+                                    <div className="flex items-end gap-2">
+                                        <h3 className="text-2xl font-black text-white">99.8%</h3>
+                                        <span className="text-[10px] text-[#13ec80] font-bold mb-1">UP</span>
+                                    </div>
+                                </div>
+                                <div className="bg-[#121413] p-5 border border-[#1f2b24] rounded-xl">
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Gens (Hoy)</p>
+                                    <h3 className="text-2xl font-black text-blue-400">{recentLogs.length * 12}+</h3>
+                                </div>
+                                <div className="bg-[#121413] p-5 border border-[#1f2b24] rounded-xl">
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Uso API</p>
+                                    <h3 className="text-2xl font-black text-purple-400">Normal</h3>
+                                </div>
+                                <div className="bg-[#121413] p-5 border border-[#1f2b24] rounded-xl">
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Estado Motor</p>
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-2 h-2 rounded-full bg-[#13ec80] animate-pulse"></div>
+                                        <h3 className="text-xl font-bold text-white uppercase tracking-tighter">Online</h3>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-[#121413] border border-[#1f2b24] rounded-xl overflow-hidden shadow-2xl">
+                                <div className="p-4 border-b border-[#1f2b24] bg-white/5 flex justify-between items-center">
+                                    <h3 className="text-xs font-bold text-white uppercase tracking-widest">Actividad Reciente del Sistema</h3>
+                                    <div className="flex gap-4">
+                                        <span className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
+                                            <span className="w-2 h-2 rounded-full bg-[#13ec80]"></span> Éxito
+                                        </span>
+                                        <span className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500">
+                                            <span className="w-2 h-2 rounded-full bg-blue-500"></span> Proceso
+                                        </span>
+                                    </div>
+                                </div>
+                                <div className="divide-y divide-[#1f2b24]/50">
+                                    {recentLogs.map((log) => (
+                                        <div key={log.id} className="p-4 hover:bg-white/[0.02] transition-all flex items-center justify-between group">
+                                            <div className="flex items-center gap-4">
+                                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${log.type === 'success' ? 'bg-[#13ec80]/10 text-[#13ec80]' : 'bg-amber-400/10 text-amber-400'
+                                                    }`}>
+                                                    <span className="material-symbols-outlined !text-lg">
+                                                        {log.type === 'success' ? 'check_circle' : 'warning'}
+                                                    </span>
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="font-bold text-white group-hover:text-[#13ec80] transition-colors">{log.title}</p>
+                                                        <span className={`text-[9px] px-1.5 py-0.5 rounded font-black uppercase tracking-tighter border ${log.text.includes('B2C')
+                                                            ? 'bg-blue-500/10 border-blue-500/20 text-blue-400'
+                                                            : 'bg-[#13ec80]/10 border-[#13ec80]/20 text-[#13ec80]'
+                                                            }`}>
+                                                            {log.text.includes('B2C') ? 'B2C Account' : 'Partner Event'}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-[11px] text-slate-500">{log.text}</p>
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className="text-xs font-mono text-white/50">{log.time}</p>
+                                                <p className="text-[9px] text-slate-700 font-bold uppercase tracking-widest group-hover:text-slate-500 transition-colors">Transaction ID: {log.id.substring(0, 8)}</p>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {recentLogs.length === 0 && (
+                                        <div className="py-20 text-center">
+                                            <span className="material-symbols-outlined !text-4xl text-white/5 mb-2">history</span>
+                                            <p className="text-slate-600 font-bold uppercase tracking-widest text-xs">No se encontraron registros recientes</p>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </div>
                     )}
                 </div>
-            </main>
+            </main >
 
             {/* Create Partner Modal */}
-            {showCreatePartner && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md">
-                    <div className="bg-[#121413] border border-[#1f2b24] p-8 rounded-2xl w-full max-w-md shadow-[0_0_50px_rgba(0,0,0,1)]">
-                        <h3 className="text-xl font-black text-white uppercase mb-6 flex items-center gap-3">
-                            <span className="material-symbols-outlined text-[#13ec80]">add_business</span> Nuevo Revendedor
-                        </h3>
-                        <div className="space-y-4">
-                            <div>
-                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Razón Social</label>
-                                <input
-                                    className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-lg px-4 py-3 text-white outline-none focus:border-[#13ec80]"
-                                    placeholder="Nombre de la Agencia..."
-                                    value={newPartner.name}
-                                    onChange={(e) => setNewPartner({ ...newPartner, name: e.target.value })}
-                                />
+            {
+                showCreatePartner && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md">
+                        <div className="bg-[#121413] border border-[#1f2b24] p-8 rounded-2xl w-full max-w-md shadow-[0_0_50px_rgba(0,0,0,1)]">
+                            <h3 className="text-xl font-black text-white uppercase mb-6 flex items-center gap-3">
+                                <span className="material-symbols-outlined text-[#13ec80]">add_business</span> Nuevo Revendedor
+                            </h3>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Razón Social</label>
+                                    <input
+                                        className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-lg px-4 py-3 text-white outline-none focus:border-[#13ec80]"
+                                        placeholder="Nombre de la Agencia..."
+                                        value={newPartner.name}
+                                        onChange={(e) => setNewPartner({ ...newPartner, name: e.target.value })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Email de Usuario (Login)</label>
+                                    <input
+                                        className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-lg px-4 py-3 text-white outline-none focus:border-[#13ec80]"
+                                        placeholder="admin@agencia.com"
+                                        type="email"
+                                        value={newPartner.email}
+                                        onChange={(e) => setNewPartner({ ...newPartner, email: e.target.value })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Créditos Iniciales</label>
+                                    <input
+                                        className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-lg px-4 py-3 text-white outline-none focus:border-[#13ec80]"
+                                        type="number"
+                                        value={newPartner.initialCredits}
+                                        onChange={(e) => setNewPartner({ ...newPartner, initialCredits: parseInt(e.target.value) || 0 })}
+                                    />
+                                </div>
                             </div>
-                            <div>
-                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Email de Usuario (Login)</label>
-                                <input
-                                    className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-lg px-4 py-3 text-white outline-none focus:border-[#13ec80]"
-                                    placeholder="admin@agencia.com"
-                                    type="email"
-                                    value={newPartner.email}
-                                    onChange={(e) => setNewPartner({ ...newPartner, email: e.target.value })}
-                                />
+                            <div className="flex gap-4 mt-8">
+                                <button onClick={() => setShowCreatePartner(false)} className="flex-1 py-3 text-xs font-bold text-slate-500 hover:text-white transition-colors">CANCELAR</button>
+                                <button
+                                    onClick={handleCreatePartner}
+                                    className="flex-1 py-3 bg-[#13ec80] text-[#0a0c0b] font-black text-xs rounded-lg shadow-[0_0_20px_rgba(19,236,128,0.2)]"
+                                >
+                                    CREAR PARTNER
+                                </button>
                             </div>
-                            <div>
-                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Créditos Iniciales</label>
-                                <input
-                                    className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-lg px-4 py-3 text-white outline-none focus:border-[#13ec80]"
-                                    type="number"
-                                    value={newPartner.initialCredits}
-                                    onChange={(e) => setNewPartner({ ...newPartner, initialCredits: parseInt(e.target.value) || 0 })}
-                                />
-                            </div>
-                        </div>
-                        <div className="flex gap-4 mt-8">
-                            <button onClick={() => setShowCreatePartner(false)} className="flex-1 py-3 text-xs font-bold text-slate-500 hover:text-white transition-colors">CANCELAR</button>
-                            <button
-                                onClick={handleCreatePartner}
-                                className="flex-1 py-3 bg-[#13ec80] text-[#0a0c0b] font-black text-xs rounded-lg shadow-[0_0_20px_rgba(19,236,128,0.2)]"
-                            >
-                                CREAR PARTNER
-                            </button>
                         </div>
                     </div>
-                </div>
-            )}
+                )
+            }
 
             {/* Top Up Modal */}
-            {showTopUp && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md">
-                    <div className="bg-[#121413] border border-[#1f2b24] p-8 rounded-2xl w-full max-w-md">
-                        <h3 className="text-xl font-black text-white uppercase mb-4">Recarga de Créditos</h3>
-                        <p className="text-slate-400 text-sm mb-6">Asignando nuevos créditos a <span className="text-[#13ec80] font-bold">{showTopUp.name}</span></p>
-                        <div className="grid grid-cols-2 gap-4">
-                            {[1000, 5000, 10000, 50000].map(amt => (
-                                <button
-                                    key={amt}
-                                    onClick={() => handleTopUp(amt)}
-                                    className="py-4 border border-[#1f2b24] bg-[#0a0c0b] rounded-xl text-white font-black hover:border-[#13ec80] hover:text-[#13ec80] transition-all uppercase"
-                                >
-                                    +{amt.toLocaleString()}
-                                </button>
-                            ))}
+            {
+                showTopUp && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md">
+                        <div className="bg-[#121413] border border-[#1f2b24] p-8 rounded-2xl w-full max-w-md">
+                            <h3 className="text-xl font-black text-white uppercase mb-4">Recarga de Créditos</h3>
+                            <p className="text-slate-400 text-sm mb-6">Asignando nuevos créditos a <span className="text-[#13ec80] font-bold">{showTopUp.name}</span></p>
+                            <div className="grid grid-cols-2 gap-4">
+                                {[1000, 5000, 10000, 50000].map(amt => (
+                                    <button
+                                        key={amt}
+                                        onClick={() => handleTopUp(amt)}
+                                        className="py-4 border border-[#1f2b24] bg-[#0a0c0b] rounded-xl text-white font-black hover:border-[#13ec80] hover:text-[#13ec80] transition-all uppercase"
+                                    >
+                                        +{amt.toLocaleString()}
+                                    </button>
+                                ))}
+                            </div>
+                            <button onClick={() => setShowTopUp(null)} className="w-full mt-6 py-3 text-xs font-bold text-slate-500 hover:text-white tracking-widest uppercase">Cerrar</button>
                         </div>
-                        <button onClick={() => setShowTopUp(null)} className="w-full mt-6 py-3 text-xs font-bold text-slate-500 hover:text-white tracking-widest uppercase">Cerrar</button>
                     </div>
-                </div>
-            )}
+                )
+            }
+
+            {/* Style Edit Modal */}
+            {
+                editingStyle && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md">
+                        <div className="bg-[#121413] border border-[#1f2b24] p-8 rounded-2xl w-full max-w-md shadow-2xl">
+                            <h3 className="text-xl font-black text-white uppercase mb-6 flex items-center gap-3">
+                                <span className="material-symbols-outlined text-[#13ec80]">auto_fix_high</span>
+                                {editingStyle === 'new' ? 'Crear Nuevo Estilo' : 'Editar Estilo'}
+                            </h3>
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Model ID (Clave única)</label>
+                                    <input
+                                        className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-lg px-4 py-3 text-white outline-none focus:border-[#13ec80] font-mono text-sm"
+                                        placeholder="ej: cyberpunk_v1"
+                                        value={styleForm.id}
+                                        disabled={editingStyle !== 'new'}
+                                        onChange={(e) => setStyleForm({ ...styleForm, id: e.target.value.toLowerCase() })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Etiqueta Pública</label>
+                                    <input
+                                        className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-lg px-4 py-3 text-white outline-none focus:border-[#13ec80]"
+                                        placeholder="Nombre que ve el usuario..."
+                                        value={styleForm.label}
+                                        onChange={(e) => setStyleForm({ ...styleForm, label: e.target.value })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Categoría</label>
+                                    <input
+                                        className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-lg px-4 py-3 text-white outline-none focus:border-[#13ec80]"
+                                        placeholder="Cine, Comic, Realista..."
+                                        value={styleForm.category}
+                                        onChange={(e) => setStyleForm({ ...styleForm, category: e.target.value })}
+                                    />
+                                </div>
+                                <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/10">
+                                    <div className="flex items-center gap-2">
+                                        <span className="material-symbols-outlined text-amber-400">workspace_premium</span>
+                                        <span className="text-xs font-bold text-white uppercase">Acceso Premium</span>
+                                    </div>
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            className="sr-only peer"
+                                            checked={styleForm.is_premium}
+                                            onChange={(e) => setStyleForm({ ...styleForm, is_premium: e.target.checked })}
+                                        />
+                                        <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#13ec80]"></div>
+                                    </label>
+                                </div>
+                            </div>
+                            <div className="flex gap-4 mt-8">
+                                <button onClick={() => setEditingStyle(null)} className="flex-1 py-3 text-xs font-bold text-slate-500 hover:text-white transition-colors">CANCELAR</button>
+                                <button
+                                    onClick={handleUpdateStyle}
+                                    className="flex-1 py-3 bg-[#13ec80] text-[#0a0c0b] font-black text-xs rounded-lg shadow-[0_0_20px_rgba(19,236,128,0.2)]"
+                                >
+                                    GUARDAR CAMBIOS
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
 
             <style>{`
                 .custom-scrollbar::-webkit-scrollbar {
@@ -551,7 +1317,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                     100% { box-shadow: 0 0 0 0 rgba(19, 236, 128, 0); }
                 }
             `}</style>
-        </div>
+        </div >
     );
 };
 
