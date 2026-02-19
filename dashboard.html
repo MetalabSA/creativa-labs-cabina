@@ -8,14 +8,13 @@
 
     <meta name="description" content="Panel de administración y gestión para Partners y Clientes de Creativa Labs." />
     <link rel="icon" type="image/png" href="/cabina/favicon.png" />
-
-    <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
         href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;900&family=JetBrains+Mono:wght@400;700&display=swap"
         rel="stylesheet">
 
+    <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
             theme: {
@@ -33,7 +32,6 @@
             }
         }
     </script>
-
     <style>
         :root {
             --accent-color: #135bec;
@@ -43,6 +41,8 @@
             background-color: #050505;
             color: white;
             font-family: 'Inter', sans-serif;
+            opacity: 0;
+            transition: opacity 0.3s ease-in-out;
         }
 
         /* Custom Scrollbar for Dashboard */
@@ -84,6 +84,25 @@
 <body>
     <div id="dashboard-root"></div>
     <script type="module" src="/dashboard.tsx"></script>
-</body>
+    <script>
+        // Anti-flicker: Show body after a short delay to allow Tailwind to parse
+        const showBody = () => {
+            document.body.style.opacity = '1';
+        };
+
+        let attempts = 0;
+        const checkTailwind = () => {
+            if (window.tailwind) {
+                setTimeout(showBody, 100);
+            } else if (attempts < 50) { // Wait up to 2.5s
+                attempts++;
+                setTimeout(checkTailwind, 50);
+            } else {
+                showBody(); // Fallback
+            }
+        };
+
+        window.addEventListener('DOMContentLoaded', checkTailwind);
+    </script>
 
 </html>
