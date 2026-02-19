@@ -136,8 +136,60 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, profile 
         }
     };
 
-    if (loading) return <div className="text-white p-10 flex justify-center">Loading Dashboard...</div>;
-    if (!event) return <div className="text-white p-10 flex justify-center">No event found linked to this email.</div>;
+    const handleCreateEvent = async () => {
+        try {
+            setSaving(true);
+            const defaultSlug = `boda-${Date.now().toString().slice(-4)}`;
+            const { data, error } = await supabase.from('events').insert({
+                client_email: profile.email.toLowerCase(),
+                event_slug: defaultSlug,
+                event_name: 'Mi Celebración',
+                is_active: true,
+                credits_allocated: 50,
+                config: { primary_color: '#7f13ec', welcome_text: '¡Bienvenidos!' }
+            }).select().single();
+
+            if (error) throw error;
+            if (data) {
+                setEvent(data);
+                setEventName(data.event_name);
+                fetchEventForClient();
+            }
+        } catch (e: any) {
+            console.error('Error creating event:', e);
+            alert('Error al inicializar evento: ' + (e.message || e.error_description || 'Permisos insuficientes'));
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    if (loading) return <div className="text-white p-10 flex justify-center items-center h-screen bg-[#0a0a0a]"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-[#7f13ec]"></div></div>;
+
+    if (!event) return (
+        <div className="text-white min-h-screen flex flex-col items-center justify-center bg-[#0a0a0a] p-6 text-center gap-6">
+            <div className="w-16 h-16 bg-[#7f13ec]/20 rounded-full flex items-center justify-center text-[#7f13ec] mb-2">
+                <span className="material-symbols-outlined text-3xl">event_busy</span>
+            </div>
+            <h2 className="text-2xl font-bold">No hay evento activo</h2>
+            <p className="text-slate-400 max-w-md">
+                No encontramos un evento vinculado a <strong>{profile.email}</strong>.
+                Si eres un nuevo cliente, puedes inicializar tu panel ahora.
+            </p>
+            <button
+                onClick={handleCreateEvent}
+                disabled={saving}
+                className="bg-[#7f13ec] hover:bg-[#690cc4] text-white px-8 py-3 rounded-full font-bold transition-all flex items-center gap-2"
+            >
+                {saving ? 'Creando...' : 'Inicializar Evento'}
+            </button>
+            <button
+                onClick={() => window.location.reload()}
+                className="text-slate-500 hover:text-white text-sm underline"
+            >
+                Reintentar
+            </button>
+        </div>
+    );
 
     const eventLink = `https://photobooth.creativa-labs.com/?event=${event.event_slug}`;
     const creditsUsed = event.credits_used || 0;

@@ -13,6 +13,7 @@ interface Partner {
 interface AdminProps {
     IDENTITIES: any;
     onBack: () => void;
+    initialView?: string;
 }
 
 export const Admin: React.FC<AdminProps> = ({ IDENTITIES, onBack }) => {

@@ -99,6 +99,15 @@ const DashboardApp: React.FC = () => {
         );
     };
 
+    // Full Screen Dashboards Override
+    if (profile?.is_master) {
+        return <MasterDashboard IDENTITIES={IDENTITIES} onBack={handleLogout} />;
+    }
+
+    if (profile?.role === 'client') {
+        return <ClientDashboard user={session.user} profile={profile} />;
+    }
+
     return (
         <div className="flex h-screen w-full bg-[#0f172a] text-slate-100 font-sans overflow-hidden dark">
             {/* Sidebar Navigation */}
@@ -125,20 +134,6 @@ const DashboardApp: React.FC = () => {
                                 {renderSidebarItem('events', 'Events', Calendar)}
                                 {/* 'credits' tab redirects to overview or a specific credits view, for now reuse overview or placeholder */}
                                 {renderSidebarItem('branding', 'Clientes', Palette)}
-                            </>
-                        )}
-
-                        {profile?.role === 'client' && (
-                            <>
-                                {renderSidebarItem('overview', 'Mi Evento', Calendar)}
-                                {renderSidebarItem('gallery', 'Ver Galería', Sparkles)}
-                            </>
-                        )}
-
-                        {profile?.is_master && (
-                            <>
-                                {renderSidebarItem('master', 'Partners', Shield)}
-                                {renderSidebarItem('users', 'Users List', Users)}
                             </>
                         )}
 
@@ -179,16 +174,12 @@ const DashboardApp: React.FC = () => {
                 <div className="max-w-7xl mx-auto">
                     {activeTab === 'overview' && (
                         <div className="animate-fade-in">
-                            {profile?.is_master ? (
-                                <MasterDashboard IDENTITIES={IDENTITIES} onBack={() => { }} />
-                            ) : profile?.role === 'partner' ? (
+                            {profile?.role === 'partner' ? (
                                 <PartnerDashboard user={session.user} profile={profile} onBack={() => { }} initialView="overview" />
-                            ) : profile?.role === 'client' ? (
-                                <ClientDashboard user={session.user} profile={profile} />
                             ) : (
                                 <div className="text-center py-20">
                                     <h2 className="text-2xl font-bold text-white">Bienvenido</h2>
-                                    <p className="text-slate-400">Panel de generación pública (Modelo A) próximamente...</p>
+                                    <p className="text-slate-400">Contenido restringido.</p>
                                 </div>
                             )}
                         </div>
@@ -196,10 +187,6 @@ const DashboardApp: React.FC = () => {
 
                     {activeTab === 'events' && <PartnerDashboard user={session.user} profile={profile} onBack={() => { }} initialView="events" />}
                     {activeTab === 'branding' && <PartnerDashboard user={session.user} profile={profile} onBack={() => { }} initialView="branding" />}
-
-                    {/* Master Admin Views */}
-                    {activeTab === 'master' && <MasterDashboard IDENTITIES={IDENTITIES} onBack={() => { }} initialView="partners" />}
-                    {activeTab === 'users' && <MasterDashboard IDENTITIES={IDENTITIES} onBack={() => { }} initialView="users" />}
                 </div>
             </main>
         </div>
