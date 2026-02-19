@@ -12,6 +12,8 @@ import { SettingsView } from './components/SettingsView';
 import { PacksView } from './components/PacksView';
 import { EventGallery } from './components/EventGallery';
 import { EventQRGenerator } from './components/EventQRGenerator';
+import { GuestExperience } from './components/kiosk/GuestExperience';
+import { PublicGallery } from './components/kiosk/PublicGallery';
 import { IDENTITIES, CATEGORIES, PREFERRED_PACK_ORDER } from './lib/constants';
 
 const hexToRgba = (hex: string, alpha: number) => {
@@ -71,7 +73,7 @@ const App: React.FC = () => {
 
   // Auth & Profile State
   const [session, setSession] = useState<any>(null);
-  const [profile, setProfile] = useState<{ credits: number, total_generations: number, is_master?: boolean, unlocked_packs?: string[], full_name?: string } | null>(null);
+  const [profile, setProfile] = useState<{ credits: number, total_generations: number, is_master?: boolean, unlocked_packs?: string[], full_name?: string, role?: string } | null>(null);
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [showAdmin, setShowAdmin] = useState(false);
   const [userGenerations, setUserGenerations] = useState<any[]>([]);
@@ -180,6 +182,10 @@ const App: React.FC = () => {
       fetchFavorites();
     }
   }, [session]);
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const isGalleryMode = urlParams.get('mode') === 'gallery';
+  const isStaff = profile?.is_master || profile?.role === 'partner' || profile?.role === 'admin';
 
   // --- DETECTOR DE EVENTOS ---
   useEffect(() => {
@@ -375,10 +381,20 @@ const App: React.FC = () => {
   const fetchGenerations = async () => {
     try {
       setLoadingGenerations(true);
-      const { data, error } = await supabase
+      let query = supabase
         .from('generations')
-        .select('*')
-        .eq('user_id', session.user.id)
+        .select('*');
+
+      if (eventConfig?.id) {
+        query = query.eq('event_id', eventConfig.id);
+      } else if (session?.user?.id) {
+        query = query.eq('user_id', session.user.id);
+      } else {
+        setLoadingGenerations(false);
+        return;
+      }
+
+      const { data, error } = await query
         .order('created_at', { ascending: false })
         .limit(20);
 
@@ -923,8 +939,14 @@ const App: React.FC = () => {
   // --- EVENT MODE: Loading mientras se verifica si hay evento ---
   if (eventLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-primary">
-        <div className="text-white/50 text-sm animate-pulse">Cargando experiencia...</div>
+      <div className="flex flex-col items-center justify-center min-h-screen bg-primary">
+        <div className="relative">
+          <div className="w-16 h-16 border-4 border-white/5 border-t-[#7f13ec] rounded-full animate-spin"></div>
+          <Sparkles className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-6 h-6 text-[#7f13ec] animate-pulse" />
+        </div>
+        <div className="mt-8 text-white font-bold tracking-[0.2em] animate-pulse uppercase text-[10px]">
+          Iniciando Experiencia Alquímica
+        </div>
       </div>
     );
   }
@@ -953,6 +975,15 @@ const App: React.FC = () => {
   // --- AUTH GATE: bypass si estamos en modo evento ---
   if (!session && !eventConfig) {
     return <Auth />;
+  }
+
+  // --- PHASE 4: GUEST EXPERIENCE & PUBLIC GALLERY ---
+  if (isGalleryMode && eventConfig) {
+    return <PublicGallery eventConfig={eventConfig} supabase={supabase} />;
+  }
+
+  if (eventConfig && !isStaff) {
+    return <GuestExperience eventConfig={eventConfig} supabase={supabase} />;
   }
 
   // Administrative views moved to dashboard.html

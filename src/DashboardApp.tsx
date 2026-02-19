@@ -1,6 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import { supabase } from './lib/supabaseClient';
-import { IDENTITIES } from './lib/constants';
 import {
     LayoutDashboard,
     Calendar,
@@ -11,12 +10,21 @@ import {
     Sparkles,
     Shield,
     Users,
-    // Lucide icons mapping to Material Symbols if needed
 } from 'lucide-react';
-import { PartnerDashboard } from './components/PartnerDashboard';
-import { Admin as MasterDashboard } from './components/Admin';
-import { ClientDashboard } from './components/ClientDashboard';
+
+const PartnerDashboard = React.lazy(() => import('./components/dashboards/PartnerDashboard').then(m => ({ default: m.PartnerDashboard })));
+const MasterDashboard = React.lazy(() => import('./components/dashboards/Admin').then(m => ({ default: m.Admin })));
+const ClientDashboard = React.lazy(() => import('./components/dashboards/ClientDashboard').then(m => ({ default: m.ClientDashboard })));
 import { Auth } from './components/Auth';
+
+const LoadingUI = ({ subtitle = 'Iniciando dashboard...' }) => (
+    <div className="min-h-screen bg-[#0a0c0b] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+            <div className="w-12 h-12 border-t-2 border-[#135bec] rounded-full animate-spin" />
+            <p className="text-slate-400 text-sm font-medium animate-pulse">{subtitle}</p>
+        </div>
+    </div>
+);
 
 const DashboardApp: React.FC = () => {
     const [session, setSession] = useState<any>(null);
@@ -67,14 +75,7 @@ const DashboardApp: React.FC = () => {
     };
 
     if (loading) {
-        return (
-            <div className="min-h-screen bg-[#0a0c0b] flex items-center justify-center">
-                <div className="flex flex-col items-center gap-4">
-                    <div className="w-12 h-12 border-t-2 border-[#135bec] rounded-full animate-spin" />
-                    <p className="text-slate-400 text-sm font-medium animate-pulse">Initializing dashboard...</p>
-                </div>
-            </div>
-        );
+        return <LoadingUI />;
     }
 
     if (!session) {
@@ -100,12 +101,20 @@ const DashboardApp: React.FC = () => {
     };
 
     // Full Screen Dashboards Override
-    if (profile?.is_master) {
-        return <MasterDashboard IDENTITIES={IDENTITIES} onBack={handleLogout} />;
+    if (profile?.is_master && activeTab !== 'client_view') {
+        return (
+            <Suspense fallback={<LoadingUI />}>
+                <MasterDashboard onBack={handleLogout} />
+            </Suspense>
+        );
     }
 
-    if (profile?.role === 'client') {
-        return <ClientDashboard user={session.user} profile={profile} />;
+    if (profile?.role === 'client' || activeTab === 'client_view') {
+        return (
+            <Suspense fallback={<LoadingUI />}>
+                <ClientDashboard user={session.user} profile={profile} />
+            </Suspense>
+        );
     }
 
     return (
@@ -126,21 +135,27 @@ const DashboardApp: React.FC = () => {
 
                     {/* Navigation Menu */}
                     <nav className="flex flex-col gap-1">
-                        {renderSidebarItem('overview', 'Dashboard', LayoutDashboard)}
+                        {renderSidebarItem('overview', 'Vista General', LayoutDashboard)}
 
                         {/* Role-based Menu Items */}
+                        {profile?.is_master && (
+                            <>
+                                {renderSidebarItem('overview', 'Panel Master', Shield)}
+                                {renderSidebarItem('client_view', 'Vista Cliente', LayoutDashboard)}
+                            </>
+                        )}
                         {profile?.role === 'partner' && (
                             <>
-                                {renderSidebarItem('events', 'Events', Calendar)}
-                                {/* 'credits' tab redirects to overview or a specific credits view, for now reuse overview or placeholder */}
-                                {renderSidebarItem('branding', 'Clientes', Palette)}
+                                {renderSidebarItem('events', 'Eventos', Calendar)}
+                                {renderSidebarItem('wallet', 'Billetera', CreditCard)}
+                                {renderSidebarItem('branding', 'Identidad', Palette)}
                             </>
                         )}
 
                         {/* Settings - common for all */}
                         <button className="w-full flex items-center gap-3 px-6 py-3 text-slate-400 hover:text-white hover:bg-slate-900 transition-all group text-left border-r-[3px] border-transparent">
                             <Settings className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                            <span className="text-sm font-medium">Settings</span>
+                            <span className="text-sm font-medium">Configuración</span>
                         </button>
                     </nav>
                 </div>
@@ -155,15 +170,15 @@ const DashboardApp: React.FC = () => {
                                 className="size-10 rounded-full border-2 border-slate-700 bg-slate-800 object-cover"
                             />
                             <div className="flex flex-col min-w-0">
-                                <span className="text-xs font-bold text-white truncate">{profile?.full_name || 'Admin User'}</span>
-                                <span className="text-[10px] text-slate-500 uppercase tracking-wider">{profile?.role === 'partner' ? 'Partner Admin' : profile?.is_master ? 'Master Admin' : 'Guest'}</span>
+                                <span className="text-xs font-bold text-white truncate">{profile?.full_name || 'Usuario Admin'}</span>
+                                <span className="text-[10px] text-slate-500 uppercase tracking-wider">{profile?.role === 'partner' ? 'Gestor Partner' : profile?.is_master ? 'Admin Maestro' : 'Invitado'}</span>
                             </div>
                         </div>
                         <button
                             onClick={handleLogout}
                             className="w-full py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-[11px] font-bold text-white transition-colors uppercase tracking-wider"
                         >
-                            LOGOUT
+                            CERRAR SESIÓN
                         </button>
                     </div>
                 </div>
@@ -172,21 +187,24 @@ const DashboardApp: React.FC = () => {
             {/* Main Content Area */}
             <main className="flex-1 overflow-y-auto custom-scrollbar p-8 bg-[#0f172a]">
                 <div className="max-w-7xl mx-auto">
-                    {activeTab === 'overview' && (
-                        <div className="animate-fade-in">
-                            {profile?.role === 'partner' ? (
-                                <PartnerDashboard user={session.user} profile={profile} onBack={() => { }} initialView="overview" />
-                            ) : (
-                                <div className="text-center py-20">
-                                    <h2 className="text-2xl font-bold text-white">Bienvenido</h2>
-                                    <p className="text-slate-400">Contenido restringido.</p>
-                                </div>
-                            )}
-                        </div>
-                    )}
+                    <Suspense fallback={<LoadingUI subtitle="Cargando panel..." />}>
+                        {activeTab === 'overview' && (
+                            <div className="animate-fade-in">
+                                {profile?.role === 'partner' ? (
+                                    <PartnerDashboard user={session.user} profile={profile} onBack={() => { }} initialView="overview" />
+                                ) : (
+                                    <div className="text-center py-20">
+                                        <h2 className="text-2xl font-bold text-white">Bienvenido</h2>
+                                        <p className="text-slate-400">Contenido restringido.</p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
-                    {activeTab === 'events' && <PartnerDashboard user={session.user} profile={profile} onBack={() => { }} initialView="events" />}
-                    {activeTab === 'branding' && <PartnerDashboard user={session.user} profile={profile} onBack={() => { }} initialView="branding" />}
+                        {activeTab === 'events' && <PartnerDashboard user={session.user} profile={profile} onBack={() => { }} initialView="events" />}
+                        {activeTab === 'wallet' && <PartnerDashboard user={session.user} profile={profile} onBack={() => { }} initialView="wallet" />}
+                        {activeTab === 'branding' && <PartnerDashboard user={session.user} profile={profile} onBack={() => { }} initialView="branding" />}
+                    </Suspense>
                 </div>
             </main>
         </div>
