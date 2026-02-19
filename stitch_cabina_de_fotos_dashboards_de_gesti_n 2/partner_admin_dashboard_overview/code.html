@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Partner Admin Dashboard Overview</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#135bec",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#0f172a",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.5rem",
+                        "lg": "1rem",
+                        "xl": "1.5rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .sidebar-item-active {
+            background: rgba(19, 91, 236, 0.15);
+            color: #135bec;
+            border-right: 3px solid #135bec;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark text-slate-900 dark:text-slate-100 antialiased overflow-hidden">
+<div class="flex h-screen w-full overflow-hidden">
+<!-- Sidebar Navigation -->
+<aside class="w-64 flex-shrink-0 bg-slate-950 border-r border-slate-800 flex flex-col justify-between py-6">
+<div class="flex flex-col gap-8">
+<div class="px-6 flex items-center gap-3">
+<div class="size-10 rounded-lg bg-primary flex items-center justify-center shadow-lg shadow-primary/20">
+<span class="material-symbols-outlined text-white">auto_awesome</span>
+</div>
+<div class="flex flex-col">
+<span class="text-sm font-bold tracking-tight text-white">PHOTO BOOTH</span>
+<span class="text-[10px] uppercase tracking-widest text-slate-500 font-semibold">Reseller Pro</span>
+</div>
+</div>
+<nav class="flex flex-col gap-1">
+<a class="flex items-center gap-3 px-6 py-3 sidebar-item-active group" href="#">
+<span class="material-symbols-outlined group-hover:scale-110 transition-transform">dashboard</span>
+<span class="text-sm font-medium">Dashboard</span>
+</a>
+<a class="flex items-center gap-3 px-6 py-3 text-slate-400 hover:text-white hover:bg-slate-900 transition-all group" href="#">
+<span class="material-symbols-outlined group-hover:scale-110 transition-transform">calendar_today</span>
+<span class="text-sm font-medium">Events</span>
+</a>
+<a class="flex items-center gap-3 px-6 py-3 text-slate-400 hover:text-white hover:bg-slate-900 transition-all group" href="#">
+<span class="material-symbols-outlined group-hover:scale-110 transition-transform">payments</span>
+<span class="text-sm font-medium">Credits</span>
+</a>
+<a class="flex items-center gap-3 px-6 py-3 text-slate-400 hover:text-white hover:bg-slate-900 transition-all group" href="#">
+<span class="material-symbols-outlined group-hover:scale-110 transition-transform">palette</span>
+<span class="text-sm font-medium">White Label</span>
+</a>
+<a class="flex items-center gap-3 px-6 py-3 text-slate-400 hover:text-white hover:bg-slate-900 transition-all group" href="#">
+<span class="material-symbols-outlined group-hover:scale-110 transition-transform">settings</span>
+<span class="text-sm font-medium">Settings</span>
+</a>
+</nav>
+</div>
+<div class="px-4">
+<div class="p-4 rounded-xl bg-slate-900 border border-slate-800 flex flex-col gap-3">
+<div class="flex items-center gap-3">
+<img alt="Admin Profile" class="size-10 rounded-full border-2 border-slate-700" data-alt="Portrait of a professional man for profile" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCGywbJcs-ZzwxyLVYBpu9CATwr9y9tmPYEzfxdP3VZZLREKa_RZhiPhHPiIqCR9Q8mqThsLmuc8-RpbaieEWm5PY6NxsmEnTDlven6XVAqYVGwVJNMGcFli1stn9heamsfAy8H4eEj5akAncPBJ07ddwo297GWdzsoz9sPOogaEvZjB-_yTyCrupFR5rMNQhXOlEJvz9IV0BaVIYJPk05mwzvog5_PbVdVs1_iYIJx35GtH9tpI7t2asT5VNH-6kClVbYfVbui6gU"/>
+<div class="flex flex-col">
+<span class="text-xs font-bold text-white">Alex Rivera</span>
+<span class="text-[10px] text-slate-500">Partner Admin</span>
+</div>
+</div>
+<button class="w-full py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-[11px] font-bold transition-colors">LOGOUT</button>
+</div>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="flex-1 overflow-y-auto custom-scrollbar p-8">
+<!-- Header Section -->
+<header class="flex flex-wrap items-center justify-between gap-4 mb-8">
+<div>
+<h1 class="text-3xl font-black tracking-tight text-white mb-1">Dashboard Overview</h1>
+<p class="text-slate-400 text-sm">Welcome back, here's what's happening with your events today.</p>
+</div>
+<div class="flex items-center gap-3">
+<button class="flex items-center gap-2 px-5 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-sm font-semibold text-white transition-all">
+<span class="material-symbols-outlined text-lg">download</span>
+                        Export Stats
+                    </button>
+<button class="flex items-center gap-2 px-6 py-2.5 bg-primary hover:bg-primary/90 rounded-lg text-sm font-bold text-white shadow-lg shadow-primary/25 transition-all">
+<span class="material-symbols-outlined text-lg">add_circle</span>
+                        Create New Event
+                    </button>
+</div>
+</header>
+<!-- Stats Grid -->
+<section class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+<div class="glass-card rounded-xl p-6 flex flex-col justify-between">
+<div class="flex justify-between items-start mb-4">
+<div>
+<p class="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Wholesale Credits Balance</p>
+<h3 class="text-3xl font-black text-white">25,000</h3>
+</div>
+<div class="p-2 bg-primary/20 rounded-lg text-primary">
+<span class="material-symbols-outlined">account_balance_wallet</span>
+</div>
+</div>
+<div class="space-y-2">
+<div class="flex justify-between text-[11px] font-bold">
+<span class="text-slate-500">CONSUMPTION</span>
+<span class="text-primary">49.8% USED</span>
+</div>
+<div class="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+<div class="bg-primary h-full w-[49.8%] rounded-full shadow-[0_0_8px_rgba(19,91,236,0.5)]"></div>
+</div>
+<p class="text-[10px] text-slate-500 italic text-right">12,450 used of 25,000 credits</p>
+</div>
+</div>
+<div class="glass-card rounded-xl p-6 flex flex-col justify-between">
+<div class="flex justify-between items-start mb-4">
+<div>
+<p class="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Active Events</p>
+<h3 class="text-3xl font-black text-white">12</h3>
+</div>
+<div class="p-2 bg-emerald-500/20 rounded-lg text-emerald-500">
+<span class="material-symbols-outlined">bolt</span>
+</div>
+</div>
+<div class="flex items-center gap-2">
+<div class="flex -space-x-2">
+<div class="w-6 h-6 rounded-full border border-slate-800 bg-slate-700 flex items-center justify-center text-[8px] font-bold">JD</div>
+<div class="w-6 h-6 rounded-full border border-slate-800 bg-primary flex items-center justify-center text-[8px] font-bold">RS</div>
+<div class="w-6 h-6 rounded-full border border-slate-800 bg-slate-600 flex items-center justify-center text-[8px] font-bold">+9</div>
+</div>
+<span class="text-xs text-slate-400 font-medium">Events running currently</span>
+</div>
+</div>
+<div class="glass-card rounded-xl p-6 flex flex-col justify-between border-primary/30 relative overflow-hidden group">
+<div class="absolute top-0 right-0 p-8 opacity-10 group-hover:scale-110 transition-transform">
+<span class="material-symbols-outlined text-8xl text-primary">shopping_cart</span>
+</div>
+<div class="relative z-10">
+<p class="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Buy More Credits</p>
+<h3 class="text-xl font-bold text-white mb-4 leading-tight">Running low on credits?<br/>Refill instantly.</h3>
+<button class="px-4 py-2 bg-white text-slate-900 rounded-lg text-xs font-black uppercase tracking-wide hover:bg-slate-100 transition-colors">
+                            Top Up Now
+                        </button>
+</div>
+</div>
+</section>
+<div class="grid grid-cols-1 xl:grid-cols-3 gap-8">
+<!-- Events List Table -->
+<div class="xl:col-span-2 space-y-4">
+<div class="flex items-center justify-between px-2">
+<h2 class="text-xl font-bold text-white">My Events List</h2>
+<div class="flex items-center gap-2">
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-lg">search</span>
+<input class="bg-slate-900/50 border-slate-800 rounded-lg pl-9 pr-4 py-1.5 text-xs text-white focus:ring-primary focus:border-primary w-48 transition-all" placeholder="Search events..." type="text"/>
+</div>
+</div>
+</div>
+<div class="glass-card rounded-xl overflow-hidden">
+<table class="w-full text-left border-collapse">
+<thead class="bg-white/5 border-b border-white/10">
+<tr>
+<th class="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Event Name</th>
+<th class="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Consumption</th>
+<th class="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Status</th>
+<th class="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-white/5">
+<!-- Row 1 -->
+<tr class="hover:bg-white/5 transition-colors group">
+<td class="px-6 py-5">
+<div class="flex items-center gap-3">
+<div class="size-9 rounded bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">WT</div>
+<div>
+<p class="text-sm font-bold text-white">Wedding Tech 2024</p>
+<p class="text-[10px] text-slate-500">ID: #EVT-9021</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-5">
+<div class="w-32">
+<div class="flex justify-between text-[10px] mb-1">
+<span class="text-slate-400">850 / 1000</span>
+<span class="text-emerald-500 font-bold">85%</span>
+</div>
+<div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+<div class="h-full bg-emerald-500 w-[85%] rounded-full"></div>
+</div>
+</div>
+</td>
+<td class="px-6 py-5">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-500 text-[10px] font-bold uppercase tracking-wider">
+<span class="size-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                            Active
+                                        </span>
+</td>
+<td class="px-6 py-5 text-right">
+<div class="flex items-center justify-end gap-2">
+<button class="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-all" title="Copy Link">
+<span class="material-symbols-outlined text-xl">link</span>
+</button>
+<button class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-bold rounded text-white transition-all">Manage</button>
+</div>
+</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-white/5 transition-colors group">
+<td class="px-6 py-5">
+<div class="flex items-center gap-3">
+<div class="size-9 rounded bg-purple-500/10 flex items-center justify-center text-purple-500 font-bold text-xs">CL</div>
+<div>
+<p class="text-sm font-bold text-white">Cyber Launch Party</p>
+<p class="text-[10px] text-slate-500">ID: #EVT-4432</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-5">
+<div class="w-32">
+<div class="flex justify-between text-[10px] mb-1">
+<span class="text-slate-400">120 / 500</span>
+<span class="text-primary font-bold">24%</span>
+</div>
+<div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+<div class="h-full bg-primary w-[24%] rounded-full"></div>
+</div>
+</div>
+</td>
+<td class="px-6 py-5">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-800 text-slate-400 text-[10px] font-bold uppercase tracking-wider border border-slate-700">
+<span class="size-1.5 rounded-full bg-slate-500"></span>
+                                            Paused
+                                        </span>
+</td>
+<td class="px-6 py-5 text-right">
+<div class="flex items-center justify-end gap-2">
+<button class="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-all" title="Copy Link">
+<span class="material-symbols-outlined text-xl">link</span>
+</button>
+<button class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-bold rounded text-white transition-all">Manage</button>
+</div>
+</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-white/5 transition-colors group">
+<td class="px-6 py-5">
+<div class="flex items-center gap-3">
+<div class="size-9 rounded bg-amber-500/10 flex items-center justify-center text-amber-500 font-bold text-xs">F1</div>
+<div>
+<p class="text-sm font-bold text-white">F1 Grand Prix Fan Zone</p>
+<p class="text-[10px] text-slate-500">ID: #EVT-7721</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-5">
+<div class="w-32">
+<div class="flex justify-between text-[10px] mb-1">
+<span class="text-slate-400">4,900 / 5000</span>
+<span class="text-rose-500 font-bold">98%</span>
+</div>
+<div class="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+<div class="h-full bg-rose-500 w-[98%] rounded-full"></div>
+</div>
+</div>
+</td>
+<td class="px-6 py-5">
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-500 text-[10px] font-bold uppercase tracking-wider">
+<span class="size-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                                            Active
+                                        </span>
+</td>
+<td class="px-6 py-5 text-right">
+<div class="flex items-center justify-end gap-2">
+<button class="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white transition-all" title="Copy Link">
+<span class="material-symbols-outlined text-xl">link</span>
+</button>
+<button class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs font-bold rounded text-white transition-all">Manage</button>
+</div>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<!-- White Label & Styles Section -->
+<div class="space-y-8">
+<!-- Partner Branding Card -->
+<div class="glass-card rounded-xl p-6">
+<h2 class="text-lg font-bold text-white mb-4">Partner Branding</h2>
+<div class="space-y-5">
+<div>
+<label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Upload Logo</label>
+<div class="w-full border-2 border-dashed border-slate-700 rounded-xl p-6 flex flex-col items-center justify-center bg-slate-900/40 hover:bg-slate-900 transition-colors cursor-pointer group">
+<span class="material-symbols-outlined text-slate-500 group-hover:text-primary mb-2 text-3xl transition-colors">upload_file</span>
+<p class="text-xs text-slate-400 font-medium">Drop your logo here</p>
+<p class="text-[9px] text-slate-600 mt-1">PNG, JPG up to 5MB</p>
+</div>
+</div>
+<div class="flex items-center justify-between gap-4">
+<div class="flex-1">
+<label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Accent Color</label>
+<div class="flex items-center gap-3">
+<div class="size-9 rounded bg-primary border border-white/20 shadow-lg"></div>
+<input class="flex-1 bg-slate-900 border-slate-800 rounded-lg py-1.5 px-3 text-xs text-white font-mono focus:ring-primary" type="text" value="#135BEC"/>
+</div>
+</div>
+<div class="w-14">
+<label class="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">UI Radius</label>
+<select class="w-full bg-slate-900 border-slate-800 rounded-lg py-1.5 px-2 text-xs text-white focus:ring-primary">
+<option>8px</option>
+<option selected="">12px</option>
+<option>16px</option>
+</select>
+</div>
+</div>
+<button class="w-full py-2.5 bg-slate-100 hover:bg-white text-slate-900 text-xs font-bold rounded-lg transition-all shadow-lg">Save Branding</button>
+</div>
+</div>
+<!-- AI Style Management -->
+<div class="glass-card rounded-xl p-6">
+<div class="flex items-center justify-between mb-4">
+<h2 class="text-lg font-bold text-white">AI Style Presets</h2>
+<span class="text-[10px] font-bold text-primary">4 ACTIVE</span>
+</div>
+<div class="grid grid-cols-2 gap-3">
+<!-- Style 1 -->
+<label class="relative block cursor-pointer group">
+<input checked="" class="peer sr-only" type="checkbox"/>
+<div class="h-20 rounded-lg overflow-hidden relative border-2 border-transparent peer-checked:border-primary transition-all">
+<div class="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent z-10"></div>
+<img alt="Cyberpunk Style" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" data-alt="Cyberpunk neon city illustration" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDpQXxp0qb8IgRKzHhMbym4nJcN7xqMzf-KMx_re7WLjtheXvhFt60jVXTfRVEb-g0TcZnMR1RqYjZonfIFnyw9XzXvkhXyx8qroj8uws0_smg4KtHZC4L5ln8ZKxOENk6U_mqrmn20mBxLoVkDmaYlRkLoqb9MJslvE1vccCezVcIUwyR6q2OnThpFqr23Lq8HKbsEYKFt4Hj3jp2WJ93ipGb0t0kzdQy9OJh-LZprEJ_geEXnjdtis5Tiz6vFN2U_qroKiKR_7UA"/>
+<span class="absolute bottom-2 left-2 z-20 text-[9px] font-black uppercase text-white tracking-widest">Cyberpunk</span>
+<div class="absolute top-2 right-2 z-20 opacity-0 peer-checked:opacity-100 transition-opacity">
+<span class="material-symbols-outlined text-primary text-sm bg-white rounded-full">check_circle</span>
+</div>
+</div>
+</label>
+<!-- Style 2 -->
+<label class="relative block cursor-pointer group">
+<input checked="" class="peer sr-only" type="checkbox"/>
+<div class="h-20 rounded-lg overflow-hidden relative border-2 border-transparent peer-checked:border-primary transition-all">
+<div class="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent z-10"></div>
+<img alt="Anime Style" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" data-alt="Anime character portrait illustration" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCL5tXW7bqQn4naylPAs6IOtNMgqeIVq48bY6e35aWr3X-yPiWefz5tV4EkVPhk-xjumnbD0vrrdgIs-diQ9I1PsrkCMec2q5Q-spj0JZ5gsL6wXuLaAO2fCp53XvxZbCcnPHvrNPiseV1_LB4ZL_PLEJ_hgJDs97CglACEGgYXz1kM_XPgChO0GUtyvHQwX2qP4E9_asy8JphnQfB-gtW-RSSC_I0n0nwQ0qyfzP9Ar4_ZjALmj49n612jzDW424P-bESOKIEV1_U"/>
+<span class="absolute bottom-2 left-2 z-20 text-[9px] font-black uppercase text-white tracking-widest">Anime</span>
+<div class="absolute top-2 right-2 z-20 opacity-0 peer-checked:opacity-100 transition-opacity">
+<span class="material-symbols-outlined text-primary text-sm bg-white rounded-full">check_circle</span>
+</div>
+</div>
+</label>
+<!-- Style 3 -->
+<label class="relative block cursor-pointer group">
+<input checked="" class="peer sr-only" type="checkbox"/>
+<div class="h-20 rounded-lg overflow-hidden relative border-2 border-transparent peer-checked:border-primary transition-all">
+<div class="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent z-10"></div>
+<img alt="Realistic Style" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" data-alt="Ultra realistic lion photography" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDeNVAoX0c7gnKU9yrxCauVEdRlABP6pAEc0KovIifU8taNVMt6RlnD-lcCODILiNdkL588KQbjWZokuJY53UTXr_dOAbeW5T_iwTu9GazBEg2kggAdi9M3-fFwSu0ox5xkgSufJdxgkmMnUzJslBfa2mMbKO1Ag_SPnscalR9fZd69zic3-tJtxxUHCdqa9smNJwyP3FY28DM8Sxqo6Vu_Aykp--zB2wMRWyCFhHBZUSSCM39jqSc_rGNC1SBfTQ-QQVTc4q7Tf6U"/>
+<span class="absolute bottom-2 left-2 z-20 text-[9px] font-black uppercase text-white tracking-widest">Realistic</span>
+<div class="absolute top-2 right-2 z-20 opacity-0 peer-checked:opacity-100 transition-opacity">
+<span class="material-symbols-outlined text-primary text-sm bg-white rounded-full">check_circle</span>
+</div>
+</div>
+</label>
+<!-- Style 4 -->
+<label class="relative block cursor-pointer group">
+<input class="peer sr-only" type="checkbox"/>
+<div class="h-20 rounded-lg overflow-hidden relative border-2 border-transparent peer-checked:border-primary transition-all grayscale peer-checked:grayscale-0">
+<div class="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent z-10"></div>
+<img alt="F1 Style" class="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" data-alt="Modern Formula 1 racing car" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA-ieeBuC3zaZ6tV3xxSSjrOaEh6v7ZZP5ZqtNmB6l94IaLD19cFwIUcZPAFhkYt6rrt06JVxDkJRaoBpLihip_yqUuStMC7ztfr4atgQNyaGeJCP32BFMo3IXyomeZSxlqC33ED_FPJaQl0sm00hf4jl-8ZiSRFvU4b04gYtrg7P8RgQ8D0vxV4cdjgpzxRNNctORmyUxx7amQ8xR_BTt7Uw3iWshnd7Z5KLDbn3paQcdvl9Lc7IZw0Rl7NZaPBPdnb6OjQIo5SjA"/>
+<span class="absolute bottom-2 left-2 z-20 text-[9px] font-black uppercase text-white tracking-widest">F1 Racing</span>
+<div class="absolute top-2 right-2 z-20 opacity-0 peer-checked:opacity-100 transition-opacity">
+<span class="material-symbols-outlined text-primary text-sm bg-white rounded-full">check_circle</span>
+</div>
+</div>
+</label>
+</div>
+<p class="mt-4 text-[10px] text-slate-500 italic text-center leading-relaxed">Changes to style presets will reflect on all new event sessions immediately.</p>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>

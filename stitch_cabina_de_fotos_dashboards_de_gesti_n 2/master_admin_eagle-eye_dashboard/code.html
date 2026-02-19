@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Master Admin Eagle-Eye Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#13ec80",
+                        "background-light": "#f6f8f7",
+                        "background-dark": "#0a0c0b",
+                        "surface-dark": "#121413",
+                        "border-dark": "#1f2b24",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+            font-size: 20px;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #1f2b24;
+            border-radius: 10px;
+        }
+        @keyframes pulse-green {
+            0% { box-shadow: 0 0 0 0 rgba(19, 236, 128, 0.7); }
+            70% { box-shadow: 0 0 0 6px rgba(19, 236, 128, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(19, 236, 128, 0); }
+        }
+        .pulsing-dot {
+            animation: pulse-green 2s infinite;
+        }
+    </style>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-slate-900 dark:text-slate-100 antialiased overflow-x-hidden">
+<div class="flex h-screen overflow-hidden">
+<!-- Sidebar Navigation -->
+<aside class="w-64 border-r border-border-dark bg-background-dark hidden md:flex flex-col">
+<div class="p-6 border-b border-border-dark flex items-center gap-3">
+<div class="w-8 h-8 bg-primary rounded flex items-center justify-center text-background-dark">
+<span class="material-symbols-outlined !text-[20px] font-bold">visibility</span>
+</div>
+<div>
+<h1 class="text-sm font-bold tracking-tight text-white uppercase">Eagle-Eye</h1>
+<p class="text-[10px] text-primary/70 uppercase font-medium tracking-[0.2em]">Master Admin</p>
+</div>
+</div>
+<nav class="flex-1 p-4 flex flex-col gap-1 overflow-y-auto custom-scrollbar">
+<p class="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest">General</p>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/10 text-primary border border-primary/20" href="#">
+<span class="material-symbols-outlined">dashboard</span>
+<span class="text-sm font-medium">Overview</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors" href="#">
+<span class="material-symbols-outlined">corporate_fare</span>
+<span class="text-sm font-medium">Partners</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors" href="#">
+<span class="material-symbols-outlined">auto_fix_high</span>
+<span class="text-sm font-medium">AI Style Engine</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors" href="#">
+<span class="material-symbols-outlined">payments</span>
+<span class="text-sm font-medium">Ledger</span>
+</a>
+<p class="px-3 py-2 mt-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">System</p>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors" href="#">
+<span class="material-symbols-outlined">terminal</span>
+<span class="text-sm font-medium">Log Viewer</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors" href="#">
+<span class="material-symbols-outlined">monitoring</span>
+<span class="text-sm font-medium">Node Metrics</span>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors" href="#">
+<span class="material-symbols-outlined">settings</span>
+<span class="text-sm font-medium">Configuration</span>
+</a>
+</nav>
+<div class="p-4 border-t border-border-dark bg-surface-dark/50">
+<div class="flex items-center gap-3 mb-4">
+<div class="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center border border-primary/40">
+<span class="material-symbols-outlined text-primary !text-[18px]">person</span>
+</div>
+<div class="flex-1 min-w-0">
+<p class="text-xs font-bold text-white truncate">Admin_Root</p>
+<p class="text-[10px] text-slate-500 truncate">Platform Owner</p>
+</div>
+<span class="material-symbols-outlined text-slate-500 cursor-pointer hover:text-white">logout</span>
+</div>
+</div>
+</aside>
+<!-- Main Content -->
+<main class="flex-1 flex flex-col min-w-0 bg-background-dark">
+<!-- Top Command Bar -->
+<header class="h-16 border-b border-border-dark flex items-center justify-between px-8 bg-surface-dark/30 backdrop-blur-md sticky top-0 z-10">
+<div class="flex-1 max-w-2xl relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 !text-[18px]">search</span>
+<input class="w-full bg-surface-dark border-border-dark rounded-lg pl-10 pr-4 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-primary focus:border-primary placeholder-slate-600 transition-all outline-none" placeholder="Search partner slugs, admin emails, or global event IDs..." type="text"/>
+</div>
+<div class="flex items-center gap-4 ml-6">
+<div class="flex flex-col items-end">
+<p class="text-[10px] font-bold text-slate-500 uppercase">System Time</p>
+<p class="text-xs font-mono text-primary leading-tight">14:22:08 UTC</p>
+</div>
+<div class="h-8 w-px bg-border-dark"></div>
+<button class="relative p-2 text-slate-400 hover:text-white transition-colors">
+<span class="material-symbols-outlined">notifications</span>
+<span class="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full border-2 border-background-dark"></span>
+</button>
+</div>
+</header>
+<div class="flex-1 overflow-y-auto custom-scrollbar p-8">
+<!-- 1. Global Analytics -->
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+<div class="bg-surface-dark p-5 border border-border-dark rounded-lg hover:border-primary/30 transition-all group">
+<div class="flex justify-between items-start mb-3">
+<p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Photo Generations</p>
+<span class="text-[10px] font-bold text-primary px-1.5 py-0.5 bg-primary/10 rounded tracking-tight">+12.4%</span>
+</div>
+<div class="flex items-baseline gap-2">
+<h3 class="text-2xl font-bold text-white leading-none">12,840</h3>
+<span class="text-xs text-slate-500">/ Today</span>
+</div>
+<div class="mt-4 w-full bg-border-dark h-1 rounded-full overflow-hidden">
+<div class="bg-primary h-full w-[65%] shadow-[0_0_8px_rgba(19,236,128,0.3)]"></div>
+</div>
+</div>
+<div class="bg-surface-dark p-5 border border-border-dark rounded-lg hover:border-primary/30 transition-all">
+<div class="flex justify-between items-start mb-3">
+<p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Partners</p>
+<span class="material-symbols-outlined text-slate-600 !text-[16px]">groups</span>
+</div>
+<div class="flex items-baseline gap-2">
+<h3 class="text-2xl font-bold text-white leading-none">142</h3>
+<span class="text-xs text-slate-500">Active</span>
+</div>
+<p class="mt-2 text-[10px] text-slate-500">8 pending activation</p>
+</div>
+<div class="bg-surface-dark p-5 border border-border-dark rounded-lg hover:border-primary/30 transition-all">
+<div class="flex justify-between items-start mb-3">
+<p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Credits Sold</p>
+<span class="text-[10px] font-bold text-red-400 px-1.5 py-0.5 bg-red-400/10 rounded tracking-tight">-2.1%</span>
+</div>
+<div class="flex items-baseline gap-2">
+<h3 class="text-2xl font-bold text-white leading-none">1.2M</h3>
+<span class="text-xs text-slate-500">Units</span>
+</div>
+<p class="mt-2 text-[10px] text-slate-500">Avg. $0.12 / credit</p>
+</div>
+<div class="bg-surface-dark p-5 border border-border-dark rounded-lg hover:border-primary/30 transition-all flex flex-col justify-between">
+<div class="flex justify-between items-start mb-3">
+<p class="text-[10px] font-bold text-slate-500 uppercase tracking-wider">AI API Status</p>
+<div class="flex items-center gap-2">
+<span class="text-[10px] font-bold text-primary">LIVE</span>
+<span class="w-2 h-2 rounded-full bg-primary pulsing-dot"></span>
+</div>
+</div>
+<div class="flex items-baseline gap-2">
+<h3 class="text-2xl font-bold text-white leading-none">99.9%</h3>
+<span class="text-xs text-slate-500">Uptime</span>
+</div>
+<p class="mt-2 text-[10px] text-primary/70 font-mono tracking-tighter uppercase">Pulsing Green • Node-21-Alpha</p>
+</div>
+</div>
+<div class="grid grid-cols-1 xl:grid-cols-3 gap-8">
+<!-- 2. Partner Management Table -->
+<div class="xl:col-span-2 space-y-4">
+<div class="flex items-center justify-between">
+<h2 class="text-lg font-bold text-white tracking-tight">Partner Management</h2>
+<button class="text-xs font-bold text-primary border border-primary/30 px-3 py-1.5 rounded bg-primary/5 hover:bg-primary/10 transition-all">Export Report</button>
+</div>
+<div class="bg-surface-dark border border-border-dark rounded-xl overflow-hidden">
+<table class="w-full text-left text-sm">
+<thead>
+<tr class="bg-white/5 border-b border-border-dark">
+<th class="px-6 py-4 font-bold text-slate-400 uppercase text-[10px]">Partner Company</th>
+<th class="px-6 py-4 font-bold text-slate-400 uppercase text-[10px]">Credit Pool</th>
+<th class="px-6 py-4 font-bold text-slate-400 uppercase text-[10px]">Active Events</th>
+<th class="px-6 py-4 font-bold text-slate-400 uppercase text-[10px] text-right">Actions</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-border-dark/50">
+<tr class="hover:bg-white/[0.02] transition-colors">
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-blue-500/20 flex items-center justify-center text-blue-400 text-xs font-bold">V</div>
+<div>
+<p class="font-bold text-white">Velvet Events</p>
+<p class="text-[10px] text-slate-500 uppercase tracking-tight">slug: velvet-ldn</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-2">
+<p class="font-mono text-white">24,500</p>
+<span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+</div>
+</td>
+<td class="px-6 py-4 text-slate-300">12</td>
+<td class="px-6 py-4 text-right">
+<button class="text-primary hover:bg-primary hover:text-background-dark px-3 py-1 rounded text-xs font-bold border border-primary/20 transition-all">Top-up</button>
+</td>
+</tr>
+<tr class="hover:bg-white/[0.02] transition-colors">
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-amber-500/20 flex items-center justify-center text-amber-400 text-xs font-bold">N</div>
+<div>
+<p class="font-bold text-white">Neo-Pixel SaaS</p>
+<p class="text-[10px] text-slate-500 uppercase tracking-tight">slug: pixel-tokyo</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-2">
+<p class="font-mono text-white">1,200</p>
+<span class="w-1.5 h-1.5 rounded-full bg-red-500 pulsing-dot"></span>
+</div>
+</td>
+<td class="px-6 py-4 text-slate-300">4</td>
+<td class="px-6 py-4 text-right">
+<button class="text-primary hover:bg-primary hover:text-background-dark px-3 py-1 rounded text-xs font-bold border border-primary/20 transition-all">Top-up</button>
+</td>
+</tr>
+<tr class="hover:bg-white/[0.02] transition-colors">
+<td class="px-6 py-4">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 rounded bg-purple-500/20 flex items-center justify-center text-purple-400 text-xs font-bold">L</div>
+<div>
+<p class="font-bold text-white">Luxe Photos</p>
+<p class="text-[10px] text-slate-500 uppercase tracking-tight">slug: luxe-nyc</p>
+</div>
+</div>
+</td>
+<td class="px-6 py-4">
+<div class="flex items-center gap-2">
+<p class="font-mono text-white">8,940</p>
+<span class="w-1.5 h-1.5 rounded-full bg-primary"></span>
+</div>
+</td>
+<td class="px-6 py-4 text-slate-300">0</td>
+<td class="px-6 py-4 text-right">
+<button class="text-primary hover:bg-primary hover:text-background-dark px-3 py-1 rounded text-xs font-bold border border-primary/20 transition-all">Top-up</button>
+</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- 3. Global Style Library -->
+<div class="pt-4 space-y-4">
+<div class="flex items-center justify-between">
+<h2 class="text-lg font-bold text-white tracking-tight">Global Style Library</h2>
+<p class="text-[10px] font-bold text-slate-500 uppercase">Engine V4.2 - Stable</p>
+</div>
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+<div class="bg-surface-dark border border-border-dark p-3 rounded-lg flex flex-col gap-3 group">
+<div class="aspect-square rounded-md bg-gradient-to-br from-blue-900 to-indigo-900 overflow-hidden relative border border-white/5">
+<div class="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1596727147705-61a532a659bd?q=80&amp;w=300&amp;auto=format&amp;fit=crop')] bg-cover bg-center grayscale opacity-50 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-500" data-alt="Watercolor AI photo effect sample"></div>
+<div class="absolute bottom-2 left-2 right-2 flex justify-between items-end">
+<span class="text-[10px] font-bold text-white drop-shadow-md">Watercolor</span>
+</div>
+</div>
+<div class="flex items-center justify-between">
+<span class="text-[10px] uppercase font-bold text-slate-500">Active</span>
+<button class="w-8 h-4 bg-primary rounded-full relative transition-all">
+<span class="absolute right-1 top-1 w-2 h-2 bg-background-dark rounded-full"></span>
+</button>
+</div>
+</div>
+<div class="bg-surface-dark border border-border-dark p-3 rounded-lg flex flex-col gap-3 group">
+<div class="aspect-square rounded-md bg-gradient-to-br from-amber-900 to-orange-900 overflow-hidden relative border border-white/5">
+<div class="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1534423861386-85a16f5d13fd?q=80&amp;w=300&amp;auto=format&amp;fit=crop')] bg-cover bg-center grayscale opacity-50 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-500" data-alt="Cyberpunk AI photo style neon lights"></div>
+<div class="absolute bottom-2 left-2 right-2 flex justify-between items-end">
+<span class="text-[10px] font-bold text-white drop-shadow-md">Cyberpunk</span>
+</div>
+</div>
+<div class="flex items-center justify-between">
+<span class="text-[10px] uppercase font-bold text-slate-500">Active</span>
+<button class="w-8 h-4 bg-primary rounded-full relative transition-all">
+<span class="absolute right-1 top-1 w-2 h-2 bg-background-dark rounded-full"></span>
+</button>
+</div>
+</div>
+<div class="bg-surface-dark border border-border-dark p-3 rounded-lg flex flex-col gap-3 group">
+<div class="aspect-square rounded-md bg-gradient-to-br from-red-900 to-rose-950 overflow-hidden relative border border-white/5">
+<div class="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1596727147705-61a532a659bd?q=80&amp;w=300&amp;auto=format&amp;fit=crop')] bg-cover bg-center grayscale opacity-50 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-500" data-alt="F1 racing AI style sample"></div>
+<div class="absolute bottom-2 left-2 right-2 flex justify-between items-end">
+<span class="text-[10px] font-bold text-white drop-shadow-md">F1 Racing</span>
+</div>
+</div>
+<div class="flex items-center justify-between">
+<span class="text-[10px] uppercase font-bold text-slate-500">Disabled</span>
+<button class="w-8 h-4 bg-slate-700 rounded-full relative transition-all">
+<span class="absolute left-1 top-1 w-2 h-2 bg-background-dark rounded-full"></span>
+</button>
+</div>
+</div>
+<div class="bg-surface-dark border border-border-dark p-3 rounded-lg flex flex-col gap-3 group">
+<div class="aspect-square rounded-md bg-gradient-to-br from-emerald-900 to-teal-900 overflow-hidden relative border border-white/5">
+<div class="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&amp;w=300&amp;auto=format&amp;fit=crop')] bg-cover bg-center grayscale opacity-50 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-500" data-alt="3D Abstract AI Render"></div>
+<div class="absolute bottom-2 left-2 right-2 flex justify-between items-end">
+<span class="text-[10px] font-bold text-white drop-shadow-md">3D Render</span>
+</div>
+</div>
+<div class="flex items-center justify-between">
+<span class="text-[10px] uppercase font-bold text-slate-500">Active</span>
+<button class="w-8 h-4 bg-primary rounded-full relative transition-all">
+<span class="absolute right-1 top-1 w-2 h-2 bg-background-dark rounded-full"></span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- 4. Activity/Alerts Feed -->
+<div class="space-y-4">
+<div class="flex items-center gap-2">
+<h2 class="text-lg font-bold text-white tracking-tight">System Pulse</h2>
+<div class="w-1.5 h-1.5 rounded-full bg-red-400"></div>
+</div>
+<div class="bg-surface-dark border border-border-dark rounded-xl h-[calc(100vh-320px)] flex flex-col">
+<div class="p-4 border-b border-border-dark bg-white/5 flex items-center justify-between">
+<p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Real-time Logs</p>
+<span class="material-symbols-outlined !text-[16px] text-slate-500">filter_list</span>
+</div>
+<div class="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+<div class="flex gap-3 relative pb-4 before:content-[''] before:absolute before:left-[7px] before:top-6 before:bottom-0 before:w-px before:bg-border-dark">
+<div class="w-3.5 h-3.5 mt-1 rounded-full bg-red-500/20 border border-red-500/50 flex items-center justify-center shrink-0">
+<div class="w-1 h-1 bg-red-500 rounded-full"></div>
+</div>
+<div>
+<p class="text-xs font-bold text-red-400 leading-tight">CRITICAL: API Latency Spike</p>
+<p class="text-[10px] text-slate-500 mt-1">Node-US-East detected +450ms delay in style 'Cyberpunk'. Check scaling.</p>
+<p class="text-[9px] font-mono text-slate-600 mt-1">14:21:05 UTC</p>
+</div>
+</div>
+<div class="flex gap-3 relative pb-4 before:content-[''] before:absolute before:left-[7px] before:top-6 before:bottom-0 before:w-px before:bg-border-dark">
+<div class="w-3.5 h-3.5 mt-1 rounded-full bg-amber-500/20 border border-amber-500/50 flex items-center justify-center shrink-0">
+<div class="w-1 h-1 bg-amber-500 rounded-full"></div>
+</div>
+<div>
+<p class="text-xs font-bold text-amber-400 leading-tight">WARNING: Low Balance</p>
+<p class="text-[10px] text-slate-500 mt-1">Partner 'Neo-Pixel' (ID: 882) balance below threshold (1,200/50,000).</p>
+<p class="text-[9px] font-mono text-slate-600 mt-1">14:18:44 UTC</p>
+</div>
+</div>
+<div class="flex gap-3 relative pb-4 before:content-[''] before:absolute before:left-[7px] before:top-6 before:bottom-0 before:w-px before:bg-border-dark">
+<div class="w-3.5 h-3.5 mt-1 rounded-full bg-primary/20 border border-primary/50 flex items-center justify-center shrink-0">
+<div class="w-1 h-1 bg-primary rounded-full"></div>
+</div>
+<div>
+<p class="text-xs font-bold text-primary leading-tight">INFO: New Partner Onboarded</p>
+<p class="text-[10px] text-slate-500 mt-1">Slug 'retro-magic' has completed verification and initial top-up.</p>
+<p class="text-[9px] font-mono text-slate-600 mt-1">13:55:12 UTC</p>
+</div>
+</div>
+<div class="flex gap-3 relative pb-4 before:content-[''] before:absolute before:left-[7px] before:top-6 before:bottom-0 before:w-px before:bg-border-dark">
+<div class="w-3.5 h-3.5 mt-1 rounded-full bg-primary/20 border border-primary/50 flex items-center justify-center shrink-0">
+<div class="w-1 h-1 bg-primary rounded-full"></div>
+</div>
+<div>
+<p class="text-xs font-bold text-primary leading-tight">INFO: Style Engine Updated</p>
+<p class="text-[10px] text-slate-500 mt-1">Deploy successful: V4.2 stable is now serving global requests.</p>
+<p class="text-[9px] font-mono text-slate-600 mt-1">12:00:01 UTC</p>
+</div>
+</div>
+<div class="flex gap-3">
+<div class="w-3.5 h-3.5 mt-1 rounded-full bg-slate-700/50 border border-slate-500/50 flex items-center justify-center shrink-0">
+<div class="w-1 h-1 bg-slate-500 rounded-full"></div>
+</div>
+<div>
+<p class="text-xs font-bold text-slate-400 leading-tight">LOG: Database Backup</p>
+<p class="text-[10px] text-slate-500 mt-1">Snapshot s3://eagle-eye/db-backups/2023-10-24 completed.</p>
+<p class="text-[9px] font-mono text-slate-600 mt-1">04:00:00 UTC</p>
+</div>
+</div>
+</div>
+<div class="p-3 border-t border-border-dark bg-background-dark">
+<button class="w-full text-[10px] font-bold text-slate-500 uppercase tracking-widest hover:text-white transition-colors">View All Archive Logs</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+</div>
+</body></html>

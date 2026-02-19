@@ -1,52 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import {
-    Search,
-    UserPlus,
-    MoreHorizontal,
-    Shield,
-    CreditCard,
-    Activity,
-    Users,
-    Trash2,
-    Settings,
-    Edit2,
-    CheckCircle2,
-    XCircle,
-    Download,
-    X,
-    Plus,
-    Minus,
-    ExternalLink
-} from 'lucide-react';
+
+// We can keep these interfaces or adapt them
+interface Partner {
+    id: string;
+    name: string;
+    credits_total: number;
+    credits_used: number;
+    config?: any;
+}
 
 interface AdminProps {
     IDENTITIES: any;
     onBack: () => void;
-    initialView?: 'dashboard' | 'users' | 'partners' | 'styles';
 }
 
-export const Admin: React.FC<AdminProps> = ({ IDENTITIES, onBack, initialView = 'dashboard' }) => {
-    const [activeTab, setActiveTab] = useState(initialView);
-    const [profiles, setProfiles] = useState<any[]>([]);
-    const [partners, setPartners] = useState<any[]>([]);
+export const Admin: React.FC<AdminProps> = ({ IDENTITIES, onBack }) => {
+    const [partners, setPartners] = useState<Partner[]>([]);
     const [loading, setLoading] = useState(true);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [showAddUserModal, setShowAddUserModal] = useState(false);
-    const [editingUser, setEditingUser] = useState<any>(null); // State for editing
-
-    // Form state for new user
-    const [newUser, setNewUser] = useState({
-        email: '',
-        full_name: '',
-        role: 'client',
-        is_master: false
-    });
-
-    // Stats
     const [stats, setStats] = useState({
-        totalUsers: 0,
-        totalCredits: 0,
+        totalGenerations: 0,
+        totalPartners: 0,
+        totalCreditsSold: 0,
         activeEvents: 0
     });
 
@@ -57,35 +32,28 @@ export const Admin: React.FC<AdminProps> = ({ IDENTITIES, onBack, initialView = 
     const fetchData = async () => {
         try {
             setLoading(true);
-            const [profilesRes, partnersRes] = await Promise.all([
-                supabase.from('profiles').select('*, partner:partners(*)').order('created_at', { ascending: false }),
-                supabase.from('partners').select('*').order('name', { ascending: true })
+            const [partnersRes, eventsRes] = await Promise.all([
+                supabase.from('partners').select('*'),
+                supabase.from('events').select('*')
             ]);
 
-            if (profilesRes.error) throw profilesRes.error;
-            setProfiles(profilesRes.data || []);
+            if (partnersRes.error) throw partnersRes.error;
 
-            // Should trust partnersRes, but if empty, try to fallback or merge from profiles if needed
-            // However, partnersRes is the source of truth for the Partners Management table
-            if (partnersRes.data && partnersRes.data.length > 0) {
-                setPartners(partnersRes.data);
-            } else {
-                // Fallback: extract from profiles if partners table read failed but profiles read succeeded
-                const derivedPartners = profilesRes.data
-                    ?.filter((p: any) => p.role === 'partner' && p.partner)
-                    .map((p: any) => p.partner)
-                    .flat() || [];
-                if (derivedPartners.length > 0) setPartners(derivedPartners);
-                else setPartners([]);
-            }
+            const partnersData = partnersRes.data || [];
+            setPartners(partnersData);
 
             // Calculate stats
-            const totalC = partnersRes.data?.reduce((acc, curr) => acc + (curr.credits_total || 0), 0) || 0;
+            const totalCredits = partnersData.reduce((acc, curr) => acc + (curr.credits_total || 0), 0);
+            const totalUsed = partnersData.reduce((acc, curr) => acc + (curr.credits_used || 0), 0);
+            const activeEventsCount = eventsRes.data?.filter(e => e.is_active).length || 0;
+
             setStats({
-                totalUsers: profilesRes.data?.length || 0,
-                totalCredits: totalC,
-                activeEvents: 12 // Placeholder
+                totalGenerations: totalUsed, // Approx as generations
+                totalPartners: partnersData.length,
+                totalCreditsSold: totalCredits,
+                activeEvents: activeEventsCount
             });
+
         } catch (error) {
             console.error('Error fetching admin data:', error);
         } finally {
@@ -93,438 +61,274 @@ export const Admin: React.FC<AdminProps> = ({ IDENTITIES, onBack, initialView = 
         }
     };
 
-    const handleUpdateCredits = async (partnerId: string, amount: number) => {
-        if (!partnerId) return;
-        try {
-            const partner = partners.find(p => p.id === partnerId);
-            if (!partner) return;
-
-            const newTotal = (partner.credits_total || 0) + amount;
-            const { error } = await supabase
-                .from('partners')
-                .update({ credits_total: newTotal })
-                .eq('id', partnerId);
-
-            if (error) throw error;
-            fetchData();
-        } catch (error) {
-            console.error('Error updating credits:', error);
-        }
-    };
-
-    const handleAddUser = async (e: React.FormEvent) => {
-        e.preventDefault();
-        try {
-            setLoading(true);
-            // 1. Create auth user (Note: This usually needs an edge function or admin API, 
-            // but for this MVP we might just insert into profiles if using custom auth or shared login)
-            // Assuming for now we insert directly into profiles (trigger handles creation if needed or vice versa)
-
-            const { data, error } = await supabase.from('profiles').insert([
-                {
-                    email: newUser.email,
-                    full_name: newUser.full_name,
-                    role: newUser.role,
-                    is_master: newUser.is_master
-                }
-            ]).select();
-
-            if (error) throw error;
-
-            // If partner, create partner record
-            if (newUser.role === 'partner') {
-                const { error: pError } = await supabase.from('partners').insert([
-                    { name: newUser.full_name, user_id: data[0].id, credits_total: 1000, credits_used: 0 }
-                ]);
-                if (pError) throw pError;
-            }
-
-            setShowAddUserModal(false);
-            setNewUser({ email: '', full_name: '', role: 'client', is_master: false });
-            fetchData();
-        } catch (error) {
-            console.error('Error adding user:', error);
-            alert('Error adding user: ' + (error as any).message + '. Note: Direct user creation might fail if Auth service is strictly protected. Please ask user to Sign Up via login page if this persists.');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleDeleteUser = async (userId: string) => {
-        if (!confirm('Are you sure you want to delete this user?')) return;
-        try {
-            const { error } = await supabase.from('profiles').delete().eq('id', userId);
-            if (error) throw error;
-            fetchData();
-        } catch (error) {
-            console.error('Error deleting user:', error);
-        }
-    };
-
-    const handleEditUser = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!editingUser) return;
-
-        try {
-            setLoading(true);
-            const { error } = await supabase
-                .from('profiles')
-                .update({
-                    full_name: editingUser.full_name,
-                    role: editingUser.role,
-                    is_master: editingUser.is_master
-                })
-                .eq('id', editingUser.id);
-
-            if (error) throw error;
-
-            // If role changed to partner, ensure partner record exists (basic check)
-            if (editingUser.role === 'partner') {
-                const { data: partnerData } = await supabase.from('partners').select('id').eq('user_id', editingUser.id).single();
-                if (!partnerData) {
-                    await supabase.from('partners').insert([{ name: editingUser.full_name, user_id: editingUser.id, credits_total: 1000, credits_used: 0 }]);
-                }
-            }
-
-            setEditingUser(null);
-            fetchData();
-        } catch (error) {
-            console.error('Error updating user:', error);
-            alert('Error updating user: ' + (error as any).message);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const filteredProfiles = profiles.filter(p =>
-        p.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.email?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    const filteredPartners = partners.filter(p =>
-        p.name?.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
     return (
-        <div className="space-y-8 animate-fade-in text-slate-100">
-            {/* Header */}
-            <header className="flex flex-wrap items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-3xl font-black tracking-tight text-white mb-1">Eagle Eye Admin</h1>
-                    <p className="text-slate-400 text-sm">Global control center for user management & infrastructure.</p>
+        <div className="flex h-screen overflow-hidden bg-[#0a0c0b] text-slate-100 font-sans">
+            {/* Sidebar Navigation */}
+            <aside className="w-64 border-r border-[#1f2b24] bg-[#0a0c0b] hidden md:flex flex-col">
+                <div className="p-6 border-b border-[#1f2b24] flex items-center gap-3">
+                    <div className="w-8 h-8 bg-[#13ec80] rounded flex items-center justify-center text-[#0a0c0b]">
+                        <span className="material-symbols-outlined !text-[20px] font-bold">visibility</span>
+                    </div>
+                    <div>
+                        <h1 className="text-sm font-bold tracking-tight text-white uppercase">Eagle-Eye</h1>
+                        <p className="text-[10px] text-[#13ec80]/70 uppercase font-medium tracking-[0.2em]">Master Admin</p>
+                    </div>
                 </div>
-                <div className="flex items-center gap-3">
-                    <div className="flex bg-[#135bec]/10 p-1 rounded-lg">
-                        <button
-                            onClick={() => setActiveTab('dashboard')}
-                            className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${activeTab === 'dashboard' ? 'bg-[#135bec] text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
-                        >
-                            Dashboard
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('partners')}
-                            className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${activeTab === 'partners' ? 'bg-[#135bec] text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
-                        >
-                            Partners
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('users')}
-                            className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${activeTab === 'users' ? 'bg-[#135bec] text-white shadow-lg' : 'text-slate-400 hover:text-white'}`}
-                        >
-                            Users List
-                        </button>
+                <nav className="flex-1 p-4 flex flex-col gap-1 overflow-y-auto custom-scrollbar">
+                    <p className="px-3 py-2 text-[10px] font-bold text-slate-500 uppercase tracking-widest">General</p>
+                    <a className="flex items-center gap-3 px-3 py-2 rounded-lg bg-[#13ec80]/10 text-[#13ec80] border border-[#13ec80]/20 cursor-pointer">
+                        <span className="material-symbols-outlined">dashboard</span>
+                        <span className="text-sm font-medium">Overview</span>
+                    </a>
+                    <a className="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer">
+                        <span className="material-symbols-outlined">corporate_fare</span>
+                        <span className="text-sm font-medium">Partners</span>
+                    </a>
+                    <a className="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer">
+                        <span className="material-symbols-outlined">auto_fix_high</span>
+                        <span className="text-sm font-medium">AI Style Engine</span>
+                    </a>
+                    <a className="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5 transition-colors cursor-pointer">
+                        <span className="material-symbols-outlined">payments</span>
+                        <span className="text-sm font-medium">Ledger</span>
+                    </a>
+                </nav>
+                <div className="p-4 border-t border-[#1f2b24] bg-[#121413]/50">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="w-8 h-8 rounded-full bg-[#13ec80]/20 flex items-center justify-center border border-[#13ec80]/40">
+                            <span className="material-symbols-outlined text-[#13ec80] !text-[18px]">person</span>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-white truncate">Admin_Root</p>
+                            <p className="text-[10px] text-slate-500 truncate">Platform Owner</p>
+                        </div>
+                        <button onClick={onBack} className="material-symbols-outlined text-slate-500 cursor-pointer hover:text-white" title="Logout">logout</button>
                     </div>
-                    <button
-                        onClick={() => setShowAddUserModal(true)}
-                        className="flex items-center gap-2 px-5 py-2.5 bg-[#135bec] hover:bg-[#135bec]/90 rounded-lg text-sm font-bold text-white shadow-lg shadow-[#135bec]/25 transition-all"
-                    >
-                        <UserPlus className="w-4 h-4" />
-                        Add User
-                    </button>
                 </div>
-            </header>
+            </aside>
 
-            {activeTab === 'dashboard' && (
-                <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="glass-card rounded-xl p-6 flex flex-col justify-between">
-                        <div>
-                            <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Total Users</p>
-                            <h3 className="text-3xl font-black text-white">{stats.totalUsers}</h3>
-                        </div>
-                        <div className="mt-4 flex items-center gap-2 text-xs text-emerald-400 font-bold bg-emerald-500/10 self-start px-2 py-1 rounded">
-                            <Activity className="w-3 h-3" /> +5% this week
-                        </div>
+            {/* Main Content */}
+            <main className="flex-1 flex flex-col min-w-0 bg-[#0a0c0b]">
+                {/* Top Command Bar */}
+                <header className="h-16 border-b border-[#1f2b24] flex items-center justify-between px-8 bg-[#121413]/30 backdrop-blur-md sticky top-0 z-10">
+                    <div className="flex-1 max-w-2xl relative">
+                        <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 !text-[18px]">search</span>
+                        <input className="w-full bg-[#121413] border border-[#1f2b24] rounded-lg pl-10 pr-4 py-2 text-sm text-slate-200 focus:ring-1 focus:ring-[#13ec80] focus:border-[#13ec80] placeholder-slate-600 transition-all outline-none" placeholder="Search partner slugs, admin emails, or global event IDs..." type="text" />
                     </div>
-                    <div className="glass-card rounded-xl p-6 flex flex-col justify-between">
-                        <div>
-                            <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Global Credits Distributed</p>
-                            <h3 className="text-3xl font-black text-white">{stats.totalCredits.toLocaleString()}</h3>
+                    <div className="flex items-center gap-4 ml-6">
+                        <div className="flex flex-col items-end">
+                            <p className="text-[10px] font-bold text-slate-500 uppercase">System Time</p>
+                            <p className="text-xs font-mono text-[#13ec80] leading-tight">{new Date().toLocaleTimeString('en-US', { hour12: false })} UTC</p>
                         </div>
-                        <div className="mt-4 flex items-center gap-2 text-xs text-[#135bec] font-bold bg-[#135bec]/10 self-start px-2 py-1 rounded">
-                            <CreditCard className="w-3 h-3" /> Active Balance
-                        </div>
+                        <div className="h-8 w-px bg-[#1f2b24]"></div>
+                        <button className="relative p-2 text-slate-400 hover:text-white transition-colors">
+                            <span className="material-symbols-outlined">notifications</span>
+                            <span className="absolute top-2 right-2 w-2 h-2 bg-[#13ec80] rounded-full border-2 border-[#0a0c0b]"></span>
+                        </button>
                     </div>
-                    <div className="glass-card rounded-xl p-6 flex flex-col justify-between">
-                        <div>
-                            <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">System Health</p>
-                            <h3 className="text-3xl font-black text-white">99.9%</h3>
-                        </div>
-                        <div className="mt-4 flex items-center gap-2 text-xs text-emerald-400 font-bold bg-emerald-500/10 self-start px-2 py-1 rounded">
-                            <CheckCircle2 className="w-3 h-3" /> All Systems Operational
-                        </div>
-                    </div>
-                </section>
-            )}
+                </header>
 
-            {activeTab === 'partners' && (
-                <div className="space-y-4">
-                    <div className="flex items-center justify-between px-2">
-                        <h2 className="text-xl font-bold text-white">Registered Partners</h2>
-                        <div className="relative">
-                            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                            <input
-                                type="text"
-                                placeholder="Search partners..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="bg-slate-900/50 border-slate-800 rounded-lg pl-9 pr-4 py-1.5 text-xs text-white focus:ring-[#135bec] focus:border-[#135bec] w-64 transition-all outline-none"
-                            />
+                <div className="flex-1 overflow-y-auto custom-scrollbar p-8">
+                    {/* 1. Global Analytics */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                        {/* Generations Card */}
+                        <div className="bg-[#121413] p-5 border border-[#1f2b24] rounded-lg hover:border-[#13ec80]/30 transition-all group">
+                            <div className="flex justify-between items-start mb-3">
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Photo Generations</p>
+                                <span className="text-[10px] font-bold text-[#13ec80] px-1.5 py-0.5 bg-[#13ec80]/10 rounded tracking-tight">+12.4%</span>
+                            </div>
+                            <div className="flex items-baseline gap-2">
+                                <h3 className="text-2xl font-bold text-white leading-none">{stats.totalGenerations.toLocaleString()}</h3>
+                                <span className="text-xs text-slate-500">/ Total</span>
+                            </div>
+                            <div className="mt-4 w-full bg-[#1f2b24] h-1 rounded-full overflow-hidden">
+                                <div className="bg-[#13ec80] h-full w-[65%] shadow-[0_0_8px_rgba(19,236,128,0.3)]"></div>
+                            </div>
+                        </div>
+
+                        {/* Partners Card */}
+                        <div className="bg-[#121413] p-5 border border-[#1f2b24] rounded-lg hover:border-[#13ec80]/30 transition-all">
+                            <div className="flex justify-between items-start mb-3">
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Partners</p>
+                                <span className="material-symbols-outlined text-slate-600 !text-[16px]">groups</span>
+                            </div>
+                            <div className="flex items-baseline gap-2">
+                                <h3 className="text-2xl font-bold text-white leading-none">{stats.totalPartners}</h3>
+                                <span className="text-xs text-slate-500">Active</span>
+                            </div>
+                            <p className="mt-2 text-[10px] text-slate-500">Global Resellers</p>
+                        </div>
+
+                        {/* Credits Card */}
+                        <div className="bg-[#121413] p-5 border border-[#1f2b24] rounded-lg hover:border-[#13ec80]/30 transition-all">
+                            <div className="flex justify-between items-start mb-3">
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Credits Sold</p>
+                                <span className="text-[10px] font-bold text-red-400 px-1.5 py-0.5 bg-red-400/10 rounded tracking-tight">-2.1%</span>
+                            </div>
+                            <div className="flex items-baseline gap-2">
+                                <h3 className="text-2xl font-bold text-white leading-none">{(stats.totalCreditsSold / 1000).toFixed(1)}k</h3>
+                                <span className="text-xs text-slate-500">Units</span>
+                            </div>
+                            <p className="mt-2 text-[10px] text-slate-500">Avg. $0.12 / credit</p>
+                        </div>
+
+                        {/* Status Card */}
+                        <div className="bg-[#121413] p-5 border border-[#1f2b24] rounded-lg hover:border-[#13ec80]/30 transition-all flex flex-col justify-between">
+                            <div className="flex justify-between items-start mb-3">
+                                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">AI API Status</p>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-[10px] font-bold text-[#13ec80]">LIVE</span>
+                                    <span className="w-2 h-2 rounded-full bg-[#13ec80] animate-[pulse-green_2s_infinite]"></span>
+                                </div>
+                            </div>
+                            <div className="flex items-baseline gap-2">
+                                <h3 className="text-2xl font-bold text-white leading-none">99.9%</h3>
+                                <span className="text-xs text-slate-500">Uptime</span>
+                            </div>
+                            <p className="mt-2 text-[10px] text-[#13ec80]/70 font-mono tracking-tighter uppercase">Pulsing Green • Node-21-Alpha</p>
                         </div>
                     </div>
 
-                    <div className="glass-card rounded-xl overflow-hidden">
-                        <table className="w-full text-left border-collapse">
-                            <thead className="bg-white/5 border-b border-white/10">
-                                <tr>
-                                    <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Partner Name</th>
-                                    <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Credits (Used / Total)</th>
-                                    <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Load Credits</th>
-                                    <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-white/5">
-                                {filteredPartners.map(partner => (
-                                    <tr key={partner.id} className="hover:bg-white/5 transition-colors group">
-                                        <td className="px-6 py-5">
-                                            <div className="flex items-center gap-3">
-                                                <div className="size-9 rounded bg-[#135bec]/10 flex items-center justify-center text-[#135bec] font-bold text-xs">
-                                                    {partner.name?.substring(0, 2).toUpperCase()}
-                                                </div>
-                                                <p className="text-sm font-bold text-white">{partner.name}</p>
+                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+                        {/* 2. Partner Management Table */}
+                        <div className="xl:col-span-2 space-y-4">
+                            <div className="flex items-center justify-between">
+                                <h2 className="text-lg font-bold text-white tracking-tight">Partner Management</h2>
+                                <button className="text-xs font-bold text-[#13ec80] border border-[#13ec80]/30 px-3 py-1.5 rounded bg-[#13ec80]/5 hover:bg-[#13ec80]/10 transition-all">Export Report</button>
+                            </div>
+                            <div className="bg-[#121413] border border-[#1f2b24] rounded-xl overflow-hidden">
+                                <table className="w-full text-left text-sm">
+                                    <thead>
+                                        <tr className="bg-white/5 border-b border-[#1f2b24]">
+                                            <th className="px-6 py-4 font-bold text-slate-400 uppercase text-[10px]">Partner Company</th>
+                                            <th className="px-6 py-4 font-bold text-slate-400 uppercase text-[10px]">Credit Pool</th>
+                                            <th className="px-6 py-4 font-bold text-slate-400 uppercase text-[10px]">Status</th>
+                                            <th className="px-6 py-4 font-bold text-slate-400 uppercase text-[10px] text-right">Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-[#1f2b24]/50">
+                                        {loading ? (
+                                            <tr>
+                                                <td colSpan={4} className="p-8 text-center text-slate-500">Loading partners...</td>
+                                            </tr>
+                                        ) : partners.map(partner => (
+                                            <tr key={partner.id} className="hover:bg-white/[0.02] transition-colors">
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-8 h-8 rounded bg-blue-500/20 flex items-center justify-center text-blue-400 text-xs font-bold">
+                                                            {partner.name.substring(0, 1).toUpperCase()}
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-bold text-white">{partner.name}</p>
+                                                            <p className="text-[10px] text-slate-500 uppercase tracking-tight">ID: {partner.id.substring(0, 8)}</p>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="font-mono text-white">{partner.credits_total - partner.credits_used}</p>
+                                                        {((partner.credits_total - partner.credits_used) < 100) ? (
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-[pulse-green_2s_infinite]"></span>
+                                                        ) : (
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-[#13ec80]"></span>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 text-slate-300">
+                                                    {(partner.credits_total - partner.credits_used) > 0 ? 'Active' : 'Inactive'}
+                                                </td>
+                                                <td className="px-6 py-4 text-right">
+                                                    <button
+                                                        onClick={() => alert('Top-up logic not implemented yet')}
+                                                        className="text-[#13ec80] hover:bg-[#13ec80] hover:text-[#0a0c0b] px-3 py-1 rounded text-xs font-bold border border-[#13ec80]/20 transition-all"
+                                                    >
+                                                        Top-up
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        {/* 3. Global Style Library (Static for now as per design) */}
+                        <div className="pt-4 space-y-4">
+                            <div className="flex items-center justify-between">
+                                <h2 className="text-lg font-bold text-white tracking-tight">Global Style Library</h2>
+                                <p className="text-[10px] font-bold text-slate-500 uppercase">Engine V4.2 - Stable</p>
+                            </div>
+                            <div className="grid grid-cols-2 lg:grid-cols-4 xl:grid-cols-2 gap-4">
+                                {/* Styles Mockup */}
+                                {['Watercolor', 'Cyberpunk', 'F1 Racing', '3D Render'].map((style, idx) => (
+                                    <div key={idx} className="bg-[#121413] border border-[#1f2b24] p-3 rounded-lg flex flex-col gap-3 group">
+                                        <div className={`aspect-square rounded-md overflow-hidden relative border border-white/5 bg-gradient-to-br ${idx % 2 === 0 ? 'from-blue-900 to-indigo-900' : 'from-amber-900 to-orange-900'}`}>
+                                            {/* Placeholder images */}
+                                            <div className="absolute bottom-2 left-2 right-2 flex justify-between items-end">
+                                                <span className="text-[10px] font-bold text-white drop-shadow-md">{style}</span>
                                             </div>
-                                        </td>
-                                        <td className="px-6 py-5">
-                                            <div className="flex flex-col gap-1">
-                                                <span className="text-sm font-mono text-white">
-                                                    {partner.credits_used?.toLocaleString()} / {partner.credits_total?.toLocaleString()}
-                                                </span>
-                                                <div className="w-32 h-1 bg-slate-800 rounded-full overflow-hidden">
-                                                    <div className="h-full bg-[#135bec]" style={{ width: `${(partner.credits_used / partner.credits_total) * 100}%` }}></div>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-5">
-                                            <div className="flex items-center gap-2">
-                                                <button onClick={() => handleUpdateCredits(partner.id, -500)} className="p-1 hover:bg-rose-500/20 rounded text-slate-400 hover:text-rose-500"><Minus className="w-4 h-4" /></button>
-                                                <button onClick={() => handleUpdateCredits(partner.id, 500)} className="p-1 hover:bg-emerald-500/20 rounded text-slate-400 hover:text-emerald-500"><Plus className="w-4 h-4" /></button>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-5 text-right">
-                                            <button className="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-[10px] font-bold rounded text-white transition-all uppercase tracking-widest">Manage</button>
-                                        </td>
-                                    </tr>
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[10px] uppercase font-bold text-slate-500">Active</span>
+                                            <button className="w-8 h-4 bg-[#13ec80] rounded-full relative transition-all">
+                                                <span className="absolute right-1 top-1 w-2 h-2 bg-[#0a0c0b] rounded-full"></span>
+                                            </button>
+                                        </div>
+                                    </div>
                                 ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            )}
-
-            {activeTab === 'users' && (
-                <div className="space-y-4">
-                    <div className="flex items-center justify-between px-2">
-                        <h2 className="text-xl font-bold text-white">All System Users</h2>
-                        <div className="relative">
-                            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
-                            <input
-                                type="text"
-                                placeholder="Search users..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="bg-slate-900/50 border-slate-800 rounded-lg pl-9 pr-4 py-1.5 text-xs text-white focus:ring-[#135bec] focus:border-[#135bec] w-64 transition-all outline-none"
-                            />
+                            </div>
                         </div>
                     </div>
 
-                    <div className="glass-card rounded-xl overflow-hidden">
-                        <table className="w-full text-left border-collapse">
-                            <thead className="bg-white/5 border-b border-white/10">
-                                <tr>
-                                    <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">User</th>
-                                    <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Role</th>
-                                    <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest">Joined</th>
-                                    <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-widest text-right">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-white/5">
-                                {filteredProfiles.map(profile => (
-                                    <tr key={profile.id} className="hover:bg-white/5 transition-colors group">
-                                        <td className="px-6 py-5">
-                                            <div className="flex items-center gap-3">
-                                                <img
-                                                    src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${profile.email}`}
-                                                    className="size-9 rounded-full bg-slate-800"
-                                                    alt="Avatar"
-                                                />
-                                                <div>
-                                                    <p className="text-sm font-bold text-white">{profile.full_name}</p>
-                                                    <p className="text-[10px] text-slate-500">{profile.email}</p>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-6 py-5">
-                                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${profile.is_master ? 'bg-amber-500/20 text-amber-500' : profile.role === 'partner' ? 'bg-[#135bec]/20 text-[#135bec]' : 'bg-slate-800 text-slate-400'}`}>
-                                                {profile.is_master ? 'Master' : profile.role}
-                                            </span>
-                                        </td>
-                                        <td className="px-6 py-5 text-xs text-slate-400">
-                                            {new Date(profile.created_at).toLocaleDateString()}
-                                        </td>
-                                        <td className="px-6 py-5 text-right">
-                                            <div className="flex items-center justify-end gap-2">
-                                                <button onClick={() => setEditingUser(profile)} className="p-2 hover:bg-slate-700 rounded-lg text-slate-400 hover:text-white"><Edit2 className="w-4 h-4" /></button>
-                                                <button onClick={() => handleDeleteUser(profile.id)} className="p-2 hover:bg-rose-500/20 rounded-lg text-slate-400 hover:text-rose-500"><Trash2 className="w-4 h-4" /></button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            )}
-
-            {/* Edit User Modal */}
-            {editingUser && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                    <div className="glass-card w-full max-w-md bg-slate-900 rounded-2xl border border-white/10 shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
-                        <div className="flex items-center justify-between p-6 border-b border-white/5">
-                            <h3 className="text-xl font-black text-white">EDIT USER</h3>
-                            <button onClick={() => setEditingUser(null)} className="text-slate-500 hover:text-white"><X className="w-6 h-6" /></button>
+                    {/* 4. Activity/Alerts Feed */}
+                    <div className="space-y-4 mt-8">
+                        <div className="flex items-center gap-2">
+                            <h2 className="text-lg font-bold text-white tracking-tight">System Pulse</h2>
+                            <div className="w-1.5 h-1.5 rounded-full bg-red-400"></div>
                         </div>
-                        <form onSubmit={handleEditUser} className="p-6 space-y-4">
-                            <div>
-                                <label className="text-[10px] font-black uppercase tracking-[2px] text-slate-500 mb-2 block">Full Name</label>
-                                <input
-                                    required
-                                    type="text"
-                                    className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-[#135bec] outline-none transition-all"
-                                    value={editingUser.full_name}
-                                    onChange={e => setEditingUser({ ...editingUser, full_name: e.target.value })}
-                                />
+                        <div className="bg-[#121413] border border-[#1f2b24] rounded-xl h-64 flex flex-col">
+                            <div className="p-4 border-b border-[#1f2b24] bg-white/5 flex items-center justify-between">
+                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Real-time Logs</p>
+                                <span className="material-symbols-outlined !text-[16px] text-slate-500">filter_list</span>
                             </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="text-[10px] font-black uppercase tracking-[2px] text-slate-500 mb-2 block">Role</label>
-                                    <select
-                                        className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-[#135bec] outline-none transition-all"
-                                        value={editingUser.role}
-                                        onChange={e => setEditingUser({ ...editingUser, role: e.target.value })}
-                                    >
-                                        <option value="client">Client</option>
-                                        <option value="partner">Partner</option>
-                                    </select>
+                            <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+                                <div className="flex gap-3 relative pb-4 before:content-[''] before:absolute before:left-[7px] before:top-6 before:bottom-0 before:w-px before:bg-[#1f2b24]">
+                                    <div className="w-3.5 h-3.5 mt-1 rounded-full bg-[#13ec80]/20 border border-[#13ec80]/50 flex items-center justify-center shrink-0">
+                                        <div className="w-1 h-1 bg-[#13ec80] rounded-full"></div>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-bold text-[#13ec80] leading-tight">INFO: System Ready</p>
+                                        <p className="text-[10px] text-slate-500 mt-1">Dashboard initialized for Admin_Root.</p>
+                                        <p className="text-[9px] font-mono text-slate-600 mt-1">Just now</p>
+                                    </div>
                                 </div>
-                                <div className="flex flex-col">
-                                    <label className="text-[10px] font-black uppercase tracking-[2px] text-slate-500 mb-2 block">Access Level</label>
-                                    <label className="flex items-center gap-2 cursor-pointer mt-2">
-                                        <input
-                                            type="checkbox"
-                                            className="form-checkbox bg-slate-800 border-white/10 text-[#135bec] rounded"
-                                            checked={editingUser.is_master}
-                                            onChange={e => setEditingUser({ ...editingUser, is_master: e.target.checked })}
-                                        />
-                                        <span className="text-xs text-white">Master Admin</span>
-                                    </label>
+                                <div className="flex gap-3 relative pb-4">
+                                    <div className="w-3.5 h-3.5 mt-1 rounded-full bg-slate-700/50 border border-slate-500/50 flex items-center justify-center shrink-0">
+                                        <div className="w-1 h-1 bg-slate-500 rounded-full"></div>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs font-bold text-slate-400 leading-tight">LOG: Database Sync</p>
+                                        <p className="text-[10px] text-slate-500 mt-1">Partner data synchronized.</p>
+                                        <p className="text-[9px] font-mono text-slate-600 mt-1">1 min ago</p>
+                                    </div>
                                 </div>
                             </div>
-                            <button
-                                type="submit"
-                                disabled={loading}
-                                className="w-full py-4 bg-[#135bec] hover:bg-[#135bec]/90 text-white font-black rounded-xl shadow-xl shadow-[#135bec]/20 transition-all uppercase tracking-[2px] text-xs"
-                            >
-                                {loading ? 'SAVING...' : 'SAVE CHANGES'}
-                            </button>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {/* Add User Modal */}
-            {showAddUserModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                    <div className="glass-card w-full max-w-md bg-slate-900 rounded-2xl border border-white/10 shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
-                        <div className="flex items-center justify-between p-6 border-b border-white/5">
-                            <h3 className="text-xl font-black text-white">ADD NEW USER</h3>
-                            <button onClick={() => setShowAddUserModal(false)} className="text-slate-500 hover:text-white"><X className="w-6 h-6" /></button>
                         </div>
-                        <form onSubmit={handleAddUser} className="p-6 space-y-4">
-                            <div>
-                                <label className="text-[10px] font-black uppercase tracking-[2px] text-slate-500 mb-2 block">Full Name</label>
-                                <input
-                                    required
-                                    type="text"
-                                    className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-[#135bec] outline-none transition-all"
-                                    value={newUser.full_name}
-                                    onChange={e => setNewUser({ ...newUser, full_name: e.target.value })}
-                                />
-                            </div>
-                            <div>
-                                <label className="text-[10px] font-black uppercase tracking-[2px] text-slate-500 mb-2 block">Email Address</label>
-                                <input
-                                    required
-                                    type="email"
-                                    className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-[#135bec] outline-none transition-all"
-                                    value={newUser.email}
-                                    onChange={e => setNewUser({ ...newUser, email: e.target.value })}
-                                />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="text-[10px] font-black uppercase tracking-[2px] text-slate-500 mb-2 block">Role</label>
-                                    <select
-                                        className="w-full bg-slate-800 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-[#135bec] outline-none transition-all"
-                                        value={newUser.role}
-                                        onChange={e => setNewUser({ ...newUser, role: e.target.value })}
-                                    >
-                                        <option value="client">Client</option>
-                                        <option value="partner">Partner</option>
-                                    </select>
-                                </div>
-                                <div className="flex flex-col">
-                                    <label className="text-[10px] font-black uppercase tracking-[2px] text-slate-500 mb-2 block">Access Level</label>
-                                    <label className="flex items-center gap-2 cursor-pointer mt-2">
-                                        <input
-                                            type="checkbox"
-                                            className="form-checkbox bg-slate-800 border-white/10 text-[#135bec] rounded"
-                                            checked={newUser.is_master}
-                                            onChange={e => setNewUser({ ...newUser, is_master: e.target.checked })}
-                                        />
-                                        <span className="text-xs text-white">Master Admin</span>
-                                    </label>
-                                </div>
-                            </div>
-                            <button
-                                type="submit"
-                                disabled={loading}
-                                className="w-full py-4 bg-[#135bec] hover:bg-[#135bec]/90 text-white font-black rounded-xl shadow-xl shadow-[#135bec]/20 transition-all uppercase tracking-[2px] text-xs"
-                            >
-                                {loading ? 'CREATING...' : 'CREATE USER ACCOUNT'}
-                            </button>
-                        </form>
                     </div>
                 </div>
-            )}
+            </main>
+            <style>{`
+                .custom-scrollbar::-webkit-scrollbar {
+                    width: 4px;
+                }
+                .custom-scrollbar::-webkit-scrollbar-track {
+                    background: transparent;
+                }
+                .custom-scrollbar::-webkit-scrollbar-thumb {
+                    background: #1f2b24;
+                    border-radius: 10px;
+                }
+            `}</style>
         </div>
     );
 };
