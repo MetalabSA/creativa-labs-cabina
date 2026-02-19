@@ -88,7 +88,7 @@ export const BubbleMenu: React.FC<BubbleMenuProps> = ({
                                         <span className="text-[10px] text-accent font-black uppercase tracking-wider">
                                             {eventConfig
                                                 ? `${Math.max(0, (eventConfig.credits_allocated || 0) - (eventConfig.credits_used || 0))} Disponibles`
-                                                : (profile?.is_master ? 'Master Admin' : `${profile?.credits || 0} Créditos`)
+                                                : `${profile?.is_master ? '∞' : (profile?.credits || 0)} Créditos`
                                             }
                                         </span>
                                     </div>
@@ -115,16 +115,7 @@ export const BubbleMenu: React.FC<BubbleMenuProps> = ({
                                 >
                                     <div className="space-y-2 mt-4">
 
-                                        {/* Dashboard (Admin) */}
-                                        {profile?.is_master && (
-                                            <MenuItem
-                                                icon={Shield}
-                                                label="Dashboard"
-                                                onClick={() => handleNav('admin')}
-                                                active={currentView === 'admin'}
-                                                highlight
-                                            />
-                                        )}
+
 
                                         {/* Categories Dropdown */}
                                         <div className="overflow-hidden rounded-xl bg-white/5 border border-white/5">
@@ -223,15 +214,7 @@ export const BubbleMenu: React.FC<BubbleMenuProps> = ({
                                             />
                                         )}
 
-                                        {(profile?.is_master || profile?.role === 'partner') && (
-                                            <MenuItem
-                                                icon={Shield}
-                                                label="Administración"
-                                                onClick={() => handleNav('admin')}
-                                                active={currentView === 'admin'}
-                                                highlight
-                                            />
-                                        )}
+
 
                                         <MenuItem
                                             icon={HelpCircle}

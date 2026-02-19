@@ -1006,8 +1006,6 @@ const App: React.FC = () => {
             } else if (view === 'favorites') {
               setActiveCategory('favorites');
               setAppStep('gallery');
-            } else if (view === 'admin') {
-              window.location.href = '/dashboard.html';
             } else if (view === 'buy_credits') {
               setShowPricing(true);
             } else if (view === 'show-qr') {
