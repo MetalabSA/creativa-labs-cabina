@@ -217,11 +217,11 @@ export const Admin: React.FC<AdminProps> = ({ IDENTITIES, onBack }) => {
                                                 <td className="px-6 py-4">
                                                     <div className="flex items-center gap-3">
                                                         <div className="w-8 h-8 rounded bg-blue-500/20 flex items-center justify-center text-blue-400 text-xs font-bold">
-                                                            {partner.name.substring(0, 1).toUpperCase()}
+                                                            {(partner?.name || 'P').substring(0, 1).toUpperCase()}
                                                         </div>
                                                         <div>
                                                             <p className="font-bold text-white">{partner.name}</p>
-                                                            <p className="text-[10px] text-slate-500 uppercase tracking-tight">ID: {partner.id.substring(0, 8)}</p>
+                                                            <p className="text-[10px] text-slate-500 uppercase tracking-tight">ID: {(partner?.id || '00000000').substring(0, 8)}</p>
                                                         </div>
                                                     </div>
                                                 </td>

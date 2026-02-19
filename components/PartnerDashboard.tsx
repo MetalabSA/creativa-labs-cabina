@@ -327,7 +327,7 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
                         <div className="flex -space-x-2">
                             {events.slice(0, 3).map((e, idx) => (
                                 <div key={idx} className="w-7 h-7 rounded-full border-2 border-slate-900 bg-[#135bec] flex items-center justify-center text-[8px] font-black">
-                                    {e.event_name.substring(0, 1).toUpperCase()}
+                                    {(e?.event_name || 'E').substring(0, 1).toUpperCase()}
                                 </div>
                             ))}
                             {events.length > 3 && (
@@ -392,7 +392,7 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
                                             <td className="px-6 py-5">
                                                 <div className="flex items-center gap-3">
                                                     <div className="size-10 rounded-lg bg-[#135bec]/10 border border-[#135bec]/20 flex items-center justify-center text-[#135bec] font-black text-xs">
-                                                        {event.event_name.substring(0, 2).toUpperCase()}
+                                                        {(event?.event_name || 'E').substring(0, 2).toUpperCase()}
                                                     </div>
                                                     <div>
                                                         <p className="text-sm font-bold text-white group-hover:text-[#135bec] transition-colors">{event.event_name}</p>

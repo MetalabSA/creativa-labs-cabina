@@ -68,7 +68,7 @@ const DashboardApp: React.FC = () => {
 
     if (loading) {
         return (
-            <div className="min-h-screen bg-[#0f172a] flex items-center justify-center">
+            <div className="min-h-screen bg-[#0a0c0b] flex items-center justify-center">
                 <div className="flex flex-col items-center gap-4">
                     <div className="w-12 h-12 border-t-2 border-[#135bec] rounded-full animate-spin" />
                     <p className="text-slate-400 text-sm font-medium animate-pulse">Initializing dashboard...</p>
