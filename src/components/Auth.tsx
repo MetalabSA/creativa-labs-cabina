@@ -34,7 +34,7 @@ export const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
                 if (error) throw error;
             } else if (view === 'forgot-password') {
                 const { error } = await supabase.auth.resetPasswordForEmail(email, {
-                    redirectTo: window.location.origin + '/cabina/',
+                    redirectTo: window.location.origin + '/',
                 });
                 if (error) throw error;
                 setMessage({ type: 'success', text: 'Te enviamos un email con las instrucciones para recuperar tu contraseña.' });

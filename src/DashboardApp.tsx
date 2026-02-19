@@ -71,7 +71,7 @@ const DashboardApp: React.FC = () => {
 
     const handleLogout = async () => {
         await supabase.auth.signOut();
-        window.location.href = '/cabina/';
+        window.location.href = '/';
     };
 
     if (loading) {

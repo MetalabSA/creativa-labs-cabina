@@ -10,7 +10,7 @@ interface EventQRGeneratorProps {
 export const EventQRGenerator: React.FC<EventQRGeneratorProps> = ({ eventConfig, onClose }) => {
     const qrContainerRef = useRef<HTMLDivElement>(null);
 
-    const eventUrl = `https://metalab30.com/cabina/?event=${eventConfig.event_slug}`;
+    const eventUrl = `https://app.metalabia.com/?event=${eventConfig.event_slug}`;
 
     const handleDownloadQR = () => {
         const canvas = qrContainerRef.current?.querySelector('canvas');

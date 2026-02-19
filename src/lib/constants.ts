@@ -14,7 +14,7 @@ export const IDENTITIES = [
     {
         id: 'f1_a',
         title: 'Red Bull Racing',
-        url: '/cabina/F1-A.jpg',
+        url: '/F1-A.jpg',
         category: 'sports',
         subCategory: 'Formula 1',
         tags: ['speed', 'f1', 'action', 'professional', 'carrera', 'deporte', 'rojo', 'velocidad', 'auto', 'monaco'],
@@ -23,7 +23,7 @@ export const IDENTITIES = [
     {
         id: 'f1_b',
         title: 'Ferrari Team',
-        url: '/cabina/F1-B.jpg',
+        url: '/F1-B.jpg',
         category: 'sports',
         subCategory: 'Formula 1',
         tags: ['speed', 'f1', 'classic', 'racing', 'italia', 'rojo', 'leyenda', 'historico', 'caballino'],
@@ -32,7 +32,7 @@ export const IDENTITIES = [
     {
         id: 'f1_c',
         title: 'Mercedes AMG',
-        url: '/cabina/F1-C.jpg',
+        url: '/F1-C.jpg',
         category: 'sports',
         subCategory: 'Formula 1',
         tags: ['modern', 'f1', 'tech', 'silver', 'flecha', 'alemania', 'pro', 'campeon', 'plata'],
@@ -41,7 +41,7 @@ export const IDENTITIES = [
     {
         id: 'f1_d',
         title: 'Pit Stop Vibe',
-        url: '/cabina/F1-D.jpg',
+        url: '/F1-D.jpg',
         category: 'sports',
         subCategory: 'Formula 1',
         tags: ['mechanic', 'f1', 'teamwork', 'garage', 'trabajo', 'boxes', 'mecanico', 'equipo'],
@@ -50,7 +50,7 @@ export const IDENTITIES = [
     {
         id: 'bb_a',
         title: 'The Heisenberg',
-        url: '/cabina/BB-A.jpg',
+        url: '/BB-A.jpg',
         category: 'series',
         subCategory: 'Breaking Bad',
         tags: ['drama', 'meth', 'hat', 'cinematic', 'pelado', 'quimica', 'drogas', 'sombrero', 'lentes']
@@ -58,7 +58,7 @@ export const IDENTITIES = [
     {
         id: 'bb_b',
         title: 'Desert Cook',
-        url: '/cabina/BB-B.jpg',
+        url: '/BB-B.jpg',
         category: 'series',
         subCategory: 'Breaking Bad',
         tags: ['rv', 'desert', 'yellow', 'gasmask', 'careta', 'cocina', 'arena', 'desierto', 'amarillo']
@@ -66,7 +66,7 @@ export const IDENTITIES = [
     {
         id: 'bb_c',
         title: 'Better Call Saul',
-        url: '/cabina/BB-C.jpg',
+        url: '/BB-C.jpg',
         category: 'series',
         subCategory: 'Breaking Bad',
         tags: ['lawyer', 'suit', 'colorful', 'office', 'abogado', 'traje', 'comedia', 'estafador', 'carcel']
@@ -74,7 +74,7 @@ export const IDENTITIES = [
     {
         id: 'bb_d',
         title: 'Los Pollos Hermanos',
-        url: '/cabina/BB-D.jpg',
+        url: '/BB-D.jpg',
         category: 'series',
         subCategory: 'Breaking Bad',
         tags: ['chicken', 'fried', 'restaurant', 'yellow', 'empleado', 'delantal', 'comida', 'fastfood']
@@ -82,7 +82,7 @@ export const IDENTITIES = [
     {
         id: 'suit_a',
         title: 'Harvey Specter',
-        url: '/cabina/SUIT-A.jpg',
+        url: '/SUIT-A.jpg',
         category: 'series',
         subCategory: 'La Ley de los Audaces',
         tags: ['law', 'executive', 'expensive', 'classy', 'traje', 'corbata', 'lujo', 'abogado', 'exito']
@@ -90,7 +90,7 @@ export const IDENTITIES = [
     {
         id: 'suit_b',
         title: 'Mike Ross Style',
-        url: '/cabina/SUIT-B.jpg',
+        url: '/SUIT-B.jpg',
         category: 'series',
         subCategory: 'La Ley de los Audaces',
         tags: ['law', 'young', 'genius', 'bicycle', 'bici', 'mochila', 'bolso', 'joven', 'mensajero']
@@ -98,7 +98,7 @@ export const IDENTITIES = [
     {
         id: 'suit_c',
         title: 'Donna Paulsen',
-        url: '/cabina/SUIT-C.jpg',
+        url: '/SUIT-C.jpg',
         category: 'series',
         subCategory: 'La Ley de los Audaces',
         tags: ['secretary', 'powerful', 'fashion', 'redhead', 'vestido', 'pelirroja', 'secretaria', 'mujer']
@@ -106,7 +106,7 @@ export const IDENTITIES = [
     {
         id: 'suit_d',
         title: 'Pearson Hardman',
-        url: '/cabina/SUIT-D.jpg',
+        url: '/SUIT-D.jpg',
         category: 'series',
         subCategory: 'La Ley de los Audaces',
         tags: ['firm', 'luxury', 'office', 'success', 'oficina', 'socios', 'empresa', 'corporativo']
@@ -114,7 +114,7 @@ export const IDENTITIES = [
     {
         id: 'pb_a',
         title: 'Thomas Shelby',
-        url: '/cabina/PB-A.jpg',
+        url: '/PB-A.jpg',
         category: 'series',
         subCategory: 'Peaky Blinders',
         tags: ['gangster', 'vintage', 'cap', 'whiskey', 'boina', 'fuego', 'mafia', 'fumar', 'antiguo'],
@@ -123,7 +123,7 @@ export const IDENTITIES = [
     {
         id: 'pb_b',
         title: 'Birmingham Streets',
-        url: '/cabina/PB-B.jpg',
+        url: '/PB-B.jpg',
         category: 'series',
         subCategory: 'Peaky Blinders',
         tags: ['industrial', 'smoke', 'horse', 'family', 'caballo', 'niebla', 'calle', 'oscuro', 'frio'],
@@ -132,7 +132,7 @@ export const IDENTITIES = [
     {
         id: 'pb_c',
         title: 'Garrison Pub',
-        url: '/cabina/PB-C.jpg',
+        url: '/PB-C.jpg',
         category: 'series',
         subCategory: 'Peaky Blinders',
         tags: ['bar', 'drink', 'meeting', 'gentlemen', 'trago', 'reunion', 'poker', 'londres', 'taberna'],
@@ -141,7 +141,7 @@ export const IDENTITIES = [
     {
         id: 'pb_d',
         title: 'The Razor Edge',
-        url: '/cabina/PB-D.jpg',
+        url: '/PB-D.jpg',
         category: 'series',
         subCategory: 'Peaky Blinders',
         tags: ['razor', 'fight', 'strategy', 'british', 'navaja', 'pelea', 'sangre', 'inglaterra'],
@@ -150,7 +150,7 @@ export const IDENTITIES = [
     {
         id: 'ph_a',
         title: 'Urban Explorer',
-        url: '/cabina/PH-A.jpg',
+        url: '/PH-A.jpg',
         category: 'urban',
         subCategory: 'Urbano',
         tags: ['street', 'hoodie', 'city', 'night', 'buchon', 'noche', 'grafiti', 'ciudad', 'capucha']
@@ -158,7 +158,7 @@ export const IDENTITIES = [
     {
         id: 'ph_b',
         title: 'Studio Portrait',
-        url: '/cabina/PH-B.jpg',
+        url: '/PH-B.jpg',
         category: 'urban',
         subCategory: 'Urbano',
         tags: ['clean', 'lighting', 'vogue', 'model', 'estudio', 'flash', 'limpio', 'retrato', 'blanco']
@@ -166,7 +166,7 @@ export const IDENTITIES = [
     {
         id: 'ph_c',
         title: 'Neon Life',
-        url: '/cabina/PH-C.jpg',
+        url: '/PH-C.jpg',
         category: 'urban',
         subCategory: 'Urbano',
         tags: ['color', 'neon', 'asia', 'cyberpunk', 'futuro', 'luces', 'noche', 'tokyo', 'led']
@@ -174,7 +174,7 @@ export const IDENTITIES = [
     {
         id: 'ph_d',
         title: 'Vintage Film',
-        url: '/cabina/PH-D.jpg',
+        url: '/PH-D.jpg',
         category: 'urban',
         subCategory: 'Urbano',
         tags: ['analog', 'grainy', 'retro', '90s', 'rollo', 'sepia', 'viejo', 'fotografia', 'vhs']
@@ -182,7 +182,7 @@ export const IDENTITIES = [
     {
         id: 'jhonw_a',
         title: 'Baba Yaga',
-        url: '/cabina/jhonw_a.jpg',
+        url: '/jhonw_a.jpg',
         category: 'cinema',
         subCategory: 'John Wick',
         tags: ['john wick', 'accion', 'suit', 'weapons', 'venganza', 'traje', 'asesino', 'perro'],
@@ -191,7 +191,7 @@ export const IDENTITIES = [
     {
         id: 'jhonw_b',
         title: 'The Continental',
-        url: '/cabina/jhonw_b.jpg',
+        url: '/jhonw_b.jpg',
         category: 'cinema',
         subCategory: 'John Wick',
         tags: ['john wick', 'hotel', 'neon', 'mercy', 'noche', 'monedas', 'lujo', 'accion'],
@@ -200,7 +200,7 @@ export const IDENTITIES = [
     {
         id: 'jhonw_c',
         title: 'High Table Legacy',
-        url: '/cabina/jhonw_c.jpg',
+        url: '/jhonw_c.jpg',
         category: 'cinema',
         subCategory: 'John Wick',
         tags: ['john wick', 'trama', 'poder', 'oro', 'consejo', 'elegante', 'noir'],
@@ -209,7 +209,7 @@ export const IDENTITIES = [
     {
         id: 'jhonw_d',
         title: 'Excommunicado',
-        url: '/cabina/jhonw_d.jpg',
+        url: '/jhonw_d.jpg',
         category: 'cinema',
         subCategory: 'John Wick',
         tags: ['john wick', 'escape', 'lluvia', 'recompensa', 'reloj', 'correr', 'persecucion'],
@@ -218,7 +218,7 @@ export const IDENTITIES = [
     {
         id: 'jhonw_e',
         title: 'Desert Assassin',
-        url: '/cabina/jhonw_e.jpg',
+        url: '/jhonw_e.jpg',
         category: 'cinema',
         subCategory: 'John Wick',
         tags: ['john wick', 'desierto', 'arena', 'casablanca', 'calor', 'caballo'],
@@ -227,7 +227,7 @@ export const IDENTITIES = [
     {
         id: 'jhonw_f',
         title: 'Ballerina Soul',
-        url: '/cabina/jhonw_f.jpg',
+        url: '/jhonw_f.jpg',
         category: 'cinema',
         subCategory: 'John Wick',
         tags: ['john wick', 'danza', 'pelea', 'ballet', 'teatro', 'elegancia'],
@@ -236,7 +236,7 @@ export const IDENTITIES = [
     {
         id: 'jhonw_g',
         title: 'Osaka Night',
-        url: '/cabina/jhonw_g.jpg',
+        url: '/jhonw_g.jpg',
         category: 'cinema',
         subCategory: 'John Wick',
         tags: ['john wick', 'japon', 'katana', 'neon', 'rojo', 'samurai'],
@@ -245,7 +245,7 @@ export const IDENTITIES = [
     {
         id: 'jhonw_h',
         title: 'Last Stand',
-        url: '/cabina/jhonw_h.jpg',
+        url: '/jhonw_h.jpg',
         category: 'cinema',
         subCategory: 'John Wick',
         tags: ['john wick', 'final', 'amanecer', 'escaleras', 'paris', 'sacrificio'],
@@ -254,7 +254,7 @@ export const IDENTITIES = [
     {
         id: 'magic_a',
         title: 'El Gran Mago',
-        url: '/cabina/magic_a.jpg',
+        url: '/magic_a.jpg',
         category: 'fantasy',
         subCategory: 'Magia',
         tags: ['magia', 'magos', 'cartas', 'ilusion', 'truco', 'chistera', 'misterio', 'humo'],
@@ -263,7 +263,7 @@ export const IDENTITIES = [
     {
         id: 'magic_b',
         title: 'Ilusión Real',
-        url: '/cabina/magic_b.jpg',
+        url: '/magic_b.jpg',
         category: 'fantasy',
         subCategory: 'Magia',
         tags: ['magia', 'cartas', 'fuego', 'levitacion', 'misterio', 'show', 'escenario', 'magico'],
@@ -272,7 +272,7 @@ export const IDENTITIES = [
     {
         id: 'magic_c',
         title: 'Arcane Master',
-        url: '/cabina/magic_c.jpg',
+        url: '/magic_c.jpg',
         category: 'fantasy',
         subCategory: 'Magia',
         tags: ['magia', 'hechizo', 'runas', 'libro', 'poder', 'energia', 'azul'],
@@ -281,7 +281,7 @@ export const IDENTITIES = [
     {
         id: 'magic_d',
         title: 'Dark Illusion',
-        url: '/cabina/magic_d.jpg',
+        url: '/magic_d.jpg',
         category: 'fantasy',
         subCategory: 'Magia',
         tags: ['magia', 'oscuro', 'sombras', 'vudu', 'miedo', 'cuervo'],
@@ -290,7 +290,7 @@ export const IDENTITIES = [
     {
         id: 'magic_e',
         title: 'Street Magic',
-        url: '/cabina/magic_e.jpg',
+        url: '/magic_e.jpg',
         category: 'fantasy',
         subCategory: 'Magia',
         tags: ['magia', 'calle', 'moneda', 'mano', 'close up', 'asombro'],
@@ -299,7 +299,7 @@ export const IDENTITIES = [
     {
         id: 'sup_a',
         title: 'The Avenger',
-        url: '/cabina/sup_a.jpg',
+        url: '/sup_a.jpg',
         category: 'cinema',
         subCategory: 'Superhéroes',
         tags: ['superheroes', 'ironman', 'avengers', 'tech', 'poder', 'vengadores', 'heroe', 'vuelo'],
@@ -308,7 +308,7 @@ export const IDENTITIES = [
     {
         id: 'sup_b',
         title: 'Legacy of Thor',
-        url: '/cabina/sup_b.jpg',
+        url: '/sup_b.jpg',
         category: 'cinema',
         subCategory: 'Superhéroes',
         tags: ['superheroes', 'thor', 'hulk', 'god', 'trueno', 'fuerza', 'martillo', 'epico'],
@@ -317,7 +317,7 @@ export const IDENTITIES = [
     {
         id: 'sup_c',
         title: 'Cosmic Guardian',
-        url: '/cabina/sup_c.jpg',
+        url: '/sup_c.jpg',
         category: 'cinema',
         subCategory: 'Superhéroes',
         tags: ['superheroes', 'guardian', 'galaxia', 'estrellas', 'vuelo', 'fuerza'],
@@ -326,7 +326,7 @@ export const IDENTITIES = [
     {
         id: 'sup_d',
         title: 'Emerald Might',
-        url: '/cabina/sup_d.jpg',
+        url: '/sup_d.jpg',
         category: 'cinema',
         subCategory: 'Superhéroes',
         tags: ['superheroes', 'hulk', 'fuerza', 'verde', 'destruccion', 'enojo'],
@@ -335,7 +335,7 @@ export const IDENTITIES = [
     {
         id: 'sup_e',
         title: 'Justice Knight',
-        url: '/cabina/sup_e.jpg',
+        url: '/sup_e.jpg',
         category: 'cinema',
         subCategory: 'Superhéroes',
         tags: ['superheroes', 'batman', 'noche', 'capa', 'justicia', 'murcielago'],
@@ -344,7 +344,7 @@ export const IDENTITIES = [
     {
         id: 'sup_f',
         title: 'Knight Alt I',
-        url: '/cabina/sup_f.jpg',
+        url: '/sup_f.jpg',
         category: 'cinema',
         subCategory: 'Superhéroes',
         tags: ['superheroes', 'variante', 'oscuro', 'armadura'],
@@ -353,7 +353,7 @@ export const IDENTITIES = [
     {
         id: 'sup_g',
         title: 'Knight Alt II',
-        url: '/cabina/sup_g.jpg',
+        url: '/sup_g.jpg',
         category: 'cinema',
         subCategory: 'Superhéroes',
         tags: ['superheroes', 'variante', 'tecnologico', 'azul'],
