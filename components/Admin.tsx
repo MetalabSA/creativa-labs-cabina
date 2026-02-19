@@ -220,15 +220,15 @@ export const Admin: React.FC<AdminProps> = ({ IDENTITIES, onBack }) => {
                                                             {(partner?.name || 'P').substring(0, 1).toUpperCase()}
                                                         </div>
                                                         <div>
-                                                            <p className="font-bold text-white">{partner.name}</p>
+                                                            <p className="font-bold text-white">{partner?.name}</p>
                                                             <p className="text-[10px] text-slate-500 uppercase tracking-tight">ID: {(partner?.id || '00000000').substring(0, 8)}</p>
                                                         </div>
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <div className="flex items-center gap-2">
-                                                        <p className="font-mono text-white">{partner.credits_total - partner.credits_used}</p>
-                                                        {((partner.credits_total - partner.credits_used) < 100) ? (
+                                                        <p className="font-mono text-white">{(partner?.credits_total || 0) - (partner?.credits_used || 0)}</p>
+                                                        {(((partner?.credits_total || 0) - (partner?.credits_used || 0)) < 100) ? (
                                                             <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-[pulse-green_2s_infinite]"></span>
                                                         ) : (
                                                             <span className="w-1.5 h-1.5 rounded-full bg-[#13ec80]"></span>
@@ -236,7 +236,7 @@ export const Admin: React.FC<AdminProps> = ({ IDENTITIES, onBack }) => {
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 text-slate-300">
-                                                    {(partner.credits_total - partner.credits_used) > 0 ? 'Active' : 'Inactive'}
+                                                    {((partner?.credits_total || 0) - (partner?.credits_used || 0)) > 0 ? 'Active' : 'Inactive'}
                                                 </td>
                                                 <td className="px-6 py-4 text-right">
                                                     <button
@@ -317,7 +317,7 @@ export const Admin: React.FC<AdminProps> = ({ IDENTITIES, onBack }) => {
                         </div>
                     </div>
                 </div>
-            </main>
+            </main >
             <style>{`
                 .custom-scrollbar::-webkit-scrollbar {
                     width: 4px;
@@ -330,6 +330,6 @@ export const Admin: React.FC<AdminProps> = ({ IDENTITIES, onBack }) => {
                     border-radius: 10px;
                 }
             `}</style>
-        </div>
+        </div >
     );
 };
