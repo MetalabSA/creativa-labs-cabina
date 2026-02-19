@@ -136,6 +136,40 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
         }
     };
 
+    const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (!e.target.files || e.target.files.length === 0) return;
+        const file = e.target.files[0];
+        const fileExt = file.name.split('.').pop();
+        const fileName = `${partner?.id}-${Date.now()}.${fileExt}`;
+
+        try {
+            setLoading(true);
+            const { error: uploadError } = await supabase.storage
+                .from('logos')
+                .upload(fileName, file);
+
+            if (uploadError) {
+                // Try 'public' bucket if 'logos' fails or doesn't exist (fallback)
+                const { error: publicError } = await supabase.storage
+                    .from('public')
+                    .upload(`logos/${fileName}`, file);
+
+                if (publicError) throw uploadError; // Throw original error if both fail
+
+                const { data } = supabase.storage.from('public').getPublicUrl(`logos/${fileName}`);
+                setBrandingConfig({ ...brandingConfig, logo_url: data.publicUrl });
+            } else {
+                const { data } = supabase.storage.from('logos').getPublicUrl(fileName);
+                setBrandingConfig({ ...brandingConfig, logo_url: data.publicUrl });
+            }
+        } catch (error) {
+            console.error('Error uploading logo:', error);
+            alert('Error al subir logo: ' + (error as any).message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleCreateEvent = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!partner) return;
@@ -432,7 +466,17 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
                         <div className="space-y-6">
                             <div>
                                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-[2px] block mb-3">Logo del Revendedor</label>
-                                <div className="w-full border-2 border-dashed border-slate-800 rounded-xl p-6 flex flex-col items-center justify-center bg-slate-900/40 hover:bg-slate-900 transition-all cursor-pointer group hover:border-[#135bec]/50">
+                                <div
+                                    className="w-full border-2 border-dashed border-slate-800 rounded-xl p-6 flex flex-col items-center justify-center bg-slate-900/40 hover:bg-slate-900 transition-all cursor-pointer group hover:border-[#135bec]/50"
+                                    onClick={() => document.getElementById('logoInput')?.click()}
+                                >
+                                    <input
+                                        type="file"
+                                        id="logoInput"
+                                        className="hidden"
+                                        accept="image/*"
+                                        onChange={handleLogoUpload}
+                                    />
                                     {brandingConfig.logo_url ? (
                                         <img src={brandingConfig.logo_url} className="h-12 object-contain mb-2" alt="Logo" />
                                     ) : (
@@ -570,7 +614,7 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
                                             placeholder="cliente@ejemplo.com"
                                             className="w-full bg-[#0a0a0b] border border-white/10 rounded-xl pl-11 pr-5 py-4 text-white focus:border-[#135bec] outline-none transition-all placeholder:text-slate-800 text-xs"
                                             value={newEvent.client_email}
-                                            onChange={e => setNewEvent({ ...newEvent, client_email: e.target.value })}
+                                            onChange={e => setNewEvent({ ...newEvent, client_email: e.target.value.toLowerCase() })}
                                         />
                                     </div>
                                     <p className="text-[9px] text-slate-500 mt-1.5 ml-1">Este email se usará para que el cliente acceda a su panel.</p>

@@ -110,8 +110,8 @@ const DashboardApp: React.FC = () => {
                             <Sparkles className="w-6 h-6 text-white" />
                         </div>
                         <div className="flex flex-col">
-                            <span className="text-sm font-bold tracking-tight text-white uppercase">PHOTO BOOTH</span>
-                            <span className="text-[10px] uppercase tracking-widest text-slate-500 font-semibold">Reseller Pro</span>
+                            <span className="text-sm font-bold tracking-tight text-white uppercase truncate">{profile?.partner?.name || 'PHOTO BOOTH'}</span>
+                            <span className="text-[10px] uppercase tracking-widest text-slate-500 font-semibold truncate">{profile?.role === 'partner' ? 'Reseller Pro' : 'Client Access'}</span>
                         </div>
                     </div>
 

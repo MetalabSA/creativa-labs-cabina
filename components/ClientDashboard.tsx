@@ -62,7 +62,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, profile 
             const { data, error } = await supabase
                 .from('events')
                 .select('*')
-                .eq('client_email', profile.email)
+                .ilike('client_email', profile.email.toLowerCase())
                 .single();
 
             if (data) {

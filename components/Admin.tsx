@@ -64,7 +64,20 @@ export const Admin: React.FC<AdminProps> = ({ IDENTITIES, onBack, initialView = 
 
             if (profilesRes.error) throw profilesRes.error;
             setProfiles(profilesRes.data || []);
-            setPartners(partnersRes.data || []);
+
+            // Should trust partnersRes, but if empty, try to fallback or merge from profiles if needed
+            // However, partnersRes is the source of truth for the Partners Management table
+            if (partnersRes.data && partnersRes.data.length > 0) {
+                setPartners(partnersRes.data);
+            } else {
+                // Fallback: extract from profiles if partners table read failed but profiles read succeeded
+                const derivedPartners = profilesRes.data
+                    ?.filter((p: any) => p.role === 'partner' && p.partner)
+                    .map((p: any) => p.partner)
+                    .flat() || [];
+                if (derivedPartners.length > 0) setPartners(derivedPartners);
+                else setPartners([]);
+            }
 
             // Calculate stats
             const totalC = partnersRes.data?.reduce((acc, curr) => acc + (curr.credits_total || 0), 0) || 0;
@@ -131,7 +144,7 @@ export const Admin: React.FC<AdminProps> = ({ IDENTITIES, onBack, initialView = 
             fetchData();
         } catch (error) {
             console.error('Error adding user:', error);
-            alert('Error adding user. Check console.');
+            alert('Error adding user: ' + (error as any).message + '. Note: Direct user creation might fail if Auth service is strictly protected. Please ask user to Sign Up via login page if this persists.');
         } finally {
             setLoading(false);
         }
