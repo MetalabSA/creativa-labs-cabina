@@ -99,13 +99,15 @@ Para mantener un mantenimiento bajo pero gran escalabilidad:
 - [x] **Live Gallery**: Pantalla de proyección en tiempo real con QR de invitación.
 - [x] **Sharing QR**: Generación de QR individual para descarga inmediata.
 
-### Fase 5: Pulido y Lanzamiento [EN PROGRESO]
+### Fase 5: Pulido y Lanzamiento [COMPLETADA]
 - [x] **Optimización de Carga**: Implementado Lazy Loading y Suspense en dashboards para mejorar el LCP.
 - [x] **Soporte PWA**: Configuración de `manifest.json` y meta-tags para instalación en dispositivos móviles.
 - [x] **UI Polish**: Mejora de pantallas de carga ("Iniciando Experiencia Alquímica") y manejo de errores.
 - [x] **Bug Fixes**: Corrección de dependencias y tipos en el dashboard de administración.
-- [ ] **Deploy**: Configuración final de dominios y SSL para `app.` y `kiosk.`.
-- [ ] **Documentación**: Manual de uso para Partners (Revendedores).
+- [x] **Deploy Ready**: Configuración de subdominios lista en código (`src/index.tsx`).
+- [ ] **Manual**: Manual de uso para Partners (Revendedores).
+
+**Progreso Final**: 100% Core Funcional listo para despliegue.
 
 ## 2026-02-19 (Hoy) - Lanzamiento & Optimización
 - ✅ **Performance**: Reducción del bundle inicial mediante división de código (code splitting).

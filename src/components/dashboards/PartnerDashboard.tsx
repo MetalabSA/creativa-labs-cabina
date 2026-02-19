@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { supabase } from '../lib/supabaseClient';
+import { supabase } from '../../lib/supabaseClient';
 import {
     Calendar,
     Plus,
@@ -36,7 +36,7 @@ import {
     Link as LinkIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { IDENTITIES, PREFERRED_PACK_ORDER } from '../lib/constants';
+import { IDENTITIES, PREFERRED_PACK_ORDER } from '../../lib/constants';
 
 interface Partner {
     id: string;

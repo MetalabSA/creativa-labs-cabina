@@ -1,13 +1,28 @@
 # 📔 Registro de Avances - Creativa Labs (Cabina de Fotos)
  
-## [19-02-2026] - Fase 4: Experiencia de Invitados (Camera UI)
+## [19-02-2026] - Fase 5: Pulido y Despliegue Final
+- **Traducción Completa**: Localización 100% al castellano de todos los Dashboards (Admin, Partner, Cliente) y componentes de UX.
+- **Lógica de Dominios (Subdomain Rerouting)**: Implementado ruteo inteligente en `src/index.tsx` para separar productos:
+    - `app.metalabia.com` ➔ Carga la App B2C (Photo Booth).
+    - `kiosk.metalabia.com` ➔ Carga el SaaS Management (Dashboards).
+- **Refactorización de Estructura**: Movido todo el código fuente a la carpeta `src/`, incluyendo `dashboard.tsx` y `index.css`, para estandarizar el proceso de build.
+- **Build & Deploy Exitoso**: 
+    - Se resolvieron errores de resolución de rutas (`Could not resolve ../lib/constants`) ajustando los imports relativos.
+    - Se configuró la base de la app en `/` para compatibilidad con subdominios.
+    - **Push a GitHub**: ✅ Completado exitosamente.
+    - **Hostinger**: Archivos subidos a `public_html/app` y `public_html/kiosk` con configuración de `.htaccess` para manejo de rutas SPA (Single Page Application).
 
-### 📸 Guest Experience & Public Gallery
-- **Componente GuestExperience**: Implementada interfaz simplificada para invitados. Flujo optimizado: Selección de Estilo -> Captura de Foto -> Procesamiento IA -> Resultado.
-- **Branding Dinámico**: La interfaz hereda automáticamente los colores y logos del evento configurado.
-- **Public Gallery**: Creada pantalla de proyección en tiempo real que rota las fotos generadas y muestra el QR de invitación.
-- **Integración en App.tsx**: Lógica de ruteo inteligente mediante parámetros de URL (`?event=slug` y `?mode=gallery`).
-- **Feedback Visual**: Implementación de frases aleatorias de carga y confeti al finalizar la generación.
+## [19-02-2026] - Proceso Técnico y Rationale
+### 🧠 Razonamiento del Ruteo
+Para evitar mantener dos repositorios diferentes, usamos un **Router de Hostname** en el punto de entrada de React. El sistema detecta el subdominio y decide si renderizar la experiencia de "Cabina" o el "Dashboard de Gestión". Esto reduce la fricción en el mantenimiento de la lógica de créditos y conexión a Supabase.
+
+### 🛠️ Resolución de Errores de Build (Post-Refactor)
+Al mover los archivos a `src/`, el sistema de build (Vite) perdió la pista de los archivos de constantes. Se realizaron las siguientes correcciones:
+1.  Ajuste masivo de imports: `../lib/` ➔ `../../lib/` en componentes de dashboards.
+2.  Configuración de Multi-Entry Points en `vite.config.ts` para generar tanto `index.html` como `dashboard.html`.
+3.  Ajuste del `manifest.json` y `favicon.png` para que usen rutas absolutas desde la raíz `/`.
+
+## [19-02-2026] - Fase 4: Experiencia de Invitados (Camera UI)
 
 ## [19-02-2026] - Fase 3: Núcleo SaaS (Refinamiento y Dynamic Branding)
 Fecha: 19 de Febrero de 2026

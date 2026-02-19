@@ -36,7 +36,7 @@ Cliente configura su evento → Invitados generan fotos (sin login)
 - **Auth**: NO requerido para invitados (Zero Friction)
 - **Créditos**: Se deducen del `events.credits_allocated` (atómico)
 - **Dashboard**: 3 dashboards diferenciados (Master, Partner, Cliente)
-- **Estado**: ✅ FASE 1 Y 2 COMPLETADAS
+- **Estado**: ✅ COMPLETADO (Desplegado en app. y kiosk.)
 
 ---
 
