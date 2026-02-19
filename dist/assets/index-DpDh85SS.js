@@ -1,4 +1,4 @@
-import{c as Y,R as p}from"./DashboardApp-C4WUhTMs.js";/**
+import{c as Y,R as p}from"./DashboardApp-C8P7gnDf.js";/**
  * @license lucide-react v0.554.0 - ISC
  *
  * This source code is licensed under the ISC license.

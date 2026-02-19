@@ -61,6 +61,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
         usage_count: 0
     });
     const [recentLogs, setRecentLogs] = useState<any[]>([]);
+    const [stylesMetadata, setStylesMetadata] = useState<any[]>([]);
 
     // New Partner Form
     const [newPartner, setNewPartner] = useState({
@@ -76,11 +77,12 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
     const fetchData = async () => {
         try {
             setLoading(true);
-            const [partnersRes, eventsRes, profilesRes, generationsRes] = await Promise.all([
+            const [partnersRes, eventsRes, profilesRes, generationsRes, stylesRes] = await Promise.all([
                 supabase.from('partners').select('*'),
                 supabase.from('events').select('*'),
                 supabase.from('profiles').select('*'),
-                supabase.from('generations').select('id, created_at, model_id, event_id, events(event_name)').order('created_at', { ascending: false })
+                supabase.from('generations').select('id, created_at, model_id, event_id, events(event_name)').order('created_at', { ascending: false }),
+                supabase.from('styles_metadata').select('*')
             ]);
 
             if (partnersRes.error) throw partnersRes.error;
@@ -90,10 +92,12 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
             const profilesData = profilesRes.data || [];
             const eventsData = eventsRes.data || [];
             const generationsData = generationsRes.data || [];
+            const stylesMetadataData = stylesRes?.data || [];
 
             setPartners(partnersData);
             const b2cUsersData = profilesData.filter(p => p.role === 'user' || !p.role);
             setB2CUsers(b2cUsersData);
+            setStylesMetadata(stylesMetadataData);
 
             // Calculate global stats
             const totalCredits = partnersData.reduce((acc, curr) => acc + (curr.credits_total || 0), 0);
@@ -602,7 +606,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                 </div>
                                 <div className="bg-[#121413] p-5 border border-[#1f2b24] rounded-xl relative overflow-hidden group">
                                     <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Créditos en Canales</p>
-                                    <h3 className="text-2xl font-black text-blue-400">{partnerStats.creditsInCirculation.toLocaleString()}</h3>
+                                    <h3 className="text-2xl font-black text-blue-400">{(partnerStats.creditsInCirculation || 0).toLocaleString()}</h3>
                                     <div className="absolute top-0 right-0 w-12 h-12 bg-purple-500/10 rounded-bl-full flex items-center justify-center translate-x-4 -translate-y-4 group-hover:translate-x-2 group-hover:-translate-y-2 transition-transform">
                                         <span className="material-symbols-outlined text-purple-500 !text-sm">account_balance_wallet</span>
                                     </div>
@@ -655,8 +659,8 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                                     <td className="px-6 py-4">
                                                         <div className="flex flex-col items-center gap-1">
                                                             <div className="flex items-center gap-2">
-                                                                <span className="font-mono text-white text-sm font-bold">{(p.credits_total - p.credits_used).toLocaleString()}</span>
-                                                                <span className="text-[10px] text-slate-600">/ {p.credits_total.toLocaleString()}</span>
+                                                                <span className="font-mono text-white text-sm font-bold">{((p.credits_total || 0) - (p.credits_used || 0)).toLocaleString()}</span>
+                                                                <span className="text-[10px] text-slate-600">/ {(p.credits_total || 0).toLocaleString()}</span>
                                                             </div>
                                                             <div className="w-24 h-1 bg-[#1f2b24] rounded-full overflow-hidden">
                                                                 <div
@@ -712,15 +716,15 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                 </div>
                                 <div className="bg-[#121413] p-5 border border-[#1f2b24] rounded-xl">
                                     <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Créditos en Circulación</p>
-                                    <h3 className="text-2xl font-black text-[#13ec80]">{b2cStats.totalB2CCredits.toLocaleString()}</h3>
+                                    <h3 className="text-2xl font-black text-[#13ec80]">{(b2cStats.totalB2CCredits || 0).toLocaleString()}</h3>
                                 </div>
                                 <div className="bg-[#121413] p-5 border border-[#1f2b24] rounded-xl">
                                     <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Total Generaciones</p>
-                                    <h3 className="text-2xl font-black text-blue-400">{b2cStats.totalB2CGenerations.toLocaleString()}</h3>
+                                    <h3 className="text-2xl font-black text-blue-400">{(b2cStats.totalB2CGenerations || 0).toLocaleString()}</h3>
                                 </div>
                                 <div className="bg-[#121413] p-5 border border-[#1f2b24] rounded-xl">
                                     <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Ingreso Est. (Credits)</p>
-                                    <h3 className="text-2xl font-black text-amber-400">{(b2cStats.totalB2CGenerations * 100).toLocaleString()} <span className="text-[10px] text-slate-500">pts</span></h3>
+                                    <h3 className="text-2xl font-black text-amber-400">{((b2cStats.totalB2CGenerations || 0) * 100).toLocaleString()} <span className="text-[10px] text-slate-500">pts</span></h3>
                                 </div>
                             </div>
 
