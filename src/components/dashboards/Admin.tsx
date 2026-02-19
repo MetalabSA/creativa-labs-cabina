@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabaseClient';
+import { Search } from 'lucide-react';
 import Background3D from '../Background3D';
 
 // Interfaces
@@ -36,6 +37,8 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
     const [showTopUp, setShowTopUp] = useState<{ id: string, name: string } | null>(null);
     const [topUpAmount, setTopUpAmount] = useState<number>(1000);
     const [showNewUserModal, setShowNewUserModal] = useState(false);
+    const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
+    const [b2cSearchQuery, setB2CSearchQuery] = useState('');
     const [newUserForm, setNewUserForm] = useState({
         email: '',
         credits: 1000,
@@ -170,7 +173,6 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                 topPartners: partnerActivity.slice(0, 5)
             });
 
-            // Logs
             setRecentLogs(generationsData.slice(0, 10).map((g: any) => ({
                 id: g.id,
                 type: 'success',
@@ -179,10 +181,41 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                 time: new Date(g.created_at).toLocaleTimeString()
             })));
 
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error fetching admin data:', error);
+            if (error.message?.includes('column')) {
+                console.warn('⚠️ Detectadas columnas faltantes en el esquema. Revisa la base de datos.');
+            }
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleUpdateUser = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingUser) return;
+        try {
+            setIsSavingUser(true);
+            const { error } = await supabase
+                .from('profiles')
+                .update({
+                    full_name: editingUser.full_name,
+                    credits: Number(editingUser.credits),
+                    unlocked_packs: editingUser.unlocked_packs,
+                    role: editingUser.role
+                })
+                .eq('id', editingUser.id);
+
+            if (error) throw error;
+
+            alert('Usuario actualizado correctamente');
+            setEditingUser(null);
+            fetchData();
+        } catch (error: any) {
+            console.error('Error updating user:', error);
+            alert('Error al actualizar usuario: ' + error.message);
+        } finally {
+            setIsSavingUser(false);
         }
     };
 
@@ -243,16 +276,21 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
             }).eq('id', targetUserId);
 
             // 3. Create Partner Entry
+            const partnerObj: any = {
+                name: newPartner.name,
+                contact_email: newPartner.email.toLowerCase(),
+                user_id: targetUserId,
+                credits_total: Number(newPartner.initialCredits),
+                credits_used: 0
+            };
+
+            // Only add config if it exists in the schema (resilience)
+            // Based on user report, config might be missing in some projects
+            // partnerObj.config = { primary_color: '#135bec', style_presets: ['Formula 1', 'John Wick'] };
+
             const { error: partError } = await supabase
                 .from('partners')
-                .insert({
-                    name: newPartner.name,
-                    contact_email: newPartner.email.toLowerCase(),
-                    user_id: targetUserId,
-                    credits_total: Number(newPartner.initialCredits),
-                    credits_used: 0,
-                    config: { primary_color: '#135bec', style_presets: ['Formula 1', 'John Wick'] }
-                });
+                .insert(partnerObj);
 
             if (partError) throw partError;
 
@@ -304,7 +342,13 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                     .from('partners')
                     .update({ credits_total: (partner.credits_total || 0) + amount })
                     .eq('id', partner.id);
-                if (error) throw error;
+
+                if (error) {
+                    if (error.message.includes('credits_total')) {
+                        throw new Error('La columna "credits_total" no existe en la tabla "partners". Por favor, ejecuta la migración SQL necesaria.');
+                    }
+                    throw error;
+                }
             } else {
                 // Assume it's a B2C user profile
                 const user = b2cUsers.find(u => u.id === showTopUp.id);
@@ -321,7 +365,8 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
             setShowTopUp(null);
             fetchData();
         } catch (error: any) {
-            alert('Error updating credits: ' + error.message);
+            console.error('Error al recargar créditos:', error);
+            alert('Error al recargar créditos: ' + error.message);
         } finally {
             setLoading(false);
         }
@@ -745,12 +790,24 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                     <h2 className="text-2xl font-black text-white tracking-tight uppercase">Base de Datos Usuarios B2C</h2>
                                     <p className="text-slate-500 text-sm">Métricas detalladas y gestión de la aplicación pública</p>
                                 </div>
-                                <button
-                                    onClick={() => setShowNewUserModal(true)}
-                                    className="bg-blue-600 text-white px-6 py-3 rounded-lg font-bold flex items-center gap-2 hover:scale-[1.02] transition-all shadow-[0_0_20px_rgba(37,99,235,0.3)]"
-                                >
-                                    <span className="material-symbols-outlined">person_add</span> Nuevo Usuario
-                                </button>
+                                <div className="flex items-center gap-4">
+                                    <div className="relative">
+                                        <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                                        <input
+                                            type="text"
+                                            placeholder="Buscar por email..."
+                                            value={b2cSearchQuery}
+                                            onChange={(e) => setB2CSearchQuery(e.target.value)}
+                                            className="bg-[#121413] border border-[#1f2b24] rounded-lg pl-10 pr-4 py-2 text-sm text-white focus:border-blue-500 outline-none w-64 transition-all"
+                                        />
+                                    </div>
+                                    <button
+                                        onClick={() => setShowNewUserModal(true)}
+                                        className="bg-blue-600 text-white px-6 py-3 rounded-lg font-bold flex items-center gap-2 hover:scale-[1.02] transition-all shadow-[0_0_20px_rgba(37,99,235,0.3)]"
+                                    >
+                                        <span className="material-symbols-outlined">person_add</span> Nuevo Usuario
+                                    </button>
+                                </div>
                             </div>
 
                             {/* B2C Analytics Row */}
@@ -791,45 +848,56 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-[#1f2b24]/50">
-                                                    {b2cUsers.sort((a, b) => (b.total_generations || 0) - (a.total_generations || 0)).map(u => (
-                                                        <tr key={u.id} className="hover:bg-white/[0.02] transition-colors group">
-                                                            <td className="px-6 py-4">
-                                                                <p className="font-bold text-white group-hover:text-[#13ec80] transition-colors">{u.email}</p>
-                                                                <p className="text-[10px] text-slate-600 font-mono italic">B2C Personal Account</p>
-                                                            </td>
-                                                            <td className="px-6 py-4 text-center">
-                                                                <div className="flex flex-wrap justify-center gap-1">
-                                                                    {(u.unlocked_packs || []).length > 0 ? (
-                                                                        u.unlocked_packs?.map(pack => (
-                                                                            <span key={pack} className="text-[8px] px-1.5 py-0.5 bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded-full font-bold uppercase">{pack}</span>
-                                                                        ))
-                                                                    ) : (
-                                                                        <span className="text-[9px] text-slate-700 font-bold uppercase tracking-tighter">Sin Packs</span>
-                                                                    )}
-                                                                </div>
-                                                            </td>
-                                                            <td className="px-6 py-4 font-mono text-[#13ec80] text-center font-bold">{u.credits?.toLocaleString() || 0}</td>
-                                                            <td className="px-6 py-4 text-slate-400 text-center">
-                                                                <div className="flex flex-col items-center">
-                                                                    <span className="font-bold text-white">{u.total_generations || 0}</span>
-                                                                    <div className="w-12 h-1 bg-[#1f2b24] rounded-full mt-1 overflow-hidden">
-                                                                        <div
-                                                                            className="h-full bg-blue-500"
-                                                                            style={{ width: `${Math.min(100, (u.total_generations || 0) * 5)}%` }}
-                                                                        />
+                                                    {b2cUsers
+                                                        .filter(u => u.email.toLowerCase().includes(b2cSearchQuery.toLowerCase()))
+                                                        .sort((a, b) => (b.total_generations || 0) - (a.total_generations || 0))
+                                                        .map(u => (
+                                                            <tr key={u.id} className="hover:bg-white/[0.02] transition-colors group">
+                                                                <td className="px-6 py-4">
+                                                                    <p className="font-bold text-white group-hover:text-[#13ec80] transition-colors">{u.full_name || u.email}</p>
+                                                                    <p className="text-[10px] text-slate-600 font-mono italic">{u.email}</p>
+                                                                </td>
+                                                                <td className="px-6 py-4 text-center">
+                                                                    <div className="flex flex-wrap justify-center gap-1">
+                                                                        {(u.unlocked_packs || []).length > 0 ? (
+                                                                            u.unlocked_packs?.map(pack => (
+                                                                                <span key={pack} className="text-[8px] px-1.5 py-0.5 bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded-full font-bold uppercase">{pack}</span>
+                                                                            ))
+                                                                        ) : (
+                                                                            <span className="text-[9px] text-slate-700 font-bold uppercase tracking-tighter">Sin Packs</span>
+                                                                        )}
                                                                     </div>
-                                                                </div>
-                                                            </td>
-                                                            <td className="px-6 py-4 text-right">
-                                                                <button
-                                                                    onClick={() => setShowTopUp({ id: u.id, name: u.email })}
-                                                                    className="text-[10px] font-bold text-[#13ec80] border border-[#13ec80]/30 px-3 py-1.5 rounded-lg hover:bg-[#13ec80]/10 transition-all uppercase"
-                                                                >
-                                                                    Cargar Saldo
-                                                                </button>
-                                                            </td>
-                                                        </tr>
-                                                    ))}
+                                                                </td>
+                                                                <td className="px-6 py-4 font-mono text-[#13ec80] text-center font-bold">{u.credits?.toLocaleString() || 0}</td>
+                                                                <td className="px-6 py-4 text-slate-400 text-center">
+                                                                    <div className="flex flex-col items-center">
+                                                                        <span className="font-bold text-white">{u.total_generations || 0}</span>
+                                                                        <div className="w-12 h-1 bg-[#1f2b24] rounded-full mt-1 overflow-hidden">
+                                                                            <div
+                                                                                className="h-full bg-blue-500"
+                                                                                style={{ width: `${Math.min(100, (u.total_generations || 0) * 5)}%` }}
+                                                                            />
+                                                                        </div>
+                                                                    </div>
+                                                                </td>
+                                                                <td className="px-6 py-4 text-right">
+                                                                    <div className="flex items-center justify-end gap-2">
+                                                                        <button
+                                                                            onClick={() => setEditingUser(u)}
+                                                                            className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-500 hover:text-white hover:bg-white/5 transition-all"
+                                                                        >
+                                                                            <span className="material-symbols-outlined !text-lg">edit</span>
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => setShowTopUp({ id: u.id, name: u.email })}
+                                                                            className="text-[10px] font-bold text-[#13ec80] border border-[#13ec80]/30 px-3 py-1.5 rounded-lg hover:bg-[#13ec80]/10 transition-all uppercase"
+                                                                        >
+                                                                            Saldo
+                                                                        </button>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+                                                        ))}
                                                 </tbody>
                                             </table>
                                         </div>
@@ -1272,9 +1340,10 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                     <button type="button" onClick={() => setShowCreatePartner(false)} className="flex-1 py-3 text-xs font-bold text-slate-500 hover:text-white transition-colors">CANCELAR</button>
                                     <button
                                         type="submit"
-                                        className="flex-1 py-3 bg-[#13ec80] text-[#0a0c0b] font-black text-xs rounded-lg shadow-[0_0_20px_rgba(19,236,128,0.2)]"
+                                        disabled={loading}
+                                        className="flex-1 py-3 bg-[#13ec80] text-[#0a0c0b] font-black text-xs rounded-lg shadow-[0_0_20px_rgba(19,236,128,0.2)] hover:scale-[1.02] transition-all disabled:opacity-50"
                                     >
-                                        CREAR PARTNER
+                                        {loading ? 'CREANDO...' : 'CREAR PARTNER'}
                                     </button>
                                 </div>
                             </form>
@@ -1374,6 +1443,90 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                     </div>
                 )
             }
+
+            {editingUser && (
+                <div className="fixed inset-0 bg-black/90 backdrop-blur-xl z-[100] flex items-center justify-center p-6">
+                    <div className="bg-[#121413] border border-[#1f2b24] w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+                        <div className="p-8 border-b border-[#1f2b24]">
+                            <h3 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-3">
+                                <span className="material-symbols-outlined text-blue-500">manage_accounts</span>
+                                Editar Usuario B2C
+                            </h3>
+                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">{editingUser.email}</p>
+                        </div>
+                        <form onSubmit={handleUpdateUser} className="p-8 space-y-6">
+                            <div className="grid grid-cols-2 gap-6">
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Nombre Completo</label>
+                                    <input
+                                        type="text"
+                                        value={editingUser.full_name || ''}
+                                        onChange={e => setEditingUser({ ...editingUser, full_name: e.target.value })}
+                                        className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-xl px-4 py-3 text-white outline-none focus:border-blue-500 transition-colors"
+                                        placeholder="Nombre del usuario..."
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Créditos</label>
+                                    <input
+                                        type="number"
+                                        value={editingUser.credits}
+                                        onChange={e => setEditingUser({ ...editingUser, credits: parseInt(e.target.value) || 0 })}
+                                        className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-xl px-4 py-3 text-white outline-none focus:border-blue-500"
+                                    />
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Packs Desbloqueados</label>
+                                <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto p-4 bg-[#0a0c0b] rounded-xl border border-[#1f2b24] custom-scrollbar">
+                                    {Array.from(new Set(stylesMetadata.map(s => s.category))).filter(c => c).map(category => {
+                                        const isChecked = editingUser.unlocked_packs?.includes(category);
+                                        return (
+                                            <label key={category} className="flex items-center gap-3 cursor-pointer group">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isChecked}
+                                                    onChange={e => {
+                                                        const packs = editingUser.unlocked_packs || [];
+                                                        if (e.target.checked) {
+                                                            setEditingUser({ ...editingUser, unlocked_packs: [...packs, category] });
+                                                        } else {
+                                                            setEditingUser({ ...editingUser, unlocked_packs: packs.filter(p => p !== category) });
+                                                        }
+                                                    }}
+                                                    className="hidden"
+                                                />
+                                                <div className={`w-4 h-4 rounded border ${isChecked ? 'bg-blue-600 border-blue-600' : 'border-[#1f2b24] group-hover:border-slate-600'} flex items-center justify-center transition-all`}>
+                                                    {isChecked && <span className="material-symbols-outlined !text-[12px] text-white">check</span>}
+                                                </div>
+                                                <span className={`text-[11px] uppercase font-bold tracking-tight ${isChecked ? 'text-white' : 'text-slate-500'}`}>{category}</span>
+                                            </label>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
+                            <div className="flex gap-4 pt-4">
+                                <button
+                                    type="button"
+                                    onClick={() => setEditingUser(null)}
+                                    className="flex-1 px-6 py-4 rounded-xl font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all uppercase text-[10px] tracking-widest"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isSavingUser}
+                                    className="flex-1 px-6 py-4 bg-blue-600 text-white rounded-xl font-black uppercase text-[10px] tracking-[2px] shadow-lg shadow-blue-500/20 hover:scale-[1.02] transition-all disabled:opacity-50"
+                                >
+                                    {isSavingUser ? 'GUARDANDO...' : 'GUARDAR CAMBIOS'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
 
             {showNewUserModal && (
                 <div className="fixed inset-0 bg-black/90 backdrop-blur-xl z-[100] flex items-center justify-center p-6">
