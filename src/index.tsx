@@ -8,9 +8,9 @@ if (!rootElement) {
   throw new Error("Could not find root element to mount to");
 }
 
-// Lógica de Subdominio para separar productos
+// Lógica de Subdominio para separar productos (según Roadmap)
 const hostname = window.location.hostname;
-const isKiosk = hostname.startsWith('kiosk') || window.location.pathname.startsWith('/kiosk');
+const isSaaSManagement = hostname.startsWith('kiosk') || hostname.startsWith('admin') || window.location.pathname.startsWith('/dashboard') || window.location.pathname.startsWith('/kiosk');
 
 class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean, error: any }> {
   constructor(props: any) {
@@ -46,7 +46,7 @@ const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
     <ErrorBoundary>
-      {isKiosk ? <DashboardApp /> : <App />}
+      {isSaaSManagement ? <DashboardApp /> : <App />}
     </ErrorBoundary>
   </React.StrictMode>
 );
