@@ -19,6 +19,8 @@ interface UserProfile {
     credits: number;
     total_generations: number;
     role: string;
+    unlocked_packs?: string[];
+    created_at?: string;
 }
 
 interface AdminProps {
@@ -32,6 +34,14 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
     const [loading, setLoading] = useState(true);
     const [showCreatePartner, setShowCreatePartner] = useState(false);
     const [showTopUp, setShowTopUp] = useState<{ id: string, name: string } | null>(null);
+    const [topUpAmount, setTopUpAmount] = useState<number>(1000);
+    const [showNewUserModal, setShowNewUserModal] = useState(false);
+    const [newUserForm, setNewUserForm] = useState({
+        email: '',
+        credits: 1000,
+        packs: ''
+    });
+    const [isSavingUser, setIsSavingUser] = useState(false);
     const [stats, setStats] = useState({
         totalGenerations: 0,
         totalPartners: 0,
@@ -67,6 +77,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
     const [newPartner, setNewPartner] = useState({
         name: '',
         email: '',
+        password: '',
         initialCredits: 1000
     });
 
@@ -175,55 +186,83 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
         }
     };
 
-    const handleCreatePartner = async () => {
+    const handleCreateUser = async (e: React.FormEvent) => {
+        e.preventDefault();
         try {
-            setLoading(true);
-            // 1. Create or Find Profile
-            const { data: profile, error: pError } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('email', newPartner.email.toLowerCase())
-                .maybeSingle();
+            setIsSavingUser(true);
 
-            let targetUserId = profile?.id;
+            const { data: existingUser } = await supabase.from('profiles').select('id').eq('email', newUserForm.email).maybeSingle();
 
-            if (!profile) {
-                // If not exists, insert into profiles and let them login later
-                const { data: newP, error: insError } = await supabase
-                    .from('profiles')
-                    .insert({
-                        email: newPartner.email.toLowerCase(),
-                        role: 'partner',
-                        credits: 0
-                    })
-                    .select()
-                    .single();
-                if (insError) throw insError;
-                targetUserId = newP.id;
-            } else {
-                // Update role
-                await supabase.from('profiles').update({ role: 'partner' }).eq('id', profile.id);
+            if (existingUser) {
+                alert('Este usuario ya existe en la base de datos.');
+                setIsSavingUser(false);
+                return;
             }
 
-            // 2. Create Partner Entry
+            const { error: profError } = await supabase.from('profiles').insert({
+                email: newUserForm.email.toLowerCase(),
+                credits: Number(newUserForm.credits),
+                unlocked_packs: newUserForm.packs.split(',').map(p => p.trim()).filter(p => p),
+                role: 'user'
+            });
+
+            if (profError) throw profError;
+
+            alert('Usuario B2C creado correctamente.');
+            setShowNewUserModal(false);
+            setNewUserForm({ email: '', credits: 1000, packs: '' });
+            fetchData();
+        } catch (error) {
+            console.error('Error creating user:', error);
+            alert('Error al crear usuario. Revisa la consola.');
+        } finally {
+            setIsSavingUser(false);
+        }
+    };
+
+    const handleCreatePartner = async (e: React.FormEvent) => {
+        e.preventDefault();
+        try {
+            setLoading(true);
+
+            // 1. Create Auth User for Partner
+            const { data: authData, error: authError } = await supabase.auth.signUp({
+                email: newPartner.email.toLowerCase(),
+                password: newPartner.password || 'Partner123!', // Temporal
+            });
+
+            if (authError) throw authError;
+            const targetUserId = authData.user?.id;
+
+            if (!targetUserId) throw new Error("No se pudo obtener el ID del usuario");
+
+            // 2. Update Profile Role
+            await supabase.from('profiles').update({
+                role: 'partner',
+                full_name: newPartner.name
+            }).eq('id', targetUserId);
+
+            // 3. Create Partner Entry
             const { error: partError } = await supabase
                 .from('partners')
                 .insert({
                     name: newPartner.name,
                     contact_email: newPartner.email.toLowerCase(),
                     user_id: targetUserId,
-                    credits_total: newPartner.initialCredits,
-                    credits_used: 0
+                    credits_total: Number(newPartner.initialCredits),
+                    credits_used: 0,
+                    config: { primary_color: '#135bec', style_presets: ['Formula 1', 'John Wick'] }
                 });
 
             if (partError) throw partError;
 
-            alert('Partner creado exitosamente');
+            alert('Partner creado con éxito.');
             setShowCreatePartner(false);
-            setNewPartner({ name: '', email: '', initialCredits: 1000 });
+            setNewPartner({ name: '', email: '', password: '', initialCredits: 1000 });
             fetchData();
         } catch (error: any) {
-            alert('Error creating partner: ' + error.message);
+            console.error('Error creating partner:', error);
+            alert('Error al crear partner: ' + (error.message || 'Error desconocido'));
         } finally {
             setLoading(false);
         }
@@ -355,7 +394,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                 <div className="p-4 border-t border-[#1f2b24] bg-[#121413]/50">
                     <div className="flex items-center gap-3 mb-2">
                         <div className="w-8 h-8 rounded-full bg-[#13ec80]/20 flex items-center justify-center border border-[#13ec80]/40">
-                            <span className="material-symbols-outlined text-[#13ec80] !text-[18px]">person</span>
+                            <span className="material-symbols-outlined !text-[18px]">person</span>
                         </div>
                         <div className="flex-1 min-w-0">
                             <p className="text-xs font-bold text-white truncate">Admin_Root</p>
@@ -706,6 +745,12 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                     <h2 className="text-2xl font-black text-white tracking-tight uppercase">Base de Datos Usuarios B2C</h2>
                                     <p className="text-slate-500 text-sm">Métricas detalladas y gestión de la aplicación pública</p>
                                 </div>
+                                <button
+                                    onClick={() => setShowNewUserModal(true)}
+                                    className="bg-blue-600 text-white px-6 py-3 rounded-lg font-bold flex items-center gap-2 hover:scale-[1.02] transition-all shadow-[0_0_20px_rgba(37,99,235,0.3)]"
+                                >
+                                    <span className="material-symbols-outlined">person_add</span> Nuevo Usuario
+                                </button>
                             </div>
 
                             {/* B2C Analytics Row */}
@@ -739,6 +784,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                                 <thead className="bg-[#0a0c0b] border-b border-[#1f2b24]">
                                                     <tr>
                                                         <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Email de Usuario</th>
+                                                        <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-center">Packs Activos</th>
                                                         <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-center">Balance</th>
                                                         <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-center">Generaciones</th>
                                                         <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">Acciones</th>
@@ -750,6 +796,17 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                                             <td className="px-6 py-4">
                                                                 <p className="font-bold text-white group-hover:text-[#13ec80] transition-colors">{u.email}</p>
                                                                 <p className="text-[10px] text-slate-600 font-mono italic">B2C Personal Account</p>
+                                                            </td>
+                                                            <td className="px-6 py-4 text-center">
+                                                                <div className="flex flex-wrap justify-center gap-1">
+                                                                    {(u.unlocked_packs || []).length > 0 ? (
+                                                                        u.unlocked_packs?.map(pack => (
+                                                                            <span key={pack} className="text-[8px] px-1.5 py-0.5 bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded-full font-bold uppercase">{pack}</span>
+                                                                        ))
+                                                                    ) : (
+                                                                        <span className="text-[9px] text-slate-700 font-bold uppercase tracking-tighter">Sin Packs</span>
+                                                                    )}
+                                                                </div>
                                                             </td>
                                                             <td className="px-6 py-4 font-mono text-[#13ec80] text-center font-bold">{u.credits?.toLocaleString() || 0}</td>
                                                             <td className="px-6 py-4 text-slate-400 text-center">
@@ -829,8 +886,8 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                             <div className="flex justify-between items-end mb-8">
                                 <div>
-                                    <h2 className="text-2xl font-black text-white tracking-tight uppercase">Motor de Estilos IA</h2>
-                                    <p className="text-slate-500 text-sm">Configuración maestra de identidades, prompts y exclusividad</p>
+                                    <h2 className="text-2xl font-black text-white tracking-tight uppercase">Motor de Estilos IA (Malla Maestro)</h2>
+                                    <p className="text-slate-500 text-sm">Gestiona Categorías (Packs) y Estilos (IDs técnicos) de la plataforma</p>
                                 </div>
                                 <button
                                     onClick={() => {
@@ -867,9 +924,9 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                 <table className="w-full text-left">
                                     <thead className="bg-[#0a0c0b] border-b border-[#1f2b24]">
                                         <tr>
-                                            <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Identidad (ID)</th>
-                                            <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Etiqueta Pública</th>
-                                            <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Categoría</th>
+                                            <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">ID Técnico</th>
+                                            <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Nombre Público</th>
+                                            <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Categoría (Pack)</th>
                                             <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Nivel</th>
                                             <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Acciones</th>
                                         </tr>
@@ -1168,7 +1225,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                             <h3 className="text-xl font-black text-white uppercase mb-6 flex items-center gap-3">
                                 <span className="material-symbols-outlined text-[#13ec80]">add_business</span> Nuevo Revendedor
                             </h3>
-                            <div className="space-y-4">
+                            <form onSubmit={handleCreatePartner} className="space-y-4">
                                 <div>
                                     <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Razón Social</label>
                                     <input
@@ -1176,6 +1233,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                         placeholder="Nombre de la Agencia..."
                                         value={newPartner.name}
                                         onChange={(e) => setNewPartner({ ...newPartner, name: e.target.value })}
+                                        required
                                     />
                                 </div>
                                 <div>
@@ -1186,6 +1244,18 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                         type="email"
                                         value={newPartner.email}
                                         onChange={(e) => setNewPartner({ ...newPartner, email: e.target.value })}
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Contraseña Temporal</label>
+                                    <input
+                                        className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-lg px-4 py-3 text-white outline-none focus:border-[#13ec80]"
+                                        placeholder="Contraseña temporal para el partner"
+                                        type="password"
+                                        value={newPartner.password}
+                                        onChange={(e) => setNewPartner({ ...newPartner, password: e.target.value })}
+                                        required
                                     />
                                 </div>
                                 <div>
@@ -1195,18 +1265,19 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                         type="number"
                                         value={newPartner.initialCredits}
                                         onChange={(e) => setNewPartner({ ...newPartner, initialCredits: parseInt(e.target.value) || 0 })}
+                                        required
                                     />
                                 </div>
-                            </div>
-                            <div className="flex gap-4 mt-8">
-                                <button onClick={() => setShowCreatePartner(false)} className="flex-1 py-3 text-xs font-bold text-slate-500 hover:text-white transition-colors">CANCELAR</button>
-                                <button
-                                    onClick={handleCreatePartner}
-                                    className="flex-1 py-3 bg-[#13ec80] text-[#0a0c0b] font-black text-xs rounded-lg shadow-[0_0_20px_rgba(19,236,128,0.2)]"
-                                >
-                                    CREAR PARTNER
-                                </button>
-                            </div>
+                                <div className="flex gap-4 mt-8">
+                                    <button type="button" onClick={() => setShowCreatePartner(false)} className="flex-1 py-3 text-xs font-bold text-slate-500 hover:text-white transition-colors">CANCELAR</button>
+                                    <button
+                                        type="submit"
+                                        className="flex-1 py-3 bg-[#13ec80] text-[#0a0c0b] font-black text-xs rounded-lg shadow-[0_0_20px_rgba(19,236,128,0.2)]"
+                                    >
+                                        CREAR PARTNER
+                                    </button>
+                                </div>
+                            </form>
                         </div>
                     </div>
                 )
@@ -1303,6 +1374,78 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                     </div>
                 )
             }
+
+            {showNewUserModal && (
+                <div className="fixed inset-0 bg-black/90 backdrop-blur-xl z-[100] flex items-center justify-center p-6">
+                    <div className="bg-[#121413] border border-[#1f2b24] w-full max-w-md rounded-3xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+                        <div className="p-8 border-b border-[#1f2b24]">
+                            <h3 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-3">
+                                <span className="material-symbols-outlined text-blue-500">person_add</span>
+                                Nuevo Usuario B2C
+                            </h3>
+                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Alta de cuenta pública y créditos</p>
+                        </div>
+                        <form onSubmit={handleCreateUser} className="p-8 space-y-6">
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Email del Usuario</label>
+                                <input
+                                    type="email"
+                                    required
+                                    value={newUserForm.email}
+                                    onChange={e => setNewUserForm({ ...newUserForm, email: e.target.value })}
+                                    className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-xl px-4 py-3 text-white outline-none focus:border-blue-500 transition-colors"
+                                    placeholder="ejemplo@usuario.com"
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Créditos Iniciales</label>
+                                    <input
+                                        type="number"
+                                        required
+                                        value={newUserForm.credits}
+                                        onChange={e => setNewUserForm({ ...newUserForm, credits: parseInt(e.target.value) })}
+                                        className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-xl px-4 py-3 text-white outline-none focus:border-blue-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Rol Asignado</label>
+                                    <div className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-xl px-4 py-3 text-slate-400 text-xs font-bold uppercase tracking-widest">
+                                        USUARIO B2C
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Packs Desbloqueados (Separar por coma)</label>
+                                <input
+                                    type="text"
+                                    value={newUserForm.packs}
+                                    onChange={e => setNewUserForm({ ...newUserForm, packs: e.target.value })}
+                                    className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-xl px-4 py-3 text-white outline-none focus:border-blue-500"
+                                    placeholder="Formula 1, John Wick, Magia..."
+                                />
+                                <p className="text-[9px] text-slate-600 mt-2 italic">* Los nombres deben coincidir con la subcategoría en el Motor de Estilos.</p>
+                            </div>
+                            <div className="flex gap-4 pt-4">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowNewUserModal(false)}
+                                    className="flex-1 px-6 py-4 rounded-xl font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all uppercase text-[10px] tracking-widest"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isSavingUser}
+                                    className="flex-1 px-6 py-4 bg-blue-600 text-white rounded-xl font-black uppercase text-[10px] tracking-[2px] shadow-lg shadow-blue-500/20 hover:scale-[1.02] transition-all disabled:opacity-50"
+                                >
+                                    {isSavingUser ? 'CREANDO...' : 'CREAR USUARIO'}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
 
             <style>{`
                 .custom-scrollbar::-webkit-scrollbar {
