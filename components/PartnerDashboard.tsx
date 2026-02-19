@@ -238,8 +238,8 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
 
     const filteredEvents = useMemo(() => {
         return events.filter(e =>
-            e.event_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            e.event_slug.toLowerCase().includes(searchTerm.toLowerCase())
+            (e.event_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+            (e.event_slug || '').toLowerCase().includes(searchTerm.toLowerCase())
         );
     }, [events, searchTerm]);
 
