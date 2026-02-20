@@ -195,7 +195,6 @@ const DashboardApp: React.FC = () => {
                                 </span>
                             </div>
                         </div>
-                        <div className="text-[8px] text-slate-600 font-mono text-center mb-1">R: {profile?.role || 'null'} | M: {profile?.is_master ? 'Y' : 'N'}</div>
                         <button
                             onClick={handleLogout}
                             className="w-full py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-[11px] font-bold text-white transition-colors uppercase tracking-wider"
