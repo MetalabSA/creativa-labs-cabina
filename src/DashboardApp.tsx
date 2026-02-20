@@ -56,12 +56,26 @@ const DashboardApp: React.FC = () => {
             setLoading(true);
             const { data, error } = await supabase
                 .from('profiles')
-                .select('*, partner:partners(*)')
+                .select('*')
                 .eq('id', userId)
                 .single();
 
             if (error) throw error;
-            setProfile(data);
+
+            // Try to fetch partner separately to avoid query failure
+            let partnerData = null;
+            try {
+                const { data: part } = await supabase
+                    .from('partners')
+                    .select('*')
+                    .eq('user_id', userId)
+                    .single();
+                partnerData = part;
+            } catch (pErr) {
+                console.warn('User has no partner entry or RLS restricted');
+            }
+
+            setProfile({ ...data, partner: partnerData });
         } catch (error) {
             console.error('Error fetching profile:', error);
         } finally {
@@ -101,7 +115,10 @@ const DashboardApp: React.FC = () => {
     };
 
     // Full Screen Dashboards Override
-    if ((profile?.is_master || profile?.role === 'master' || profile?.role === 'admin') && activeTab !== 'client_view') {
+    const userRole = (profile?.role || '').toLowerCase();
+    const isMaster = profile?.is_master || userRole === 'master' || userRole === 'admin';
+
+    if (isMaster && activeTab !== 'client_view') {
         return (
             <Suspense fallback={<LoadingUI />}>
                 <MasterDashboard onBack={handleLogout} />
@@ -138,7 +155,7 @@ const DashboardApp: React.FC = () => {
                         {renderSidebarItem('overview', 'Vista General', LayoutDashboard)}
 
                         {/* Role-based Menu Items */}
-                        {(profile?.is_master || profile?.role === 'master' || profile?.role === 'admin') && (
+                        {isMaster && (
                             <>
                                 {renderSidebarItem('overview', 'Panel Master', Shield)}
                                 {renderSidebarItem('client_view', 'Vista Cliente', LayoutDashboard)}
@@ -173,11 +190,12 @@ const DashboardApp: React.FC = () => {
                                 <span className="text-xs font-bold text-white truncate">{profile?.full_name || 'Usuario Admin'}</span>
                                 <span className="text-[10px] text-slate-500 uppercase tracking-wider">
                                     {profile?.role === 'partner' ? 'Gestor Partner' :
-                                        (profile?.is_master || profile?.role === 'master' || profile?.role === 'admin') ? 'Admin Maestro' :
+                                        isMaster ? 'Admin Maestro' :
                                             'Invitado'}
                                 </span>
                             </div>
                         </div>
+                        <div className="text-[8px] text-slate-600 font-mono text-center mb-1">R: {profile?.role || 'null'} | M: {profile?.is_master ? 'Y' : 'N'}</div>
                         <button
                             onClick={handleLogout}
                             className="w-full py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-[11px] font-bold text-white transition-colors uppercase tracking-wider"
@@ -196,6 +214,11 @@ const DashboardApp: React.FC = () => {
                             <div className="animate-fade-in">
                                 {profile?.role === 'partner' ? (
                                     <PartnerDashboard user={session.user} profile={profile} onBack={() => { }} initialView="overview" />
+                                ) : isMaster ? (
+                                    <div className="text-center py-20">
+                                        <h2 className="text-2xl font-bold text-white italic">Panel de Control General</h2>
+                                        <p className="text-slate-400">Selecciona una opción del menú para comenzar.</p>
+                                    </div>
                                 ) : (
                                     <div className="text-center py-20">
                                         <h2 className="text-2xl font-bold text-white">Bienvenido</h2>
