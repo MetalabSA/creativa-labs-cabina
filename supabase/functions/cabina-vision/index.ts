@@ -189,11 +189,15 @@ serve(async (req) => {
             }
         }
 
-        // 2. Obtener el Prompt Maestro
-        // Nota: Cabina usa la tabla 'identity_prompts', diferente a futbol que usa 'identities'
-        const { data: promptData } = await supabase.from('identity_prompts').select('master_prompt').eq('id', model_id).maybeSingle();
-        const masterPrompt = promptData?.master_prompt || "Professional portrait photography, studio lighting, high quality.";
-        console.log(`[CABINA] Prompt cargado para model_id: ${model_id}`);
+        // 2. Obtener el Prompt Maestro del nuevo repositorio unificado
+        const { data: promptData } = await supabase
+            .from('styles_metadata')
+            .select('prompt')
+            .eq('id', model_id)
+            .maybeSingle();
+
+        const masterPrompt = promptData?.prompt || "Professional portrait photography, studio lighting, high quality, highly detailed.";
+        console.log(`[CABINA] Prompt cargado (${masterPrompt.substring(0, 30)}...) para model_id: ${model_id}`);
 
         // 3. Crear Tarea en Kie.ai
         const createResponse = await fetch("https://api.kie.ai/api/v1/jobs/createTask", {
@@ -311,7 +315,7 @@ serve(async (req) => {
             // Registrar generación en DB (user_id es nullable para invitados de evento)
             supabase.from('generations').insert({
                 user_id: user_id || null,
-                style_id: model_id,
+                model_id: model_id,
                 image_url: finalImageUrl,
                 aspect_ratio: aspect_ratio,
                 event_id: event_id || null
