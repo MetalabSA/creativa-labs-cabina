@@ -345,14 +345,14 @@ const App: React.FC = () => {
       setProfile(data);
 
       // Auto-redirect staff to dashboard if not in event mode and on root path
+      // Disabled to prevent unwanted redirects on mobile. Access is via BubbleMenu.
+      /*
       const params = new URLSearchParams(window.location.search);
       const isStaffUser = data.is_master || data.role === 'master' || data.role === 'partner' || data.role === 'admin';
       if (isStaffUser && !params.get('event') && !params.get('mode')) {
-        // Option A: automatic redirect (maybe too aggressive?)
-        // Option B: show a notification or just let the BubbleMenu handle it.
-        // The user said "me manda como usuario", so let's do the redirect.
         window.location.href = '/dashboard.html';
       }
+      */
     } catch (error) {
       console.error('Error fetching profile:', error);
     } finally {
