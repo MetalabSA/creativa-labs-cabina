@@ -72,6 +72,10 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
         id: '',
         label: '',
         category: '',
+        subcategory: '',
+        image_url: '',
+        prompt: '',
+        tags: '' as string | string[],
         is_premium: false,
         usage_count: 0
     });
@@ -333,6 +337,36 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
         } catch (error: any) {
             console.error('Error creating partner:', error);
             alert('Error al crear partner: ' + (error.message || 'Error desconocido'));
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        try {
+            setLoading(true);
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${styleForm.id || 'new'}-${Math.random()}.${fileExt}`;
+            const filePath = `styles/${fileName}`;
+
+            const { error: uploadError } = await supabase.storage
+                .from('assets')
+                .upload(filePath, file);
+
+            if (uploadError) throw uploadError;
+
+            const { data: { publicUrl } } = supabase.storage
+                .from('assets')
+                .getPublicUrl(filePath);
+
+            setStyleForm(prev => ({ ...prev, image_url: publicUrl }));
+            alert('Imagen subida correctamente');
+        } catch (error: any) {
+            console.error('Error uploading image:', error);
+            alert('Error al subir imagen: ' + error.message);
         } finally {
             setLoading(false);
         }
@@ -1421,7 +1455,15 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                         onError={(e) => (e.currentTarget.src = '/placeholder-style.jpg')}
                                     />
                                     <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <label className="cursor-pointer bg-white text-black px-4 py-2 rounded-full text-[10px] font-black uppercase">Cambiar Imagen</label>
+                                        <label className="cursor-pointer bg-white text-black px-4 py-2 rounded-full text-[10px] font-black uppercase">
+                                            Cambiar Imagen
+                                            <input
+                                                type="file"
+                                                className="hidden"
+                                                accept="image/*"
+                                                onChange={handleImageUpload}
+                                            />
+                                        </label>
                                     </div>
                                 </div>
                                 <div className="mt-6 text-center">
@@ -1551,12 +1593,12 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                 <div className="space-y-4">
                                     <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Tactical Tags</label>
                                     <div className="flex flex-wrap gap-2 mb-4">
-                                        {String((styleForm as any).tags || '').split(',').filter(Boolean).map((tag, idx) => (
+                                        {(Array.isArray(styleForm.tags) ? styleForm.tags : String(styleForm.tags || '').split(',').filter(Boolean)).map((tag, idx) => (
                                             <span key={idx} className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-[10px] font-bold text-slate-300 flex items-center gap-2">
                                                 {tag.trim()}
                                                 <button onClick={() => {
-                                                    const currentTags = String((styleForm as any).tags).split(',').filter(t => t.trim() !== tag.trim());
-                                                    setStyleForm({ ...styleForm, tags: currentTags.join(', ') } as any);
+                                                    const currentTags = (Array.isArray(styleForm.tags) ? styleForm.tags : String(styleForm.tags).split(',')).filter(t => t.trim() !== tag.trim());
+                                                    setStyleForm({ ...styleForm, tags: currentTags } as any);
                                                 }} className="text-slate-600 hover:text-white transition-colors">×</button>
                                             </span>
                                         ))}
@@ -1606,12 +1648,14 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                                     label: styleForm.label,
                                                     category: styleForm.category,
                                                     is_premium: styleForm.is_premium,
-                                                    prompt: (styleForm as any).prompt,
-                                                    tags: String((styleForm as any).tags).split(',').map(t => t.trim()).filter(Boolean),
-                                                    subcategory: (styleForm as any).subcategory,
-                                                    image_url: (styleForm as any).image_url,
+                                                    prompt: styleForm.prompt,
+                                                    tags: Array.isArray(styleForm.tags) ? styleForm.tags : String(styleForm.tags).split(',').map(t => t.trim()).filter(Boolean),
+                                                    subcategory: styleForm.subcategory,
+                                                    image_url: styleForm.image_url,
                                                     updated_at: new Date().toISOString()
                                                 };
+
+                                                console.log('Syncing identity payload:', payload);
 
                                                 const { error } = await supabase
                                                     .from('styles_metadata')
