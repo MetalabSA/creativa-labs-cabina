@@ -76,6 +76,8 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
     });
     const [recentLogs, setRecentLogs] = useState<any[]>([]);
     const [stylesMetadata, setStylesMetadata] = useState<any[]>([]);
+    const [styleSearchQuery, setStyleSearchQuery] = useState('');
+    const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('all');
 
     // New Partner Form
     const [newPartner, setNewPartner] = useState({
@@ -953,98 +955,114 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
 
                     {view === 'styles' && (
                         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            <div className="flex justify-between items-end mb-8">
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
                                 <div>
-                                    <h2 className="text-2xl font-black text-white tracking-tight uppercase">Motor de Estilos IA (Malla Maestro)</h2>
-                                    <p className="text-slate-500 text-sm">Gestiona Categorías (Packs) y Estilos (IDs técnicos) de la plataforma</p>
+                                    <h2 className="text-2xl font-black text-white tracking-tight uppercase">Identity Repository <span className="text-[#13ec80]">({stylesMetadata.length})</span></h2>
+                                    <p className="text-slate-500 text-sm">Protocolo de gestión de identidades y mallas IA Maestro</p>
                                 </div>
-                                <button
-                                    onClick={() => {
-                                        setStyleForm({ id: '', label: '', category: '', is_premium: false, usage_count: 0 });
-                                        setEditingStyle('new');
-                                    }}
-                                    className="bg-[#13ec80] text-[#0a0c0b] px-6 py-3 rounded-lg font-bold flex items-center gap-2 hover:scale-[1.02] transition-all shadow-[0_0_20px_rgba(19,236,128,0.3)]"
-                                >
-                                    <span className="material-symbols-outlined">add_box</span> Nuevo Estilo
-                                </button>
-                            </div>
-
-                            {/* Styles Analytics Row */}
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-                                <div className="bg-[#121413] p-5 border border-[#1f2b24] rounded-xl">
-                                    <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Total Estilos</p>
-                                    <h3 className="text-2xl font-black text-white">{stylesMetadata.length}</h3>
-                                </div>
-                                <div className="bg-[#121413] p-5 border border-[#1f2b24] rounded-xl">
-                                    <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Estilos Premium</p>
-                                    <h3 className="text-2xl font-black text-amber-400">{stylesMetadata.filter(s => s.is_premium).length}</h3>
-                                </div>
-                                <div className="bg-[#121413] p-5 border border-[#1f2b24] rounded-xl">
-                                    <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Categorías Activas</p>
-                                    <h3 className="text-2xl font-black text-blue-400">{new Set(stylesMetadata.map(s => s.category)).size}</h3>
-                                </div>
-                                <div className="bg-[#121413] p-5 border border-[#1f2b24] rounded-xl">
-                                    <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Top Usage</p>
-                                    <h3 className="text-2xl font-black text-[#13ec80]">{Math.max(...stylesMetadata.map(s => s.usage_count || 0)).toLocaleString()}</h3>
+                                <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
+                                    <div className="relative">
+                                        <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                                        <input
+                                            type="text"
+                                            placeholder="Buscar identidad..."
+                                            value={styleSearchQuery}
+                                            onChange={(e) => setStyleSearchQuery(e.target.value)}
+                                            className="bg-[#121413] border border-[#1f2b24] rounded-xl pl-10 pr-4 py-2 text-sm text-white focus:border-[#13ec80] outline-none w-full md:w-64 transition-all"
+                                        />
+                                    </div>
+                                    <button
+                                        onClick={() => {
+                                            setStyleForm({ id: '', label: '', category: '', is_premium: false, usage_count: 0, prompt: '', tags: '', subcategory: '', image_url: '' } as any);
+                                            setEditingStyle('new');
+                                        }}
+                                        className="bg-[#13ec80] text-[#0a0c0b] px-6 py-2 rounded-xl font-bold flex items-center justify-center gap-2 hover:scale-[1.02] transition-all shadow-[0_0_20px_rgba(19,236,128,0.3)]"
+                                    >
+                                        <span className="material-symbols-outlined">add_box</span> Nueva Identidad
+                                    </button>
                                 </div>
                             </div>
 
-                            <div className="bg-[#121413] border border-[#1f2b24] rounded-xl overflow-hidden shadow-2xl">
-                                <table className="w-full text-left">
-                                    <thead className="bg-[#0a0c0b] border-b border-[#1f2b24]">
-                                        <tr>
-                                            <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">ID Técnico</th>
-                                            <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Nombre Público</th>
-                                            <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Categoría (Pack)</th>
-                                            <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Nivel</th>
-                                            <th className="px-6 py-4 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-right">Acciones</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-[#1f2b24]/50">
-                                        {stylesMetadata.map(style => (
-                                            <tr key={style.id} className="hover:bg-white/[0.02] transition-colors group">
-                                                <td className="px-6 py-4 font-mono text-xs text-[#13ec80]">{style.id}</td>
-                                                <td className="px-6 py-4">
-                                                    <p className="font-bold text-white group-hover:text-[#13ec80] transition-colors">{style.label}</p>
-                                                    <p className="text-[10px] text-slate-500 italic">{style.usage_count || 0} generaciones</p>
-                                                </td>
-                                                <td className="px-6 py-4 text-center">
-                                                    <span className="text-[10px] bg-white/5 border border-white/10 px-2 py-1 rounded text-slate-300 uppercase font-bold tracking-tight">
-                                                        {style.category || 'Sin Categoría'}
+                            {/* Filters Bar */}
+                            <div className="flex gap-2 mb-8 overflow-x-auto pb-2 no-scrollbar">
+                                {['all', ...Array.from(new Set(stylesMetadata.map(s => s.category).filter(Boolean)))].map(cat => (
+                                    <button
+                                        key={cat}
+                                        onClick={() => setSelectedCategoryFilter(cat)}
+                                        className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${selectedCategoryFilter === cat
+                                            ? 'bg-[#13ec80] text-black shadow-[0_0_15px_rgba(19,236,128,0.3)]'
+                                            : 'bg-white/5 text-slate-500 border border-white/10 hover:border-white/20'
+                                            }`}
+                                    >
+                                        {cat === 'all' ? 'Todas / All' : cat}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Identity Grid */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                                {stylesMetadata
+                                    .filter(s => {
+                                        const matchesSearch = (s.label || '').toLowerCase().includes(styleSearchQuery.toLowerCase()) ||
+                                            (s.id || '').toLowerCase().includes(styleSearchQuery.toLowerCase());
+                                        const matchesCat = selectedCategoryFilter === 'all' || s.category === selectedCategoryFilter;
+                                        return matchesSearch && matchesCat;
+                                    })
+                                    .map(style => (
+                                        <div
+                                            key={style.id}
+                                            onClick={() => {
+                                                setEditingStyle(style);
+                                                setStyleForm({
+                                                    id: style.id,
+                                                    label: style.label,
+                                                    category: style.category || '',
+                                                    is_premium: style.is_premium || false,
+                                                    usage_count: style.usage_count || 0,
+                                                    prompt: style.prompt || '',
+                                                    tags: Array.isArray(style.tags) ? style.tags.join(', ') : (style.tags || ''),
+                                                    subcategory: style.subcategory || '',
+                                                    image_url: style.image_url || ''
+                                                } as any);
+                                            }}
+                                            className="bg-[#121413] border border-[#1f2b24] rounded-[32px] overflow-hidden group hover:border-[#13ec80]/50 transition-all cursor-pointer relative"
+                                        >
+                                            {/* Preview Image */}
+                                            <div className="aspect-[4/5] relative overflow-hidden">
+                                                <img
+                                                    src={style.image_url || '/placeholder-style.jpg'}
+                                                    alt={style.label}
+                                                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 opacity-60 group-hover:opacity-100"
+                                                />
+                                                <div className="absolute inset-0 bg-gradient-to-t from-[#0a0c0b] via-transparent to-transparent opacity-90 group-hover:opacity-40 transition-opacity"></div>
+
+                                                {/* Badges */}
+                                                <div className="absolute top-4 left-4 flex gap-2">
+                                                    {style.is_premium && (
+                                                        <span className="bg-[#ff5500] text-white text-[8px] font-black px-2 py-1 rounded-md uppercase tracking-tighter">Premium</span>
+                                                    )}
+                                                    <span className="bg-[#1f2b24]/80 backdrop-blur-md text-white text-[8px] font-black px-2 py-1 rounded-md uppercase tracking-tighter border border-white/10">
+                                                        {style.category}
                                                     </span>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <div className="flex justify-center">
-                                                        {style.is_premium ? (
-                                                            <span className="flex items-center gap-1 text-[10px] font-bold text-amber-400 bg-amber-400/10 border border-amber-400/20 px-2 py-1 rounded-full">
-                                                                <span className="material-symbols-outlined !text-[12px]">workspace_premium</span> PREMIUM
-                                                            </span>
-                                                        ) : (
-                                                            <span className="text-[10px] font-bold text-slate-500 bg-slate-500/10 border border-slate-500/20 px-2 py-1 rounded-full">ESTÁNDAR</span>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4 text-right">
-                                                    <button
-                                                        onClick={() => {
-                                                            setEditingStyle(style);
-                                                            setStyleForm({
-                                                                id: style.id,
-                                                                label: style.label,
-                                                                category: style.category || '',
-                                                                is_premium: style.is_premium || false,
-                                                                usage_count: style.usage_count || 0
-                                                            });
-                                                        }}
-                                                        className="text-[10px] font-black text-blue-400 border border-blue-400/30 px-3 py-1.5 rounded hover:bg-blue-400/10 transition-all uppercase"
-                                                    >
-                                                        Editar
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
+                                                </div>
+                                            </div>
+
+                                            {/* Content */}
+                                            <div className="p-6 absolute bottom-0 left-0 right-0">
+                                                <h4 className="text-xl font-black text-white italic uppercase tracking-tighter mb-1 group-hover:text-[#13ec80] transition-colors">{style.label}</h4>
+                                                <p className="text-[10px] text-slate-400 line-clamp-2 leading-relaxed italic opacity-60 group-hover:opacity-100 transition-opacity">
+                                                    "{style.prompt || 'Sin prompt definido...'}"
+                                                </p>
+
+                                                <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between opacity-40 group-hover:opacity-100 transition-opacity">
+                                                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
+                                                        SUB: {style.subcategory || 'General'}
+                                                    </span>
+                                                    <span className="material-symbols-outlined !text-sm text-slate-600">chevron_right</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
                             </div>
                         </div>
                     )}
@@ -1377,73 +1395,226 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                 )
             }
 
-            {/* Style Edit Modal */}
-            {
-                editingStyle && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80 backdrop-blur-md">
-                        <div className="bg-[#121413] border border-[#1f2b24] p-8 rounded-2xl w-full max-w-md shadow-2xl">
-                            <h3 className="text-xl font-black text-white uppercase mb-6 flex items-center gap-3">
-                                <span className="material-symbols-outlined text-[#13ec80]">auto_fix_high</span>
-                                {editingStyle === 'new' ? 'Crear Nuevo Estilo' : 'Editar Estilo'}
-                            </h3>
-                            <div className="space-y-4">
+            {/* Style Edit Modal - ADVANCED VERSION */}
+            {editingStyle && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/95 backdrop-blur-3xl overflow-y-auto no-scrollbar">
+                    <div className="bg-[#0a0c0b] border border-[#1f2b24] rounded-[48px] w-full max-w-5xl shadow-[0_0_100px_rgba(0,0,0,1)] overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95 duration-300">
+                        {/* Left Side: Preview */}
+                        <div className="w-full md:w-[35%] bg-white/5 p-12 flex flex-col items-center justify-center border-r border-[#1f2b24] relative overflow-hidden">
+                            <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
+                                <div className="absolute top-[-100px] left-[-100px] w-[300px] h-[300px] bg-[#13ec80] blur-[150px] rounded-full"></div>
+                                <div className="absolute bottom-[-100px] right-[-100px] w-[300px] h-[300px] bg-blue-500 blur-[150px] rounded-full"></div>
+                            </div>
+
+                            <div className="relative z-10 w-full">
+                                <div className="aspect-[4/5] rounded-[40px] overflow-hidden border-2 border-[#13ec80]/30 shadow-2xl relative group">
+                                    <img
+                                        src={styleForm.image_url || '/placeholder-style.jpg'}
+                                        alt="Preview"
+                                        className="w-full h-full object-cover"
+                                    />
+                                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <label className="cursor-pointer bg-white text-black px-4 py-2 rounded-full text-[10px] font-black uppercase">Cambiar Imagen</label>
+                                    </div>
+                                </div>
+                                <div className="mt-8 text-center">
+                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-[4px]">Identity Preview Module V1.5</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Right Side: Form */}
+                        <div className="flex-1 p-12 overflow-y-auto no-scrollbar">
+                            <div className="flex justify-between items-start mb-10">
                                 <div>
-                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Model ID (Clave única)</label>
+                                    <h3 className="text-3xl font-black text-white italic uppercase tracking-tighter">
+                                        {editingStyle === 'new' ? 'Initialize Protocol' : 'Sync Identity Data'}
+                                    </h3>
+                                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[4px] mt-1">Sintonización de Red Neuronal</p>
+                                </div>
+                                <button onClick={() => setEditingStyle(null)} className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-slate-500 hover:text-white transition-colors">
+                                    <span className="material-symbols-outlined">close</span>
+                                </button>
+                            </div>
+
+                            <div className="space-y-8">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-[#13ec80] uppercase tracking-widest ml-1">Identity Handle (ID)</label>
+                                        <input
+                                            className="w-full bg-[#121413] border border-[#1f2b24] rounded-2xl px-5 py-4 text-white outline-none focus:border-[#13ec80] font-mono text-sm"
+                                            value={styleForm.id}
+                                            disabled={editingStyle !== 'new'}
+                                            onChange={(e) => setStyleForm({ ...styleForm, id: e.target.value.toLowerCase() } as any)}
+                                        />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Visual Title</label>
+                                        <input
+                                            className="w-full bg-[#121413] border border-[#1f2b24] rounded-2xl px-5 py-4 text-white outline-none focus:border-[#13ec80]"
+                                            value={styleForm.label}
+                                            onChange={(e) => setStyleForm({ ...styleForm, label: e.target.value } as any)}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">System URL / Storage Path</label>
                                     <input
-                                        className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-lg px-4 py-3 text-white outline-none focus:border-[#13ec80] font-mono text-sm"
-                                        placeholder="ej: cyberpunk_v1"
-                                        value={styleForm.id}
-                                        disabled={editingStyle !== 'new'}
-                                        onChange={(e) => setStyleForm({ ...styleForm, id: e.target.value.toLowerCase() })}
+                                        className="w-full bg-[#121413] border border-[#1f2b24] rounded-2xl px-5 py-4 text-white outline-none focus:border-[#13ec80] font-mono text-xs"
+                                        value={(styleForm as any).image_url}
+                                        onChange={(e) => setStyleForm({ ...styleForm, image_url: e.target.value } as any)}
                                     />
                                 </div>
-                                <div>
-                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Etiqueta Pública</label>
-                                    <input
-                                        className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-lg px-4 py-3 text-white outline-none focus:border-[#13ec80]"
-                                        placeholder="Nombre que ve el usuario..."
-                                        value={styleForm.label}
-                                        onChange={(e) => setStyleForm({ ...styleForm, label: e.target.value })}
-                                    />
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Operational Category (Pack)</label>
+                                        <select
+                                            className="w-full bg-[#121413] border border-[#1f2b24] rounded-2xl px-5 py-4 text-white outline-none focus:border-[#13ec80] appearance-none"
+                                            value={styleForm.category}
+                                            onChange={(e) => setStyleForm({ ...styleForm, category: e.target.value } as any)}
+                                        >
+                                            <option value="">Seleccionar Pack</option>
+                                            <option value="cinema">Cinema (John Wick, Películas)</option>
+                                            <option value="sports">Sports (F1, Fútbol)</option>
+                                            <option value="series">Series (Breaking Bad, Suits)</option>
+                                            <option value="urban">Urban (Calle, Graffiti)</option>
+                                            <option value="fantasy">Fantasy (Magia, RPG)</option>
+                                        </select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Legacy Subcategory</label>
+                                        <input
+                                            className="w-full bg-[#121413] border border-[#1f2b24] rounded-2xl px-5 py-4 text-white outline-none focus:border-[#13ec80] font-mono text-xs"
+                                            value={(styleForm as any).subcategory}
+                                            onChange={(e) => setStyleForm({ ...styleForm, subcategory: e.target.value } as any)}
+                                        />
+                                    </div>
                                 </div>
-                                <div>
-                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Categoría</label>
-                                    <input
-                                        className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-lg px-4 py-3 text-white outline-none focus:border-[#13ec80]"
-                                        placeholder="Cine, Comic, Realista..."
-                                        value={styleForm.category}
-                                        onChange={(e) => setStyleForm({ ...styleForm, category: e.target.value })}
-                                    />
-                                </div>
-                                <div className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/10">
-                                    <div className="flex items-center gap-2">
-                                        <span className="material-symbols-outlined text-amber-400">workspace_premium</span>
-                                        <span className="text-xs font-bold text-white uppercase">Acceso Premium</span>
+
+                                <div className="bg-[#121413] border border-[#1f2b24] rounded-[24px] p-6 flex items-center justify-between group hover:border-[#ff5500]/30 transition-all">
+                                    <div className="flex items-center gap-4">
+                                        <div className="w-10 h-10 rounded-full bg-[#ff5500]/10 flex items-center justify-center text-[#ff5500]">
+                                            <span className="material-symbols-outlined">workspace_premium</span>
+                                        </div>
+                                        <span className="text-xs font-black text-white uppercase tracking-widest">Elevate to Premium Status (VIP Access Only)</span>
                                     </div>
                                     <label className="relative inline-flex items-center cursor-pointer">
                                         <input
                                             type="checkbox"
                                             className="sr-only peer"
                                             checked={styleForm.is_premium}
-                                            onChange={(e) => setStyleForm({ ...styleForm, is_premium: e.target.checked })}
+                                            onChange={(e) => setStyleForm({ ...styleForm, is_premium: e.target.checked } as any)}
                                         />
-                                        <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#13ec80]"></div>
+                                        <div className="w-14 h-7 bg-white/5 border border-white/10 rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-[#ff5500] after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all"></div>
                                     </label>
                                 </div>
-                            </div>
-                            <div className="flex gap-4 mt-8">
-                                <button onClick={() => setEditingStyle(null)} className="flex-1 py-3 text-xs font-bold text-slate-500 hover:text-white transition-colors">CANCELAR</button>
-                                <button
-                                    onClick={handleUpdateStyle}
-                                    className="flex-1 py-3 bg-[#13ec80] text-[#0a0c0b] font-black text-xs rounded-lg shadow-[0_0_20px_rgba(19,236,128,0.2)]"
-                                >
-                                    GUARDAR CAMBIOS
-                                </button>
+
+                                <div className="space-y-2">
+                                    <div className="flex justify-between">
+                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Master Generation Prompt (Cerebro Core)</label>
+                                        <span className="text-[8px] font-bold text-[#13ec80] uppercase">Neural Network Ready</span>
+                                    </div>
+                                    <textarea
+                                        className="w-full bg-[#121413] border border-[#1f2b24] rounded-[32px] px-8 py-6 text-white outline-none focus:border-[#13ec80] text-sm leading-relaxed min-h-[120px] resize-none"
+                                        value={(styleForm as any).prompt}
+                                        onChange={(e) => setStyleForm({ ...styleForm, prompt: e.target.value } as any)}
+                                    />
+                                </div>
+
+                                <div className="space-y-4">
+                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Tactical Tags</label>
+                                    <div className="flex flex-wrap gap-2 mb-4">
+                                        {String((styleForm as any).tags || '').split(',').filter(Boolean).map((tag, idx) => (
+                                            <span key={idx} className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-[10px] font-bold text-slate-300 flex items-center gap-2">
+                                                {tag.trim()}
+                                                <button onClick={() => {
+                                                    const currentTags = String((styleForm as any).tags).split(',').filter(t => t.trim() !== tag.trim());
+                                                    setStyleForm({ ...styleForm, tags: currentTags.join(', ') } as any);
+                                                }} className="text-slate-600 hover:text-white transition-colors">×</button>
+                                            </span>
+                                        ))}
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <input
+                                            className="flex-1 bg-[#121413] border border-[#1f2b24] rounded-2xl px-5 py-4 text-white outline-none focus:border-[#13ec80]"
+                                            id="new-tag-input"
+                                            placeholder="Add tactical label..."
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    const input = e.target as HTMLInputElement;
+                                                    const newTag = input.value.trim();
+                                                    if (newTag) {
+                                                        const currentTags = String((styleForm as any).tags || '');
+                                                        setStyleForm({ ...styleForm, tags: currentTags ? `${currentTags}, ${newTag}` : newTag } as any);
+                                                        input.value = '';
+                                                    }
+                                                }
+                                            }}
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const input = document.getElementById('new-tag-input') as HTMLInputElement;
+                                                const newTag = input.value.trim();
+                                                if (newTag) {
+                                                    const currentTags = String((styleForm as any).tags || '');
+                                                    setStyleForm({ ...styleForm, tags: currentTags ? `${currentTags}, ${newTag}` : newTag } as any);
+                                                    input.value = '';
+                                                }
+                                            }}
+                                            className="bg-white/5 border border-white/10 text-white px-6 rounded-2xl font-black text-[10px] uppercase hover:bg-white/10 transition-all"
+                                        >
+                                            Add
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="pt-8 flex gap-4">
+                                    <button
+                                        onClick={async () => {
+                                            try {
+                                                setLoading(true);
+                                                const payload = {
+                                                    id: styleForm.id,
+                                                    label: styleForm.label,
+                                                    category: styleForm.category,
+                                                    is_premium: styleForm.is_premium,
+                                                    prompt: (styleForm as any).prompt,
+                                                    tags: String((styleForm as any).tags).split(',').map(t => t.trim()).filter(Boolean),
+                                                    subcategory: (styleForm as any).subcategory,
+                                                    image_url: (styleForm as any).image_url,
+                                                    updated_at: new Date().toISOString()
+                                                };
+
+                                                const { error } = await supabase
+                                                    .from('styles_metadata')
+                                                    .upsert(payload);
+
+                                                if (error) throw error;
+                                                alert('Protocol synced successfully.');
+                                                setEditingStyle(null);
+                                                fetchData();
+                                            } catch (err: any) {
+                                                alert('Error: ' + err.message);
+                                            } finally {
+                                                setLoading(false);
+                                            }
+                                        }}
+                                        className="flex-1 py-6 bg-gradient-to-r from-orange-600 to-[#ff5500] text-white font-black rounded-[32px] text-xs tracking-[4px] shadow-[0_20px_40px_rgba(255,85,0,0.3)] hover:scale-[1.02] active:scale-95 transition-all uppercase italic"
+                                    >
+                                        Finalize Protocol Sync
+                                    </button>
+                                    <button className="aspect-square w-16 bg-white/5 border border-white/10 rounded-[28px] flex items-center justify-center text-slate-500 hover:text-white transition-all">
+                                        <span className="material-symbols-outlined">query_stats</span>
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     </div>
-                )
-            }
+                </div>
+            )}
 
             {editingUser && (
                 <div className="fixed inset-0 bg-black/90 backdrop-blur-xl z-[100] flex items-center justify-center p-6">
