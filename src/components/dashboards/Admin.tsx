@@ -118,11 +118,13 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
 
             // Calculate global stats
             const totalCredits = partnersData.reduce((acc, curr) => acc + (curr.credits_total || 0), 0);
-            const totalUsed = partnersData.reduce((acc, curr) => acc + (curr.credits_used || 0), 0);
+            const partnerUsageTotal = partnersData.reduce((acc, curr) => acc + (curr.credits_used || 0), 0);
+            const b2cUsageTotal = b2cUsersData.reduce((acc, curr) => acc + (curr.total_generations || 0), 0);
+            const totalGenerationsGlobal = partnerUsageTotal + b2cUsageTotal;
             const activeEventsCount = eventsData.filter(e => e.is_active).length || 0;
 
             setStats({
-                totalGenerations: totalUsed,
+                totalGenerations: totalGenerationsGlobal,
                 totalPartners: partnersData.length,
                 totalCreditsSold: totalCredits,
                 activeEvents: activeEventsCount
@@ -130,7 +132,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
 
             // Calculate B2C specific stats
             const totalB2CCredits = b2cUsersData.reduce((acc, curr) => acc + (curr.credits || 0), 0);
-            const totalB2CGenerations = b2cUsersData.reduce((acc, curr) => acc + (curr.total_generations || 0), 0);
+            const totalB2CGenerations = b2cUsageTotal;
 
             // Calculate Top Styles
             const styleCounts: Record<string, number> = {};
@@ -154,9 +156,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
             });
 
             // Calculate Partner Stats
-            const partnerCreditTotal = partnersData.reduce((acc, curr) => acc + (curr.credits_total || 0), 0);
-            const partnerUsageTotal = partnersData.reduce((acc, curr) => acc + (curr.credits_used || 0), 0);
-            const consumptionRate = partnerCreditTotal > 0 ? (partnerUsageTotal / partnerCreditTotal) * 100 : 0;
+            const consumptionRate = totalCredits > 0 ? (partnerUsageTotal / totalCredits) * 100 : 0;
 
             // Group events by partner to see activity
             const partnerActivity = partnersData.map(p => {
@@ -171,7 +171,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
             setPartnerStats({
                 totalPartners: partnersData.length,
                 totalEvents: eventsData.length,
-                creditsInCirculation: partnerCreditTotal - partnerUsageTotal,
+                creditsInCirculation: totalCredits - partnerUsageTotal,
                 avgConsumptionRate: consumptionRate,
                 topPartners: partnerActivity.slice(0, 5)
             });
@@ -788,164 +788,141 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
 
                     {view === 'b2c' && (
                         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            <div className="mb-8 flex justify-between items-end">
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-4">
                                 <div>
-                                    <h2 className="text-2xl font-black text-white tracking-tight uppercase">Base de Datos Usuarios B2C</h2>
-                                    <p className="text-slate-500 text-sm">Métricas detalladas y gestión de la aplicación pública</p>
+                                    <h2 className="text-3xl font-black text-white tracking-tight uppercase italic">Active Operatives <span className="text-[#13ec80]">({b2cUsers.length})</span></h2>
+                                    <p className="text-slate-500 text-sm font-bold uppercase tracking-widest mt-1">Gestión de identidades y créditos de la red pública</p>
                                 </div>
-                                <div className="flex items-center gap-4">
+                                <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
                                     <div className="relative">
-                                        <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                                        <Search className="w-4 h-4 text-slate-500 absolute left-4 top-1/2 -translate-y-1/2" />
                                         <input
                                             type="text"
                                             placeholder="Buscar por email..."
                                             value={b2cSearchQuery}
                                             onChange={(e) => setB2CSearchQuery(e.target.value)}
-                                            className="bg-[#121413] border border-[#1f2b24] rounded-lg pl-10 pr-4 py-2 text-sm text-white focus:border-blue-500 outline-none w-64 transition-all"
+                                            className="bg-[#121413] border border-[#1f2b24] rounded-2xl pl-12 pr-6 py-3 text-sm text-white focus:border-[#13ec80] outline-none w-full md:w-64 transition-all"
                                         />
                                     </div>
                                     <button
                                         onClick={() => setShowNewUserModal(true)}
-                                        className="bg-blue-600 text-white px-6 py-3 rounded-lg font-bold flex items-center gap-2 hover:scale-[1.02] transition-all shadow-[0_0_20px_rgba(37,99,235,0.3)]"
+                                        className="bg-blue-600 text-white px-8 py-3 rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-3 hover:scale-[1.05] transition-all shadow-[0_10px_30px_rgba(37,99,235,0.3)]"
                                     >
-                                        <span className="material-symbols-outlined">person_add</span> Nuevo Usuario
+                                        <span className="material-symbols-outlined !text-lg">person_add</span> Enrolar Usuario
                                     </button>
                                 </div>
                             </div>
 
-                            {/* B2C Analytics Row */}
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
-                                <div className="bg-[#121413] p-5 border border-[#1f2b24] rounded-xl">
-                                    <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Total Usuarios</p>
-                                    <h3 className="text-2xl font-black text-white">{b2cStats.totalUsers}</h3>
-                                </div>
-                                <div className="bg-[#121413] p-5 border border-[#1f2b24] rounded-xl">
-                                    <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Créditos en Circulación</p>
-                                    <h3 className="text-2xl font-black text-[#13ec80]">{(b2cStats.totalB2CCredits || 0).toLocaleString()}</h3>
-                                </div>
-                                <div className="bg-[#121413] p-5 border border-[#1f2b24] rounded-xl">
-                                    <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Total Generaciones</p>
-                                    <h3 className="text-2xl font-black text-blue-400">{(b2cStats.totalB2CGenerations || 0).toLocaleString()}</h3>
-                                </div>
-                                <div className="bg-[#121413] p-5 border border-[#1f2b24] rounded-xl">
-                                    <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Ingreso Est. (Credits)</p>
-                                    <h3 className="text-2xl font-black text-amber-400">{((b2cStats.totalB2CGenerations || 0) * 100).toLocaleString()} <span className="text-[10px] text-slate-500">pts</span></h3>
-                                </div>
-                            </div>
+                            <div className="grid grid-cols-1 xl:grid-cols-4 gap-8">
+                                {/* Grid de Usuarios Principal */}
+                                <div className="xl:col-span-3">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        {b2cUsers
+                                            .filter(u => u.email.toLowerCase().includes(b2cSearchQuery.toLowerCase()))
+                                            .sort((a, b) => (b.total_generations || 0) - (a.total_generations || 0))
+                                            .map(u => (
+                                                <div key={u.id} className="bg-[#121413] border border-[#1f2b24] rounded-[32px] p-6 hover:border-[#13ec80]/30 transition-all group relative overflow-hidden">
+                                                    <div className="flex items-start justify-between mb-6 relative z-10">
+                                                        <div className="flex items-center gap-4">
+                                                            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#13ec80]/20 to-blue-500/20 flex items-center justify-center border border-white/5">
+                                                                <span className="text-xl font-black text-white uppercase">{u.full_name?.[0] || u.email[0]}</span>
+                                                            </div>
+                                                            <div>
+                                                                <h4 className="font-black text-white group-hover:text-[#13ec80] transition-colors line-clamp-1">{u.full_name || u.email.split('@')[0]}</h4>
+                                                                <p className="text-[10px] text-slate-500 font-mono italic">{u.email}</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex gap-2">
+                                                            <button
+                                                                onClick={() => setEditingUser(u)}
+                                                                className="w-8 h-8 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-slate-500 hover:text-white hover:bg-[#13ec80]/20 transition-all"
+                                                            >
+                                                                <span className="material-symbols-outlined !text-sm">edit</span>
+                                                            </button>
+                                                            <button
+                                                                onClick={() => setShowTopUp({ id: u.id, name: u.email })}
+                                                                className="px-3 h-8 rounded-full bg-[#13ec80]/10 border border-[#13ec80]/20 text-[#13ec80] text-[9px] font-black uppercase tracking-tighter hover:bg-[#13ec80] hover:text-black transition-all"
+                                                            >
+                                                                Saldo
+                                                            </button>
+                                                        </div>
+                                                    </div>
 
-                            <div className="grid grid-cols-1 xl:grid-cols-3 gap-8 mb-8">
-                                <div className="xl:col-span-2">
-                                    <div className="bg-[#121413] border border-[#1f2b24] rounded-xl overflow-hidden shadow-2xl">
-                                        <div className="p-4 border-b border-[#1f2b24] flex justify-between items-center bg-white/5">
-                                            <h3 className="text-sm font-bold text-white uppercase tracking-wider">Directorio de Usuarios</h3>
-                                        </div>
-                                        <div className="overflow-x-auto">
-                                            <table className="w-full text-left">
-                                                <thead className="bg-[#0a0c0b] border-b border-[#1f2b24]">
-                                                    <tr>
-                                                        <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest">Email de Usuario</th>
-                                                        <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-center">Packs Activos</th>
-                                                        <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-center">Balance</th>
-                                                        <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-center">Generaciones</th>
-                                                        <th className="px-6 py-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest text-right">Acciones</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-[#1f2b24]/50">
-                                                    {b2cUsers
-                                                        .filter(u => u.email.toLowerCase().includes(b2cSearchQuery.toLowerCase()))
-                                                        .sort((a, b) => (b.total_generations || 0) - (a.total_generations || 0))
-                                                        .map(u => (
-                                                            <tr key={u.id} className="hover:bg-white/[0.02] transition-colors group">
-                                                                <td className="px-6 py-4">
-                                                                    <p className="font-bold text-white group-hover:text-[#13ec80] transition-colors">{u.full_name || u.email}</p>
-                                                                    <p className="text-[10px] text-slate-600 font-mono italic">{u.email}</p>
-                                                                </td>
-                                                                <td className="px-6 py-4 text-center">
-                                                                    <div className="flex flex-wrap justify-center gap-1">
-                                                                        {(u.unlocked_packs || []).length > 0 ? (
-                                                                            u.unlocked_packs?.map(pack => (
-                                                                                <span key={pack} className="text-[8px] px-1.5 py-0.5 bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded-full font-bold uppercase">{pack}</span>
-                                                                            ))
-                                                                        ) : (
-                                                                            <span className="text-[9px] text-slate-700 font-bold uppercase tracking-tighter">Sin Packs</span>
-                                                                        )}
-                                                                    </div>
-                                                                </td>
-                                                                <td className="px-6 py-4 font-mono text-[#13ec80] text-center font-bold">{u.credits?.toLocaleString() || 0}</td>
-                                                                <td className="px-6 py-4 text-slate-400 text-center">
-                                                                    <div className="flex flex-col items-center">
-                                                                        <span className="font-bold text-white">{u.total_generations || 0}</span>
-                                                                        <div className="w-12 h-1 bg-[#1f2b24] rounded-full mt-1 overflow-hidden">
-                                                                            <div
-                                                                                className="h-full bg-blue-500"
-                                                                                style={{ width: `${Math.min(100, (u.total_generations || 0) * 5)}%` }}
-                                                                            />
-                                                                        </div>
-                                                                    </div>
-                                                                </td>
-                                                                <td className="px-6 py-4 text-right">
-                                                                    <div className="flex items-center justify-end gap-2">
-                                                                        <button
-                                                                            onClick={() => setEditingUser(u)}
-                                                                            className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-500 hover:text-white hover:bg-white/5 transition-all"
-                                                                        >
-                                                                            <span className="material-symbols-outlined !text-lg">edit</span>
-                                                                        </button>
-                                                                        <button
-                                                                            onClick={() => setShowTopUp({ id: u.id, name: u.email })}
-                                                                            className="text-[10px] font-bold text-[#13ec80] border border-[#13ec80]/30 px-3 py-1.5 rounded-lg hover:bg-[#13ec80]/10 transition-all uppercase"
-                                                                        >
-                                                                            Saldo
-                                                                        </button>
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                        ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
+                                                    <div className="grid grid-cols-2 gap-4 mb-6 relative z-10">
+                                                        <div className="bg-white/5 border border-white/5 rounded-2xl p-4">
+                                                            <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Balance Disponible</p>
+                                                            <p className="text-lg font-black text-[#13ec80]">{u.credits?.toLocaleString() || 0} pts</p>
+                                                        </div>
+                                                        <div className="bg-white/5 border border-white/5 rounded-2xl p-4">
+                                                            <p className="text-[8px] font-black text-slate-500 uppercase tracking-widest mb-1">Generaciones</p>
+                                                            <p className="text-lg font-black text-white">{u.total_generations || 0}</p>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="space-y-4 relative z-10">
+                                                        <div className="flex flex-wrap gap-1.5">
+                                                            {(u.unlocked_packs || []).length > 0 ? (
+                                                                u.unlocked_packs?.map(pack => (
+                                                                    <span key={pack} className="text-[8px] px-2 py-0.5 bg-blue-500/10 border border-blue-500/20 text-blue-400 rounded-md font-black uppercase tracking-tighter">{pack}</span>
+                                                                ))
+                                                            ) : (
+                                                                <span className="text-[8px] text-slate-700 font-black uppercase italic tracking-widest">No active packs</span>
+                                                            )}
+                                                        </div>
+                                                        <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                                                            <div
+                                                                className="h-full bg-gradient-to-r from-blue-500 to-[#13ec80]"
+                                                                style={{ width: `${Math.min(100, (u.total_generations || 0) * 2)}%` }}
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Background Glow */}
+                                                    <div className="absolute -right-4 -bottom-4 w-32 h-32 bg-[#13ec80]/5 blur-[60px] rounded-full group-hover:bg-[#13ec80]/10 transition-colors pointer-events-none"></div>
+                                                </div>
+                                            ))}
                                     </div>
                                 </div>
 
-                                <div className="space-y-6">
-                                    {/* Top Styles Section */}
-                                    <div className="bg-[#121413] border border-[#1f2b24] rounded-xl p-6">
-                                        <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-6 flex items-center gap-2">
-                                            <span className="material-symbols-outlined text-[#13ec80] !text-sm">trending_up</span>
-                                            Top Estilos IA
+                                {/* Sidebar Stats */}
+                                <div className="space-y-8">
+                                    <div className="bg-[#121413] border border-[#1f2b24] rounded-[32px] p-8">
+                                        <h3 className="text-xs font-black text-white uppercase tracking-[4px] mb-8 flex items-center gap-3">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-[#13ec80] animate-pulse"></span>
+                                            Market Analysis
                                         </h3>
-                                        <div className="space-y-4">
-                                            {b2cStats.topStyles.map((style, idx) => (
+
+                                        <div className="space-y-6">
+                                            {b2cStats.topStyles.slice(0, 5).map((style, idx) => (
                                                 <div key={style.id} className="group">
-                                                    <div className="flex justify-between items-center mb-1">
-                                                        <span className="text-xs font-bold text-slate-300 group-hover:text-white transition-colors">{style.id}</span>
-                                                        <span className="text-xs font-mono text-[#13ec80]">{style.count} gens</span>
+                                                    <div className="flex justify-between items-center mb-2">
+                                                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest group-hover:text-white transition-colors">{style.id}</span>
+                                                        <span className="text-[10px] font-mono font-bold text-[#13ec80]">{style.count} GENS</span>
                                                     </div>
-                                                    <div className="w-full h-1.5 bg-[#1f2b24] rounded-full overflow-hidden">
+                                                    <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
                                                         <div
-                                                            className={`h-full transition-all duration-1000 ${idx === 0 ? 'bg-[#13ec80]' : 'bg-[#13ec80]/60'}`}
+                                                            className="h-full bg-gradient-to-r from-[#13ec80] to-[#13ec80]/40 transition-all duration-1000"
                                                             style={{ width: `${(style.count / (b2cStats.topStyles[0]?.count || 1)) * 100}%` }}
                                                         />
                                                     </div>
                                                 </div>
                                             ))}
-                                            {b2cStats.topStyles.length === 0 && (
-                                                <p className="text-[10px] text-slate-600 italic text-center py-4">No hay datos de estilos disponibles aún.</p>
-                                            )}
                                         </div>
                                     </div>
 
-                                    {/* High Value Users Info */}
-                                    <div className="bg-gradient-to-br from-[#13ec80]/10 to-transparent border border-[#13ec80]/20 rounded-xl p-6">
-                                        <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-2">Performance B2C</h3>
-                                        <p className="text-[11px] text-slate-400 leading-relaxed mb-4">
-                                            El segmento B2C representa el {((b2cStats.totalB2CGenerations / (stats.totalGenerations || 1)) * 100).toFixed(1)}% del tráfico total de la plataforma en este periodo.
-                                        </p>
-                                        <div className="flex items-center gap-4">
-                                            <div className="flex-1 h-2 bg-[#1f2b24] rounded-full overflow-hidden">
-                                                <div className="h-full bg-[#13ec80]" style={{ width: `${(b2cStats.totalB2CGenerations / (stats.totalGenerations || 1)) * 100}%` }} />
+                                    <div className="bg-gradient-to-br from-[#13ec80]/20 to-blue-600/10 border border-[#13ec80]/30 rounded-[32px] p-8 shadow-[0_20px_50px_rgba(19,236,128,0.1)] relative overflow-hidden">
+                                        <div className="relative z-10">
+                                            <h3 className="text-xs font-black text-white uppercase tracking-[4px] mb-2 font-black italic">Network Load</h3>
+                                            <p className="text-[11px] text-slate-300 leading-relaxed font-bold mb-6 italic opacity-80">
+                                                B2C SEGMENT REPRESENTS <span className="text-[#13ec80]">
+                                                    {Math.min(100, (b2cStats.totalB2CGenerations / (Math.max(1, stats.totalGenerations)) * 100)).toFixed(1)}%</span> OF TOTAL OPS.
+                                            </p>
+                                            <div className="flex items-center gap-4">
+                                                <div className="flex-1 h-3 bg-black/40 rounded-full overflow-hidden p-0.5 border border-white/5">
+                                                    <div className="h-full bg-[#13ec80] rounded-full shadow-[0_0_15px_#13ec80]" style={{ width: `${(b2cStats.totalB2CGenerations / (Math.max(1, stats.totalGenerations)) * 100)}%` }} />
+                                                </div>
+                                                <span className="text-[10px] font-mono font-black text-[#13ec80] tracking-tighter">SECURED</span>
                                             </div>
-                                            <span className="text-[10px] font-mono font-bold text-[#13ec80]">Sincronizado</span>
                                         </div>
                                     </div>
                                 </div>
