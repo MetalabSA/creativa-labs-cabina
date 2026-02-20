@@ -1,4 +1,4 @@
-import{c as e,S as a,f as r}from"./DashboardApp-d6AAEJtV.js";/**
+import{c as e,S as a,f as r}from"./DashboardApp-CUbwPTQL.js";/**
  * @license lucide-react v0.554.0 - ISC
  *
  * This source code is licensed under the ISC license.

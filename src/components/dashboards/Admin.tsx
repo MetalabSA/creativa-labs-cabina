@@ -121,31 +121,59 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
             const b2cUsersData = profilesData.filter(p => p.role === 'user' || !p.role);
             setB2CUsers(b2cUsersData);
 
-            // Merge static IDENTITIES with DB styles_metadata AND identity_prompts
-            const mergedStyles = IDENTITIES.map(style => {
-                const dbStyle = (stylesRes?.data || []).find((m: any) => m.id === style.id);
-                const dbPrompt = (promptsRes?.data || []).find((p: any) => p.id === style.id);
+            // --- MERGE LOGIC: DB is the source of truth ---
+            const dbStyles = stylesRes?.data || [];
+            const dbPrompts = promptsRes?.data || [];
+
+            // Start with DB styles
+            const mergedStyles: any[] = dbStyles.map((dbStyle: any) => {
+                const staticStyle = IDENTITIES.find(s => s.id === dbStyle.id);
+                const dbPrompt = dbPrompts.find((p: any) => p.id === dbStyle.id);
 
                 return {
-                    id: style.id,
-                    label: dbStyle?.label || style.title,
-                    category: dbStyle?.category || style.category,
-                    subcategory: dbStyle?.subcategory || style.subCategory,
-                    image_url: dbStyle?.image_url || style.url,
+                    id: dbStyle.id,
+                    label: dbStyle.label || staticStyle?.title || dbStyle.id,
+                    category: dbStyle.category || staticStyle?.category || 'General',
+                    subcategory: dbStyle.subcategory || staticStyle?.subCategory || 'General',
+                    image_url: dbStyle.image_url || staticStyle?.url || '/placeholder-style.jpg',
                     prompt: dbPrompt?.master_prompt || '',
-                    tags: dbStyle?.tags || style.tags || [],
-                    is_premium: dbStyle?.is_premium ?? style.isPremium,
-                    usage_count: dbStyle?.usage_count || 0
+                    tags: dbStyle.tags || staticStyle?.tags || [],
+                    is_premium: dbStyle.is_premium ?? staticStyle?.isPremium ?? false,
+                    usage_count: dbStyle.usage_count || 0
                 };
             });
 
-            // Add any DB styles that are NOT in IDENTITIES (custom ones)
-            (stylesRes?.data || []).forEach((dbStyle: any) => {
-                if (!mergedStyles.find(s => s.id === dbStyle.id)) {
+            // Add static styles that are NOT in DB yet
+            IDENTITIES.forEach(staticStyle => {
+                if (!mergedStyles.find(s => s.id === staticStyle.id)) {
+                    const dbPrompt = dbPrompts.find((p: any) => p.id === staticStyle.id);
                     mergedStyles.push({
-                        ...dbStyle,
-                        label: dbStyle.label || dbStyle.id,
-                        tags: Array.isArray(dbStyle.tags) ? dbStyle.tags : []
+                        id: staticStyle.id,
+                        label: staticStyle.title,
+                        category: staticStyle.category,
+                        subcategory: staticStyle.subCategory,
+                        image_url: staticStyle.url,
+                        prompt: dbPrompt?.master_prompt || '',
+                        tags: staticStyle.tags || [],
+                        is_premium: staticStyle.isPremium,
+                        usage_count: 0
+                    });
+                }
+            });
+
+            // Add styles that only exist in Prompts (fallback)
+            dbPrompts.forEach((dbPrompt: any) => {
+                if (!mergedStyles.find(s => s.id === dbPrompt.id)) {
+                    mergedStyles.push({
+                        id: dbPrompt.id,
+                        label: `Style ${dbPrompt.id}`,
+                        category: 'Legacy',
+                        subcategory: 'Unknown',
+                        image_url: '/placeholder-style.jpg',
+                        prompt: dbPrompt.master_prompt,
+                        tags: [],
+                        is_premium: false,
+                        usage_count: 0
                     });
                 }
             });

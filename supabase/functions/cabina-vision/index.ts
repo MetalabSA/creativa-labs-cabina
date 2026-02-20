@@ -21,173 +21,62 @@ serve(async (req) => {
         const SB_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ""
         const supabase = createClient(SB_URL, SB_SERVICE_ROLE_KEY)
 
-        // --- 0. LOAD BALANCER (Round Robin) ---
-        // Usamos la llave proporcionada por el usuario como prioridad
-        let currentApiKey = "e12c19f419743e747757b4f164d55e87"
-        let keyId = null;
+        // --- 0. LOAD BALANCER / API KEY ---
+        // Usamos la llave maestra proporcionada por el usuario
+        const currentApiKey = "e12c19f419743e747757b4f164d55e87"
+        console.log(`[CABINA] Iniciando proceso. API Key: ${currentApiKey.substring(0, 8)}...`);
 
-        try {
-            // Intentamos buscar en el pool solo si está activo, sino usamos la fija
-            const { data: poolData, error: poolError } = await supabase
-                .from('api_key_pool')
-                .select('id, api_key')
-                .eq('is_active', true)
-                .order('last_used_at', { ascending: true })
-                .limit(1)
-                .maybeSingle();
-
-            if (poolData && !poolError) {
-                currentApiKey = poolData.api_key;
-                keyId = poolData.id;
-                console.log(`[BALANCER] Usando llave de pool: ${poolData.id}`);
-            } else {
-                console.log("[BALANCER] Pool vacío o error, usando llave por defecto.");
-            }
-        } catch (e) {
-            console.error("[BALANCER] Error crítico buscando llave:", e.message);
-        }
-
-        // --- ACCIÓN: CHECK (para polling de rescate desde el frontend) ---
+        // --- ACCIÓN: CHECK (polling de rescate) ---
         if (action === 'check' && existingTaskId) {
+            console.log(`[CABINA-CHECK] Consultando tarea: ${existingTaskId}`);
             const queryRes = await fetch(`https://api.kie.ai/api/v1/jobs/recordInfo?taskId=${existingTaskId}`, {
                 headers: { 'Authorization': `Bearer ${currentApiKey}` }
             });
             const queryData = await queryRes.json();
+
             if (queryData.code === 200 && queryData.data.state === 'success') {
-                try {
-                    const resJson = JSON.parse(queryData.data.resultJson);
-                    const url = resJson.resultUrls?.[0] || queryData.data.imageUrl;
-
-                    // Persistir en Storage también en el check
-                    let finalUrl = url;
-                    try {
-                        const imgRes = await fetch(url);
-                        const blob = await imgRes.blob();
-                        const fileName = `results/${guest_id || user_id || 'anon'}_${Date.now()}.png`;
-                        const { error: uploadError } = await supabase.storage
-                            .from('generations')
-                            .upload(fileName, blob, { contentType: 'image/png' });
-                        if (!uploadError) {
-                            const { data: { publicUrl } } = supabase.storage.from('generations').getPublicUrl(fileName);
-                            finalUrl = publicUrl;
-                        }
-                    } catch (e) {
-                        console.warn("[STORAGE-CHECK] No se pudo persistir en check, usando URL original");
-                    }
-
-                    return new Response(JSON.stringify({ success: true, state: 'success', image_url: finalUrl }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-                } catch {
-                    const url = queryData.data.resultUrl || queryData.data.imageUrl;
-                    return new Response(JSON.stringify({ success: true, state: 'success', image_url: url }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-                }
+                const resJson = JSON.parse(queryData.data.resultJson || '{}');
+                const url = resJson.resultUrls?.[0] || queryData.data.imageUrl || queryData.data.resultUrl;
+                return new Response(JSON.stringify({ success: true, state: 'success', image_url: url }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
             }
             return new Response(JSON.stringify({ success: true, state: queryData.data?.state || 'waiting' }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         // --- ACCIÓN: CREATE ---
 
-        // 0.5 DEDUCCIÓN ATÓMICA DE CRÉDITO DE EVENTO (si aplica)
+        // 0.5 DEDUCCIÓN CRÉDITO EVENTO
         if (event_id) {
-            const { data: creditOk, error: creditErr } = await supabase.rpc('increment_event_credit', { p_event_id: event_id });
-            if (creditErr) {
-                console.error("[EVENT-CREDIT] Error RPC:", creditErr.message);
-                throw new Error("Error al verificar créditos del evento.");
-            }
-            if (!creditOk) {
-                throw new Error("🎟️ Los créditos del evento se agotaron.");
-            }
-            console.log("[EVENT-CREDIT] ✅ Crédito deducido atómicamente del evento:", event_id);
+            const { data: creditOk } = await supabase.rpc('increment_event_credit', { p_event_id: event_id });
+            if (!creditOk) throw new Error("🎟️ Créditos del evento agotados.");
         }
 
-        // 1. Procesar Foto del Usuario -> Subir a KIE.AI (primario) + Supabase Storage (backup)
+        // 1. PROCESAR FOTO (Upload MANDATORIO a Storage para tener URL)
         let publicPhotoUrl = user_photo;
-        let uploadDebugInfo = '';
+
         if (user_photo && user_photo.startsWith('data:image')) {
-            const b64Length = user_photo.length;
-            console.log(`[CABINA] Foto recibida: ${b64Length} chars, API Key: ${currentApiKey.substring(0, 8)}...`);
-
-            // Método PRIMARIO: Uploader nativo de KIE.AI (probado y confiable)
             try {
-                console.log("[CABINA] Subiendo foto via KIE.AI nativo...");
-                const uploadRes = await fetch("https://kieai.redpandaai.co/api/file-base64-upload", {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentApiKey}` },
-                    body: JSON.stringify({ base64Data: user_photo, uploadPath: "images/base64", fileName: `cabina_${Date.now()}.png` })
-                });
-                console.log(`[KIE-UPLOAD] HTTP Status: ${uploadRes.status}`);
-                const uploadText = await uploadRes.text();
-                console.log(`[KIE-UPLOAD] Response: ${uploadText.substring(0, 500)}`);
-                try {
-                    const uploadData = JSON.parse(uploadText);
-                    // Buscar URL en múltiples campos posibles
-                    const possibleUrl = uploadData.data?.url
-                        || uploadData.data?.fileUrl
-                        || uploadData.data?.imageUrl
-                        || uploadData.data?.image_url
-                        || uploadData.data?.link
-                        || uploadData.data?.src
-                        || uploadData.url;
+                console.log("[CABINA] Subiendo selfie a Supabase Storage...");
+                const base64Content = user_photo.split(',')[1];
+                const binaryData = decode(base64Content);
+                const fileName = `uploads/${guest_id || user_id || 'anon'}_${Date.now()}.png`;
 
-                    // Si no encontramos en campos conocidos, buscar cualquier string con http en data
-                    let foundUrl = possibleUrl;
-                    if (!foundUrl && uploadData.data && typeof uploadData.data === 'object') {
-                        console.log("[KIE-UPLOAD] Campos en data:", Object.keys(uploadData.data).join(', '));
-                        for (const key of Object.keys(uploadData.data)) {
-                            const val = uploadData.data[key];
-                            if (typeof val === 'string' && val.startsWith('http')) {
-                                foundUrl = val;
-                                console.log(`[KIE-UPLOAD] URL encontrada en campo '${key}': ${val}`);
-                                break;
-                            }
-                        }
-                    }
-                    // Si data es directamente un string URL
-                    if (!foundUrl && typeof uploadData.data === 'string' && uploadData.data.startsWith('http')) {
-                        foundUrl = uploadData.data;
-                    }
+                const { error: uploadError } = await supabase.storage
+                    .from('user_photos')
+                    .upload(fileName, binaryData, { contentType: 'image/png', upsert: true });
 
-                    if (uploadData.code === 200 && foundUrl) {
-                        publicPhotoUrl = foundUrl;
-                        console.log("[CABINA] ✅ Foto subida via KIE.AI:", publicPhotoUrl);
-                    } else {
-                        console.warn("[KIE-UPLOAD] data completo:", JSON.stringify(uploadData.data)?.substring(0, 300));
-                        uploadDebugInfo += `KIE(${uploadData.code}): ${uploadData.msg || 'ok'}, data keys: ${uploadData.data ? Object.keys(uploadData.data).join(',') : 'null'}. `;
-                    }
-                } catch (parseErr) {
-                    uploadDebugInfo += `KIE: No-JSON response (HTTP ${uploadRes.status}). `;
-                }
+                if (uploadError) throw new Error(`Error Storage: ${uploadError.message}`);
+
+                const { data: { publicUrl } } = supabase.storage.from('user_photos').getPublicUrl(fileName);
+                publicPhotoUrl = publicUrl;
+                console.log("[CABINA] ✅ Selfie lista en Storage:", publicPhotoUrl);
             } catch (e) {
-                console.error("[KIE-UPLOAD] Excepción:", e.message);
-                uploadDebugInfo += `KIE Exception: ${e.message}. `;
+                console.error("[CABINA] ❌ Fallo crítico de carga:", e.message);
+                throw new Error("No se pudo procesar tu foto. Intenta de nuevo.");
             }
+        }
 
-            // Método SECUNDARIO: Supabase Storage (para persistencia/backup)
-            if (publicPhotoUrl === user_photo) {
-                try {
-                    console.log("[CABINA] Intentando Supabase Storage como fallback...");
-                    const base64Content = user_photo.split(',')[1];
-                    const binaryData = decode(base64Content);
-                    const fileName = `uploads/${guest_id || user_id || 'anon'}_${Date.now()}.png`;
-                    const { error: uploadError } = await supabase.storage.from('user_photos').upload(fileName, binaryData, { contentType: 'image/png' });
-                    if (!uploadError) {
-                        const { data: { publicUrl } } = supabase.storage.from('user_photos').getPublicUrl(fileName);
-                        publicPhotoUrl = publicUrl;
-                        console.log("[CABINA] ✅ Foto subida a Supabase Storage:", publicPhotoUrl);
-                    } else {
-                        console.warn("[STORAGE] Error en upload:", uploadError.message);
-                        uploadDebugInfo += `Storage: ${uploadError.message}. `;
-                    }
-                } catch (e) {
-                    console.warn("[STORAGE] Falló:", e.message);
-                    uploadDebugInfo += `Storage Exception: ${e.message}. `;
-                }
-            }
-
-            // Safety check: si después de ambos intentos sigue siendo base64, abortar
-            if (publicPhotoUrl.startsWith('data:image')) {
-                console.error(`[CABINA] ❌ AMBOS UPLOADS FALLARON. Debug: ${uploadDebugInfo}`);
-                throw new Error(`No se pudo subir la foto. Detalles: ${uploadDebugInfo}`);
-            }
+        if (publicPhotoUrl.startsWith('data:image')) {
+            throw new Error("Error de sistema: No se generó una URL válida para la IA.");
         }
 
         // 2. Obtener el Prompt Maestro de identity_prompts
@@ -229,14 +118,6 @@ serve(async (req) => {
 
         const taskId = createResult.data.taskId;
         console.log(`[CABINA] Tarea creada: ${taskId}. Iniciando polling...`);
-
-        // 3.6 Actualizar estadísticas de la llave (Asincrónico)
-        if (keyId) {
-            supabase.from('api_key_pool')
-                .update({ last_used_at: new Date().toISOString(), usage_count: 1 })
-                .eq('id', keyId)
-                .then(() => console.log(`[BALANCER] Llave ${keyId} rotada correctamente.`));
-        }
 
         // 4. Polling (Espera activa - 60 intentos x 3s = 180s / 3 min)
         let kieImageUrl = null;
