@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { Search } from 'lucide-react';
+import { IDENTITIES } from '../../lib/constants';
 import Background3D from '../Background3D';
 
 // Interfaces
@@ -114,7 +115,35 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
             setPartners(partnersData);
             const b2cUsersData = profilesData.filter(p => p.role === 'user' || !p.role);
             setB2CUsers(b2cUsersData);
-            setStylesMetadata(stylesMetadataData);
+
+            // Merge static IDENTITIES with DB styles_metadata
+            const mergedStyles = IDENTITIES.map(style => {
+                const dbStyle = (stylesRes?.data || []).find((m: any) => m.id === style.id);
+                return {
+                    id: style.id,
+                    label: dbStyle?.label || style.title,
+                    category: dbStyle?.category || style.category,
+                    subcategory: dbStyle?.subcategory || style.subCategory,
+                    image_url: dbStyle?.image_url || style.url,
+                    prompt: dbStyle?.prompt || '',
+                    tags: dbStyle?.tags || style.tags || [],
+                    is_premium: dbStyle?.is_premium ?? style.isPremium,
+                    usage_count: dbStyle?.usage_count || 0
+                };
+            });
+
+            // Add any DB styles that are NOT in IDENTITIES (custom ones)
+            (stylesRes?.data || []).forEach((dbStyle: any) => {
+                if (!mergedStyles.find(s => s.id === dbStyle.id)) {
+                    mergedStyles.push({
+                        ...dbStyle,
+                        label: dbStyle.label || dbStyle.id,
+                        tags: Array.isArray(dbStyle.tags) ? dbStyle.tags : []
+                    });
+                }
+            });
+
+            setStylesMetadata(mergedStyles);
 
             // Calculate global stats
             const totalCredits = partnersData.reduce((acc, curr) => acc + (curr.credits_total || 0), 0);
@@ -1010,6 +1039,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                                     src={style.image_url || '/placeholder-style.jpg'}
                                                     alt={style.label}
                                                     className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 opacity-60 group-hover:opacity-100"
+                                                    onError={(e) => (e.currentTarget.src = '/placeholder-style.jpg')}
                                                 />
                                                 <div className="absolute inset-0 bg-gradient-to-t from-[#0a0c0b] via-transparent to-transparent opacity-90 group-hover:opacity-40 transition-opacity"></div>
 
@@ -1374,81 +1404,99 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
 
             {/* Style Edit Modal - ADVANCED VERSION */}
             {editingStyle && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/95 backdrop-blur-3xl overflow-y-auto no-scrollbar">
-                    <div className="bg-[#0a0c0b] border border-[#1f2b24] rounded-[48px] w-full max-w-5xl shadow-[0_0_100px_rgba(0,0,0,1)] overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95 duration-300">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6 bg-black/95 backdrop-blur-3xl overflow-hidden">
+                    <div className="bg-[#0a0c0b] border border-[#1f2b24] rounded-[40px] w-full max-w-5xl max-h-[90vh] shadow-[0_0_100px_rgba(0,0,0,1)] overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95 duration-300">
                         {/* Left Side: Preview */}
-                        <div className="w-full md:w-[35%] bg-white/5 p-12 flex flex-col items-center justify-center border-r border-[#1f2b24] relative overflow-hidden">
+                        <div className="w-full md:w-[35%] bg-white/5 p-8 flex flex-col items-center justify-start border-r border-[#1f2b24] relative overflow-y-auto no-scrollbar">
                             <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
                                 <div className="absolute top-[-100px] left-[-100px] w-[300px] h-[300px] bg-[#13ec80] blur-[150px] rounded-full"></div>
-                                <div className="absolute bottom-[-100px] right-[-100px] w-[300px] h-[300px] bg-blue-500 blur-[150px] rounded-full"></div>
                             </div>
 
-                            <div className="relative z-10 w-full">
-                                <div className="aspect-[4/5] rounded-[40px] overflow-hidden border-2 border-[#13ec80]/30 shadow-2xl relative group">
+                            <div className="relative z-10 w-full mb-8">
+                                <div className="aspect-[4/5] rounded-[32px] overflow-hidden border-2 border-[#13ec80]/30 shadow-2xl relative group">
                                     <img
                                         src={styleForm.image_url || '/placeholder-style.jpg'}
                                         alt="Preview"
                                         className="w-full h-full object-cover"
+                                        onError={(e) => (e.currentTarget.src = '/placeholder-style.jpg')}
                                     />
                                     <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                         <label className="cursor-pointer bg-white text-black px-4 py-2 rounded-full text-[10px] font-black uppercase">Cambiar Imagen</label>
                                     </div>
                                 </div>
-                                <div className="mt-8 text-center">
-                                    <p className="text-[10px] font-black text-slate-500 uppercase tracking-[4px]">Identity Preview Module V1.5</p>
+                                <div className="mt-6 text-center">
+                                    <p className="text-[10px] font-black text-[#13ec80] uppercase tracking-[4px] mb-2">Protocolo Activo</p>
+                                    <h4 className="text-xl font-black text-white italic uppercase">{styleForm.label || 'Nueva Identidad'}</h4>
                                 </div>
+                            </div>
+
+                            <div className="w-full space-y-4 pt-4 border-t border-white/5">
+                                <div className="flex justify-between items-center text-[8px] font-black text-slate-500 uppercase tracking-widest">
+                                    <span>Sync Status:</span>
+                                    <span className="text-[#13ec80]">Standby</span>
+                                </div>
+                                <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                                    <div className="w-[100%] h-full bg-[#13ec80] opacity-50"></div>
+                                </div>
+                            </div>
+
+                            <div className="mt-auto pt-8 flex flex-col items-center">
+                                <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest italic antialiased text-center">
+                                    IDENTITY PREVIEW MODULE <br />
+                                    <span className="text-[#13ec80]/40">V 1.5.0-STABLE</span>
+                                </p>
                             </div>
                         </div>
 
                         {/* Right Side: Form */}
-                        <div className="flex-1 p-12 overflow-y-auto no-scrollbar">
-                            <div className="flex justify-between items-start mb-10">
+                        <div className="flex-1 p-6 md:p-10 overflow-y-auto no-scrollbar">
+                            <div className="flex justify-between items-start mb-6">
                                 <div>
-                                    <h3 className="text-3xl font-black text-white italic uppercase tracking-tighter">
+                                    <h3 className="text-xl md:text-2xl font-black text-white italic uppercase tracking-tighter">
                                         {editingStyle === 'new' ? 'Initialize Protocol' : 'Sync Identity Data'}
                                     </h3>
-                                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-[4px] mt-1">Sintonización de Red Neuronal</p>
+                                    <p className="text-[8px] text-slate-500 font-bold uppercase tracking-[3px] mt-1 text-center md:text-left">Sintonización de Red Neuronal</p>
                                 </div>
-                                <button onClick={() => setEditingStyle(null)} className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-slate-500 hover:text-white transition-colors">
-                                    <span className="material-symbols-outlined">close</span>
+                                <button onClick={() => setEditingStyle(null)} className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-slate-500 hover:text-white transition-colors">
+                                    <span className="material-symbols-outlined !text-lg">close</span>
                                 </button>
                             </div>
 
-                            <div className="space-y-8">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-[#13ec80] uppercase tracking-widest ml-1">Identity Handle (ID)</label>
+                            <div className="space-y-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-1.5">
+                                        <label className="text-[9px] font-black text-[#13ec80] uppercase tracking-widest ml-1">Identity Handle (ID)</label>
                                         <input
-                                            className="w-full bg-[#121413] border border-[#1f2b24] rounded-2xl px-5 py-4 text-white outline-none focus:border-[#13ec80] font-mono text-sm"
+                                            className="w-full bg-[#121413] border border-[#1f2b24] rounded-xl px-4 py-3 text-white outline-none focus:border-[#13ec80] font-mono text-xs"
                                             value={styleForm.id}
                                             disabled={editingStyle !== 'new'}
                                             onChange={(e) => setStyleForm({ ...styleForm, id: e.target.value.toLowerCase() } as any)}
                                         />
                                     </div>
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Visual Title</label>
+                                    <div className="space-y-1.5">
+                                        <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Visual Title</label>
                                         <input
-                                            className="w-full bg-[#121413] border border-[#1f2b24] rounded-2xl px-5 py-4 text-white outline-none focus:border-[#13ec80]"
+                                            className="w-full bg-[#121413] border border-[#1f2b24] rounded-xl px-4 py-3 text-white outline-none focus:border-[#13ec80] text-sm"
                                             value={styleForm.label}
                                             onChange={(e) => setStyleForm({ ...styleForm, label: e.target.value } as any)}
                                         />
                                     </div>
                                 </div>
 
-                                <div className="space-y-2">
-                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">System URL / Storage Path</label>
+                                <div className="space-y-1.5">
+                                    <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">System URL / Storage Path</label>
                                     <input
-                                        className="w-full bg-[#121413] border border-[#1f2b24] rounded-2xl px-5 py-4 text-white outline-none focus:border-[#13ec80] font-mono text-xs"
+                                        className="w-full bg-[#121413] border border-[#1f2b24] rounded-xl px-4 py-3 text-white outline-none focus:border-[#13ec80] font-mono text-[10px]"
                                         value={(styleForm as any).image_url}
                                         onChange={(e) => setStyleForm({ ...styleForm, image_url: e.target.value } as any)}
                                     />
                                 </div>
 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Operational Category (Pack)</label>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="space-y-1.5">
+                                        <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Operational Category (Pack)</label>
                                         <select
-                                            className="w-full bg-[#121413] border border-[#1f2b24] rounded-2xl px-5 py-4 text-white outline-none focus:border-[#13ec80] appearance-none"
+                                            className="w-full bg-[#121413] border border-[#1f2b24] rounded-xl px-4 py-3 text-white outline-none focus:border-[#13ec80] appearance-none text-xs"
                                             value={styleForm.category}
                                             onChange={(e) => setStyleForm({ ...styleForm, category: e.target.value } as any)}
                                         >
@@ -1460,10 +1508,10 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                             <option value="fantasy">Fantasy (Magia, RPG)</option>
                                         </select>
                                     </div>
-                                    <div className="space-y-2">
-                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Legacy Subcategory</label>
+                                    <div className="space-y-1.5">
+                                        <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Legacy Subcategory</label>
                                         <input
-                                            className="w-full bg-[#121413] border border-[#1f2b24] rounded-2xl px-5 py-4 text-white outline-none focus:border-[#13ec80] font-mono text-xs"
+                                            className="w-full bg-[#121413] border border-[#1f2b24] rounded-xl px-4 py-3 text-white outline-none focus:border-[#13ec80] font-mono text-[10px]"
                                             value={(styleForm as any).subcategory}
                                             onChange={(e) => setStyleForm({ ...styleForm, subcategory: e.target.value } as any)}
                                         />
