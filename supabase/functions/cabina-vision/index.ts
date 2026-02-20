@@ -22,11 +22,12 @@ serve(async (req) => {
         const supabase = createClient(SB_URL, SB_SERVICE_ROLE_KEY)
 
         // --- 0. LOAD BALANCER (Round Robin) ---
-        let currentApiKey = Deno.env.get('BANANA_API_KEY') || "e12c19f419743e747757b4f164d55e87"
+        // Usamos la llave proporcionada por el usuario como prioridad
+        let currentApiKey = "e12c19f419743e747757b4f164d55e87"
         let keyId = null;
 
         try {
-            // Buscamos la llave activa que haga más tiempo no se usa (Round Robin)
+            // Intentamos buscar en el pool solo si está activo, sino usamos la fija
             const { data: poolData, error: poolError } = await supabase
                 .from('api_key_pool')
                 .select('id, api_key')
@@ -189,14 +190,14 @@ serve(async (req) => {
             }
         }
 
-        // 2. Obtener el Prompt Maestro del nuevo repositorio unificado
+        // 2. Obtener el Prompt Maestro de identity_prompts
         const { data: promptData } = await supabase
-            .from('styles_metadata')
-            .select('prompt')
+            .from('identity_prompts')
+            .select('master_prompt')
             .eq('id', model_id)
             .maybeSingle();
 
-        const masterPrompt = promptData?.prompt || "Professional portrait photography, studio lighting, high quality, highly detailed.";
+        const masterPrompt = promptData?.master_prompt || "Professional portrait photography, studio lighting, high quality, highly detailed.";
         console.log(`[CABINA] Prompt cargado (${masterPrompt.substring(0, 30)}...) para model_id: ${model_id}`);
 
         // 3. Crear Tarea en Kie.ai

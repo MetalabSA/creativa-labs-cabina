@@ -99,12 +99,13 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
     const fetchData = async () => {
         try {
             setLoading(true);
-            const [partnersRes, eventsRes, profilesRes, generationsRes, stylesRes] = await Promise.all([
+            const [partnersRes, eventsRes, profilesRes, generationsRes, stylesRes, promptsRes] = await Promise.all([
                 supabase.from('partners').select('*'),
                 supabase.from('events').select('*'),
                 supabase.from('profiles').select('*'),
                 supabase.from('generations').select('id, created_at, model_id, event_id, events(event_name)').order('created_at', { ascending: false }),
-                supabase.from('styles_metadata').select('*')
+                supabase.from('styles_metadata').select('*'),
+                supabase.from('identity_prompts').select('*')
             ]);
 
             if (partnersRes.error) throw partnersRes.error;
@@ -120,16 +121,18 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
             const b2cUsersData = profilesData.filter(p => p.role === 'user' || !p.role);
             setB2CUsers(b2cUsersData);
 
-            // Merge static IDENTITIES with DB styles_metadata
+            // Merge static IDENTITIES with DB styles_metadata AND identity_prompts
             const mergedStyles = IDENTITIES.map(style => {
                 const dbStyle = (stylesRes?.data || []).find((m: any) => m.id === style.id);
+                const dbPrompt = (promptsRes?.data || []).find((p: any) => p.id === style.id);
+
                 return {
                     id: style.id,
                     label: dbStyle?.label || style.title,
                     category: dbStyle?.category || style.category,
                     subcategory: dbStyle?.subcategory || style.subCategory,
                     image_url: dbStyle?.image_url || style.url,
-                    prompt: dbStyle?.prompt || '',
+                    prompt: dbPrompt?.master_prompt || '',
                     tags: dbStyle?.tags || style.tags || [],
                     is_premium: dbStyle?.is_premium ?? style.isPremium,
                     usage_count: dbStyle?.usage_count || 0
@@ -1643,30 +1646,41 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                         onClick={async () => {
                                             try {
                                                 setLoading(true);
+                                                // 1. Sync Prompt to identity_prompts
+                                                const { error: promptErr } = await supabase
+                                                    .from('identity_prompts')
+                                                    .upsert({
+                                                        id: styleForm.id,
+                                                        master_prompt: styleForm.prompt
+                                                    });
+
+                                                if (promptErr) throw promptErr;
+
+                                                // 2. Sync Metadata to styles_metadata
                                                 const payload = {
                                                     id: styleForm.id,
                                                     label: styleForm.label,
                                                     category: styleForm.category,
                                                     is_premium: styleForm.is_premium,
-                                                    prompt: styleForm.prompt,
                                                     tags: Array.isArray(styleForm.tags) ? styleForm.tags : String(styleForm.tags).split(',').map(t => t.trim()).filter(Boolean),
                                                     subcategory: styleForm.subcategory,
                                                     image_url: styleForm.image_url,
                                                     updated_at: new Date().toISOString()
                                                 };
 
-                                                console.log('Syncing identity payload:', payload);
+                                                console.log('Syncing identity metadata:', payload);
 
-                                                const { error } = await supabase
+                                                const { error: metaErr } = await supabase
                                                     .from('styles_metadata')
                                                     .upsert(payload);
 
-                                                if (error) throw error;
-                                                alert('Protocol synced successfully.');
+                                                if (metaErr) throw metaErr;
+
+                                                alert('Protocol synced successfully in both cores.');
                                                 setEditingStyle(null);
                                                 fetchData();
                                             } catch (err: any) {
-                                                alert('Error: ' + err.message);
+                                                alert('Sync Failure: ' + err.message);
                                             } finally {
                                                 setLoading(false);
                                             }

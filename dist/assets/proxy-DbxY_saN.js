@@ -1,4 +1,4 @@
-import{c as bo,r as S,j as ve}from"./DashboardApp-CNp71rbz.js";/**
+import{c as bo,r as S,j as ve}from"./DashboardApp-d6AAEJtV.js";/**
  * @license lucide-react v0.554.0 - ISC
  *
  * This source code is licensed under the ISC license.
