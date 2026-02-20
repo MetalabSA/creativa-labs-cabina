@@ -101,7 +101,7 @@ const DashboardApp: React.FC = () => {
     };
 
     // Full Screen Dashboards Override
-    if (profile?.is_master && activeTab !== 'client_view') {
+    if ((profile?.is_master || profile?.role === 'master') && activeTab !== 'client_view') {
         return (
             <Suspense fallback={<LoadingUI />}>
                 <MasterDashboard onBack={handleLogout} />
@@ -138,7 +138,7 @@ const DashboardApp: React.FC = () => {
                         {renderSidebarItem('overview', 'Vista General', LayoutDashboard)}
 
                         {/* Role-based Menu Items */}
-                        {profile?.is_master && (
+                        {(profile?.is_master || profile?.role === 'master') && (
                             <>
                                 {renderSidebarItem('overview', 'Panel Master', Shield)}
                                 {renderSidebarItem('client_view', 'Vista Cliente', LayoutDashboard)}
@@ -171,7 +171,7 @@ const DashboardApp: React.FC = () => {
                             />
                             <div className="flex flex-col min-w-0">
                                 <span className="text-xs font-bold text-white truncate">{profile?.full_name || 'Usuario Admin'}</span>
-                                <span className="text-[10px] text-slate-500 uppercase tracking-wider">{profile?.role === 'partner' ? 'Gestor Partner' : profile?.is_master ? 'Admin Maestro' : 'Invitado'}</span>
+                                <span className="text-[10px] text-slate-500 uppercase tracking-wider">{profile?.role === 'partner' ? 'Gestor Partner' : (profile?.is_master || profile?.role === 'master') ? 'Admin Maestro' : 'Invitado'}</span>
                             </div>
                         </div>
                         <button

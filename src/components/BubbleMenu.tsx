@@ -73,7 +73,7 @@ export const BubbleMenu: React.FC<BubbleMenuProps> = ({
                                         <span className="text-sm font-black text-white leading-none">
                                             {eventConfig
                                                 ? Math.max(0, (eventConfig.credits_allocated || 0) - (eventConfig.credits_used || 0))
-                                                : profile?.is_master ? '∞' : profile?.credits || 0
+                                                : (profile?.is_master || profile?.role === 'master') ? '∞' : profile?.credits || 0
                                             }
                                         </span>
                                     </div>
@@ -88,7 +88,7 @@ export const BubbleMenu: React.FC<BubbleMenuProps> = ({
                                         <span className="text-[10px] text-accent font-black uppercase tracking-wider">
                                             {eventConfig
                                                 ? `${Math.max(0, (eventConfig.credits_allocated || 0) - (eventConfig.credits_used || 0))} Disponibles`
-                                                : `${profile?.is_master ? '∞' : (profile?.credits || 0)} Créditos`
+                                                : `${(profile?.is_master || profile?.role === 'master') ? '∞' : (profile?.credits || 0)} Créditos`
                                             }
                                         </span>
                                     </div>
@@ -114,6 +114,15 @@ export const BubbleMenu: React.FC<BubbleMenuProps> = ({
                                     className="px-4 pb-6"
                                 >
                                     <div className="space-y-2 mt-4">
+                                        {(profile?.is_master || profile?.role === 'master' || profile?.role === 'partner' || profile?.role === 'admin') && (
+                                            <MenuItem
+                                                icon={Shield}
+                                                label="Dashboard Admin"
+                                                onClick={() => window.location.href = '/dashboard.html'}
+                                                active={false}
+                                                highlight
+                                            />
+                                        )}
 
 
 

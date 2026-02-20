@@ -185,7 +185,7 @@ const App: React.FC = () => {
 
   const urlParams = new URLSearchParams(window.location.search);
   const isGalleryMode = urlParams.get('mode') === 'gallery';
-  const isStaff = profile?.is_master || profile?.role === 'partner' || profile?.role === 'admin';
+  const isStaff = profile?.is_master || profile?.role === 'partner' || profile?.role === 'admin' || profile?.role === 'master';
 
   // --- DETECTOR DE EVENTOS ---
   useEffect(() => {
@@ -343,6 +343,16 @@ const App: React.FC = () => {
 
       if (error) throw error;
       setProfile(data);
+
+      // Auto-redirect staff to dashboard if not in event mode and on root path
+      const params = new URLSearchParams(window.location.search);
+      const isStaffUser = data.is_master || data.role === 'master' || data.role === 'partner' || data.role === 'admin';
+      if (isStaffUser && !params.get('event') && !params.get('mode')) {
+        // Option A: automatic redirect (maybe too aggressive?)
+        // Option B: show a notification or just let the BubbleMenu handle it.
+        // The user said "me manda como usuario", so let's do the redirect.
+        window.location.href = '/dashboard.html';
+      }
     } catch (error) {
       console.error('Error fetching profile:', error);
     } finally {
