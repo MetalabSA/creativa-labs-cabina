@@ -78,7 +78,8 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
         prompt: '',
         tags: '' as string | string[],
         is_premium: false,
-        usage_count: 0
+        usage_count: 0,
+        is_active: true
     });
 
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | null }>({
@@ -154,6 +155,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                     tags: dbStyle?.tags || staticStyle.tags || [],
                     is_premium: dbStyle?.is_premium ?? staticStyle.isPremium,
                     usage_count: dbStyle?.usage_count || 0,
+                    is_active: dbStyle?.is_active ?? true,
                     source: 'static'
                 });
             });
@@ -172,6 +174,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                         tags: dbStyle.tags || [],
                         is_premium: dbStyle.is_premium || false,
                         usage_count: dbStyle.usage_count || 0,
+                        is_active: dbStyle.is_active ?? true,
                         source: 'db_metadata'
                     });
                 }
@@ -422,12 +425,14 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
             const buckets = ['public', 'styles', 'logos', 'generations'];
             let uploadSuccess = false;
             let finalPublicUrl = '';
+            let lastError = '';
 
             for (const bucket of buckets) {
                 try {
+                    // Try with folder
                     const { data, error: uploadError } = await supabase.storage
                         .from(bucket)
-                        .upload(filePath, file);
+                        .upload(filePath, file, { upsert: true });
 
                     if (!uploadError && data) {
                         const { data: { publicUrl } } = supabase.storage
@@ -436,16 +441,32 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
 
                         finalPublicUrl = publicUrl;
                         uploadSuccess = true;
-                        console.log(`[Upload] Success in bucket: ${bucket}`);
                         break;
                     }
-                } catch (e) {
-                    console.log(`[Upload] Failed in bucket: ${bucket}, trying next...`);
+
+                    // Try without folder (root)
+                    const { data: rootData, error: rootError } = await supabase.storage
+                        .from(bucket)
+                        .upload(fileName, file, { upsert: true });
+
+                    if (!rootError && rootData) {
+                        const { data: { publicUrl } } = supabase.storage
+                            .from(bucket)
+                            .getPublicUrl(fileName);
+
+                        finalPublicUrl = publicUrl;
+                        uploadSuccess = true;
+                        break;
+                    }
+
+                    if (uploadError) lastError = uploadError.message;
+                } catch (e: any) {
+                    lastError = e.message;
                 }
             }
 
             if (!uploadSuccess) {
-                showToast("No se encontró el bucket 'public'. Por favor créalo en Supabase Storage.", 'error');
+                showToast(`Falla de Almacenamiento: ${lastError || 'Buckets no encontrados'}. Por favor creá el bucket 'public' en Supabase Storage.`, 'error');
                 return;
             }
 
@@ -1119,7 +1140,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                     </div>
                                     <button
                                         onClick={() => {
-                                            setStyleForm({ id: '', label: '', category: '', is_premium: false, usage_count: 0, prompt: '', tags: '', subcategory: '', image_url: '' } as any);
+                                            setStyleForm({ id: '', label: '', category: '', is_premium: false, usage_count: 0, prompt: '', tags: '', subcategory: '', image_url: '', is_active: true } as any);
                                             setEditingStyle('new');
                                         }}
                                         className="bg-[#13ec80] text-[#0a0c0b] px-6 py-2 rounded-xl font-bold flex items-center justify-center gap-2 hover:scale-[1.02] transition-all shadow-[0_0_20px_rgba(19,236,128,0.3)]"
@@ -1130,20 +1151,109 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                             </div>
 
                             {/* Filters Bar */}
-                            <div className="flex gap-2 mb-8 overflow-x-auto pb-2 no-scrollbar">
-                                {['all', ...Array.from(new Set(stylesMetadata.map(s => s.category).filter(Boolean)))].map(cat => (
-                                    <button
-                                        key={cat}
-                                        onClick={() => setSelectedCategoryFilter(cat)}
-                                        className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${selectedCategoryFilter === cat
-                                            ? 'bg-[#13ec80] text-black shadow-[0_0_15px_rgba(19,236,128,0.3)]'
-                                            : 'bg-white/5 text-slate-500 border border-white/10 hover:border-white/20'
-                                            }`}
-                                    >
-                                        {cat === 'all' ? 'Todas / All' : cat}
-                                    </button>
-                                ))}
+                            <div className="flex flex-wrap items-center gap-4 mb-8">
+                                <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+                                    {['all', ...Array.from(new Set(stylesMetadata.map(s => s.category?.toLowerCase()).filter(Boolean)))].map(cat => (
+                                        <button
+                                            key={cat}
+                                            onClick={() => setSelectedCategoryFilter(cat)}
+                                            className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${selectedCategoryFilter === cat
+                                                ? 'bg-[#13ec80] text-black shadow-[0_0_15px_rgba(19,236,128,0.3)]'
+                                                : 'bg-white/5 text-slate-500 border border-white/10 hover:border-white/20'
+                                                }`}
+                                        >
+                                            {cat === 'all' ? 'Todas / All' : cat}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                {/* Bulk Actions for Selected Category */}
+                                {selectedCategoryFilter !== 'all' && (
+                                    <div className="flex items-center gap-3 bg-white/5 border border-white/10 rounded-2xl px-4 py-2 animate-in zoom-in-95 duration-300">
+                                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Grupo {selectedCategoryFilter}:</span>
+                                        <button
+                                            onClick={async () => {
+                                                const stylesInCat = stylesMetadata.filter(s => s.category?.toLowerCase() === selectedCategoryFilter);
+                                                const targetActive = !stylesInCat.every(s => s.is_active);
+
+                                                try {
+                                                    setLoading(true);
+                                                    const { error } = await supabase
+                                                        .from('styles_metadata')
+                                                        .update({ is_active: targetActive })
+                                                        .ilike('category', selectedCategoryFilter);
+
+                                                    if (error) throw error;
+                                                    showToast(`Categoría ${targetActive ? 'activada' : 'ocultada'} correctamente`);
+                                                    fetchData();
+                                                } catch (err: any) {
+                                                    showToast('Error: ' + err.message, 'error');
+                                                } finally {
+                                                    setLoading(false);
+                                                }
+                                            }}
+                                            className={`flex items-center gap-2 px-3 py-1 rounded-lg text-[9px] font-black uppercase transition-all ${stylesMetadata.filter(s => s.category?.toLowerCase() === selectedCategoryFilter).every(s => s.is_active)
+                                                ? 'bg-[#13ec80]/10 text-[#13ec80] border border-[#13ec80]/30 hover:bg-[#13ec80]/20'
+                                                : 'bg-slate-500/10 text-slate-400 border border-slate-500/30 hover:bg-slate-500/20'
+                                                }`}
+                                        >
+                                            <span className="material-symbols-outlined !text-sm">
+                                                {stylesMetadata.filter(s => s.category?.toLowerCase() === selectedCategoryFilter).every(s => s.is_active) ? 'visibility' : 'visibility_off'}
+                                            </span>
+                                            {stylesMetadata.filter(s => s.category?.toLowerCase() === selectedCategoryFilter).every(s => s.is_active) ? 'Hide Category' : 'Show Category'}
+                                        </button>
+                                    </div>
+                                )}
                             </div>
+
+                            {/* Subcategory Bar (Dynamic) */}
+                            {selectedCategoryFilter !== 'all' && (
+                                <div className="flex flex-wrap items-center gap-4 mb-8 pl-4 border-l-2 border-[#13ec80]/20 animate-in slide-in-from-left-4 duration-500">
+                                    <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+                                        {Array.from(new Set(stylesMetadata.filter(s => s.category?.toLowerCase() === selectedCategoryFilter).map(s => s.subcategory).filter(Boolean))).map(sub => (
+                                            <button
+                                                key={sub}
+                                                className="px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest bg-white/5 text-slate-400 border border-white/10 hover:border-[#13ec80]/30 transition-all flex items-center gap-2 group/sub"
+                                            >
+                                                {sub}
+                                                <div
+                                                    onClick={async (e) => {
+                                                        e.stopPropagation();
+                                                        const stylesInSub = stylesMetadata.filter(s => s.subcategory === sub && s.category?.toLowerCase() === selectedCategoryFilter);
+                                                        const targetActive = !stylesInSub.every(s => s.is_active);
+
+                                                        try {
+                                                            setLoading(true);
+                                                            const { error } = await supabase
+                                                                .from('styles_metadata')
+                                                                .update({ is_active: targetActive })
+                                                                .eq('subcategory', sub)
+                                                                .ilike('category', selectedCategoryFilter);
+
+                                                            if (error) throw error;
+                                                            showToast(`Subcategoría ${targetActive ? 'activada' : 'ocultada'} correctamente`);
+                                                            fetchData();
+                                                        } catch (err: any) {
+                                                            showToast('Error: ' + err.message, 'error');
+                                                        } finally {
+                                                            setLoading(false);
+                                                        }
+                                                    }}
+                                                    className={`w-5 h-5 rounded-full flex items-center justify-center transition-all ${stylesMetadata.filter(s => s.subcategory === sub && s.category?.toLowerCase() === selectedCategoryFilter).every(s => s.is_active)
+                                                        ? 'bg-[#13ec80]/10 text-[#13ec80] hover:bg-[#13ec80]/20'
+                                                        : 'bg-red-500/10 text-red-500 hover:bg-red-500/20'
+                                                        }`}
+                                                    title={stylesMetadata.filter(s => s.subcategory === sub && s.category?.toLowerCase() === selectedCategoryFilter).every(s => s.is_active) ? 'Ocultar Subcategoría' : 'Mostrar Subcategoría'}
+                                                >
+                                                    <span className="material-symbols-outlined !text-[12px]">
+                                                        {stylesMetadata.filter(s => s.subcategory === sub && s.category?.toLowerCase() === selectedCategoryFilter).every(s => s.is_active) ? 'visibility' : 'visibility_off'}
+                                                    </span>
+                                                </div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
 
                             {/* Identity Grid */}
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -1151,7 +1261,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                     .filter(s => {
                                         const matchesSearch = (s.label || '').toLowerCase().includes(styleSearchQuery.toLowerCase()) ||
                                             (s.id || '').toLowerCase().includes(styleSearchQuery.toLowerCase());
-                                        const matchesCat = selectedCategoryFilter === 'all' || s.category === selectedCategoryFilter;
+                                        const matchesCat = selectedCategoryFilter === 'all' || s.category?.toLowerCase() === selectedCategoryFilter;
                                         return matchesSearch && matchesCat;
                                     })
                                     .map(style => (
@@ -1196,7 +1306,8 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                                     prompt: style.prompt || '',
                                                     tags: Array.isArray(style.tags) ? style.tags.join(', ') : (style.tags || ''),
                                                     subcategory: style.subcategory || '',
-                                                    image_url: style.image_url || ''
+                                                    image_url: style.image_url || '',
+                                                    is_active: style.is_active ?? true
                                                 } as any);
                                             }}>
                                                 {/* Preview Image */}
@@ -1208,7 +1319,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                                                     (style.image_url.startsWith('/') ? style.image_url : `/${style.image_url}`)
                                                         }
                                                         alt={style.label}
-                                                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 opacity-60 group-hover:opacity-100"
+                                                        className={`w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 ${style.is_active === false ? 'grayscale brightness-50 opacity-40' : 'opacity-60 group-hover:opacity-100'}`}
                                                         onError={(e) => {
                                                             const img = e.target as HTMLImageElement;
                                                             if (img.src.includes('placeholder')) return;
@@ -1221,6 +1332,12 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                                     <div className="absolute top-4 left-4 flex gap-2">
                                                         {style.is_premium && (
                                                             <span className="bg-[#ff5500] text-white text-[8px] font-black px-2 py-1 rounded-md uppercase tracking-tighter">Premium</span>
+                                                        )}
+                                                        {style.is_active === false && (
+                                                            <span className="bg-slate-600 text-white text-[8px] font-black px-2 py-1 rounded-md uppercase tracking-tighter flex items-center gap-1">
+                                                                <span className="material-symbols-outlined !text-[10px]">visibility_off</span>
+                                                                Hidden
+                                                            </span>
                                                         )}
                                                         <span className="bg-[#1f2b24]/80 backdrop-blur-md text-white text-[8px] font-black px-2 py-1 rounded-md uppercase tracking-tighter border border-white/10">
                                                             {style.category}
@@ -1711,24 +1828,47 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                             onChange={(e) => setStyleForm({ ...styleForm, category: e.target.value } as any)}
                                         />
                                         <datalist id="category-suggestions">
-                                            <option value="cinema" />
-                                            <option value="sports" />
-                                            <option value="series" />
-                                            <option value="urban" />
-                                            <option value="fantasy" />
-                                            <option value="cartoon" />
-                                            <option value="anime" />
-                                            <option value="photography" />
+                                            {Array.from(new Set(stylesMetadata.map(s => s.category).filter(Boolean).map(c => c.toLowerCase()))).map(cat => (
+                                                <option key={cat} value={cat} />
+                                            ))}
                                         </datalist>
                                     </div>
                                     <div className="space-y-1.5">
                                         <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Legacy Subcategory</label>
                                         <input
+                                            list="subcategory-suggestions"
                                             className="w-full bg-[#121413] border border-[#1f2b24] rounded-xl px-4 py-3 text-white outline-none focus:border-[#13ec80] font-mono text-[10px]"
                                             value={(styleForm as any).subcategory}
                                             onChange={(e) => setStyleForm({ ...styleForm, subcategory: e.target.value } as any)}
                                         />
+                                        <datalist id="subcategory-suggestions">
+                                            {Array.from(new Set(stylesMetadata.filter(s => s.category?.toLowerCase() === styleForm.category?.toLowerCase()).map(s => s.subcategory).filter(Boolean))).map(sub => (
+                                                <option key={sub} value={sub} />
+                                            ))}
+                                        </datalist>
                                     </div>
+                                </div>
+
+                                {/* Visibility Toggle */}
+                                <div className="bg-[#121413] border border-[#1f2b24] rounded-[24px] p-6 flex items-center justify-between group hover:border-[#13ec80]/30 transition-all">
+                                    <div className="flex items-center gap-4">
+                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${styleForm.is_active ? 'bg-[#13ec80]/10 text-[#13ec80]' : 'bg-slate-500/10 text-slate-500'}`}>
+                                            <span className="material-symbols-outlined">{styleForm.is_active ? 'visibility' : 'visibility_off'}</span>
+                                        </div>
+                                        <div>
+                                            <span className="text-xs font-black text-white uppercase tracking-widest block">Visibility Status</span>
+                                            <span className="text-[10px] text-slate-500 font-bold uppercase">{styleForm.is_active ? 'Active in application' : 'Hidden from users'}</span>
+                                        </div>
+                                    </div>
+                                    <label className="relative inline-flex items-center cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            className="sr-only peer"
+                                            checked={styleForm.is_active}
+                                            onChange={(e) => setStyleForm({ ...styleForm, is_active: e.target.checked } as any)}
+                                        />
+                                        <div className="w-14 h-7 bg-white/5 border border-white/10 rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-[#13ec80] after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all"></div>
+                                    </label>
                                 </div>
 
                                 <div className="bg-[#121413] border border-[#1f2b24] rounded-[24px] p-6 flex items-center justify-between group hover:border-[#ff5500]/30 transition-all">
@@ -1833,6 +1973,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                                     tags: Array.isArray(styleForm.tags) ? styleForm.tags : String(styleForm.tags).split(',').map(t => t.trim()).filter(Boolean),
                                                     subcategory: styleForm.subcategory,
                                                     image_url: styleForm.image_url,
+                                                    is_active: styleForm.is_active,
                                                     updated_at: new Date().toISOString()
                                                 };
 

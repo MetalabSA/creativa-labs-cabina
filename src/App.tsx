@@ -106,16 +106,21 @@ const App: React.FC = () => {
       return {
         ...style,
         isPremium: meta ? meta.is_premium : style.isPremium,
-        usageCount: meta?.usage_count || 0
+        usageCount: meta?.usage_count || 0,
+        isActive: meta ? (meta.is_active ?? true) : true
       };
     });
   }, [stylesMetadata]);
 
   const availableIdentities = React.useMemo(() => {
+    // 1. Filter by active status
+    let filtered = mergedIdentities.filter(style => style.isActive);
+
+    // 2. Filter by event selection if applicable
     if (eventConfig?.selected_styles && eventConfig.selected_styles.length > 0) {
-      return mergedIdentities.filter(style => eventConfig.selected_styles.includes(style.id));
+      filtered = filtered.filter(style => eventConfig.selected_styles.includes(style.id));
     }
-    return mergedIdentities;
+    return filtered;
   }, [mergedIdentities, eventConfig]);
 
   // Lógica "Para Vos": Seleccionamos 4 estilos destacados
