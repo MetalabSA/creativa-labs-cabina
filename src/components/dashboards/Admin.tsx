@@ -125,48 +125,51 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
             const dbStyles = stylesRes?.data || [];
             const dbPrompts = promptsRes?.data || [];
 
-            // Start with DB styles
-            const mergedStyles: any[] = dbStyles.map((dbStyle: any) => {
-                const staticStyle = IDENTITIES.find(s => s.id === dbStyle.id);
-                const dbPrompt = dbPrompts.find((p: any) => p.id === dbStyle.id);
+            // Map to store styles and avoid duplicates
+            const styleMap = new Map();
 
-                return {
-                    id: dbStyle.id,
-                    label: dbStyle.label || staticStyle?.title || dbStyle.id,
-                    category: dbStyle.category || staticStyle?.category || 'General',
-                    subcategory: dbStyle.subcategory || staticStyle?.subCategory || 'General',
-                    image_url: dbStyle.image_url || staticStyle?.url || '/placeholder-style.jpg',
+            // 1. Process Static IDENTITIES (Base)
+            IDENTITIES.forEach(staticStyle => {
+                const dbStyle = dbStyles.find(s => s.id === staticStyle.id);
+                const dbPrompt = dbPrompts.find(p => p.id === staticStyle.id);
+
+                styleMap.set(staticStyle.id, {
+                    id: staticStyle.id,
+                    label: dbStyle?.label || staticStyle.title,
+                    category: dbStyle?.category || staticStyle.category,
+                    subcategory: dbStyle?.subcategory || staticStyle.subCategory,
+                    image_url: dbStyle?.image_url || staticStyle.url,
                     prompt: dbPrompt?.master_prompt || '',
-                    tags: dbStyle.tags || staticStyle?.tags || [],
-                    is_premium: dbStyle.is_premium ?? staticStyle?.isPremium ?? false,
-                    usage_count: dbStyle.usage_count || 0
-                };
+                    tags: dbStyle?.tags || staticStyle.tags || [],
+                    is_premium: dbStyle?.is_premium ?? staticStyle.isPremium,
+                    usage_count: dbStyle?.usage_count || 0
+                });
             });
 
-            // Add static styles that are NOT in DB yet
-            IDENTITIES.forEach(staticStyle => {
-                if (!mergedStyles.find(s => s.id === staticStyle.id)) {
-                    const dbPrompt = dbPrompts.find((p: any) => p.id === staticStyle.id);
-                    mergedStyles.push({
-                        id: staticStyle.id,
-                        label: staticStyle.title,
-                        category: staticStyle.category,
-                        subcategory: staticStyle.subCategory,
-                        image_url: staticStyle.url,
+            // 2. Add DB Styles that are NOT in static list (Custom/Legacy)
+            dbStyles.forEach(dbStyle => {
+                if (!styleMap.has(dbStyle.id)) {
+                    const dbPrompt = dbPrompts.find(p => p.id === dbStyle.id);
+                    styleMap.set(dbStyle.id, {
+                        id: dbStyle.id,
+                        label: dbStyle.label || dbStyle.id,
+                        category: dbStyle.category || 'General',
+                        subcategory: dbStyle.subcategory || 'General',
+                        image_url: dbStyle.image_url || '/placeholder-style.jpg',
                         prompt: dbPrompt?.master_prompt || '',
-                        tags: staticStyle.tags || [],
-                        is_premium: staticStyle.isPremium,
-                        usage_count: 0
+                        tags: dbStyle.tags || [],
+                        is_premium: dbStyle.is_premium || false,
+                        usage_count: dbStyle.usage_count || 0
                     });
                 }
             });
 
-            // Add styles that only exist in Prompts (fallback)
-            dbPrompts.forEach((dbPrompt: any) => {
-                if (!mergedStyles.find(s => s.id === dbPrompt.id)) {
-                    mergedStyles.push({
+            // 3. Add styles that ONLY exist in Prompts (Legacy)
+            dbPrompts.forEach(dbPrompt => {
+                if (!styleMap.has(dbPrompt.id)) {
+                    styleMap.set(dbPrompt.id, {
                         id: dbPrompt.id,
-                        label: `Style ${dbPrompt.id}`,
+                        label: dbPrompt.id,
                         category: 'Legacy',
                         subcategory: 'Unknown',
                         image_url: '/placeholder-style.jpg',
@@ -178,7 +181,14 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                 }
             });
 
-            setStylesMetadata(mergedStyles);
+            // Convert map to list and filter out obvious trash
+            const finalStyles = Array.from(styleMap.values()).filter(s => {
+                // Ignore styles that are just category names (likely bad migration data)
+                const isLikelyCategory = ['Magia', 'Urbano', 'Superhéroes', 'Series', 'Sports'].includes(s.id);
+                return s.id && !isLikelyCategory;
+            });
+
+            setStylesMetadata(finalStyles);
 
             // Calculate global stats
             const totalCredits = partnersData.reduce((acc, curr) => acc + (curr.credits_total || 0), 0);
@@ -384,13 +394,13 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
             const filePath = `styles/${fileName}`;
 
             const { error: uploadError } = await supabase.storage
-                .from('assets')
+                .from('generations')
                 .upload(filePath, file);
 
             if (uploadError) throw uploadError;
 
             const { data: { publicUrl } } = supabase.storage
-                .from('assets')
+                .from('generations')
                 .getPublicUrl(filePath);
 
             setStyleForm(prev => ({ ...prev, image_url: publicUrl }));
@@ -722,7 +732,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                         <div className="grid grid-cols-1 gap-2">
                                             <button
                                                 onClick={() => {
-                                                    setStyleForm({ id: '', label: '', category: '', is_premium: false, usage_count: 0 });
+                                                    setStyleForm({ id: '', label: '', category: '', is_premium: false, usage_count: 0, prompt: '', tags: '', subcategory: '', image_url: '' } as any);
                                                     setEditingStyle('new');
                                                     setView('styles');
                                                 }}
@@ -884,7 +894,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
                             <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-4">
                                 <div>
-                                    <h2 className="text-3xl font-black text-white tracking-tight uppercase italic">Active Operatives <span className="text-[#13ec80]">({b2cUsers.length})</span></h2>
+                                    <h2 className="text-3xl font-black text-white uppercase tracking-tight italic">Active Operatives <span className="text-[#13ec80]">({b2cUsers.length})</span></h2>
                                     <p className="text-slate-500 text-sm font-bold uppercase tracking-widest mt-1">Gestión de identidades y créditos de la red pública</p>
                                 </div>
                                 <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
@@ -1717,7 +1727,37 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                     >
                                         Finalize Protocol Sync
                                     </button>
-                                    <button className="aspect-square w-16 bg-white/5 border border-white/10 rounded-[28px] flex items-center justify-center text-slate-500 hover:text-white transition-all">
+                                    {editingStyle !== 'new' && (
+                                        <button
+                                            onClick={async () => {
+                                                if (confirm('🚨 ¡ELIMINACIÓN CRÍTICA!\n\n¿Estás seguro de purgar esta identidad de todos los registros del motor?')) {
+                                                    try {
+                                                        setLoading(true);
+                                                        await Promise.all([
+                                                            supabase.from('styles_metadata').delete().eq('id', styleForm.id),
+                                                            supabase.from('identity_prompts').delete().eq('id', styleForm.id)
+                                                        ]);
+                                                        alert('Target purged successfully.');
+                                                        setEditingStyle(null);
+                                                        fetchData();
+                                                    } catch (err: any) {
+                                                        console.error(err);
+                                                        alert('Purge Error: ' + err.message);
+                                                    } finally {
+                                                        setLoading(false);
+                                                    }
+                                                }
+                                            }}
+                                            className="px-6 border border-red-500/30 text-red-500 rounded-2xl font-black text-[10px] uppercase hover:bg-red-500/10 transition-all"
+                                            disabled={loading}
+                                        >
+                                            Purge
+                                        </button>
+                                    )}
+                                    <button
+                                        onClick={() => setEditingStyle(null)}
+                                        className="aspect-square w-16 bg-white/5 border border-white/10 rounded-[28px] flex items-center justify-center text-slate-500 hover:text-white transition-all"
+                                    >
                                         <span className="material-symbols-outlined">query_stats</span>
                                     </button>
                                 </div>

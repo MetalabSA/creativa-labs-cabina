@@ -55,23 +55,23 @@ serve(async (req) => {
 
         if (user_photo && user_photo.startsWith('data:image')) {
             try {
-                console.log("[CABINA] Subiendo selfie a Supabase Storage...");
+                console.log("[CABINA] Subiendo selfie a Supabase Storage (bucket: generations)...");
                 const base64Content = user_photo.split(',')[1];
                 const binaryData = decode(base64Content);
                 const fileName = `uploads/${guest_id || user_id || 'anon'}_${Date.now()}.png`;
 
                 const { error: uploadError } = await supabase.storage
-                    .from('user_photos')
+                    .from('generations')
                     .upload(fileName, binaryData, { contentType: 'image/png', upsert: true });
 
                 if (uploadError) throw new Error(`Error Storage: ${uploadError.message}`);
 
-                const { data: { publicUrl } } = supabase.storage.from('user_photos').getPublicUrl(fileName);
+                const { data: { publicUrl } } = supabase.storage.from('generations').getPublicUrl(fileName);
                 publicPhotoUrl = publicUrl;
                 console.log("[CABINA] ✅ Selfie lista en Storage:", publicPhotoUrl);
             } catch (e) {
                 console.error("[CABINA] ❌ Fallo crítico de carga:", e.message);
-                throw new Error("No se pudo procesar tu foto. Intenta de nuevo.");
+                throw new Error(`Error al procesar tu foto: ${e.message}`);
             }
         }
 
