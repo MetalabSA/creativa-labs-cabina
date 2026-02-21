@@ -695,8 +695,10 @@ const App: React.FC = () => {
       });
 
       if (invokeError) {
-        console.warn("Invoke error (posible timeout), modo background activado.");
-        throw new Error("VAR: Se perdió la conexión, pero tu Alquimia ya está en proceso en la nube. 🇦🇷");
+        console.warn("Invoke error (timeout), habilitando modo espera...");
+        // No arrojamos error inmediatamente, permitimos un pequeño delay antes del VAR
+        await new Promise(r => setTimeout(r, 2000));
+        throw new Error("VAR: Se perdió la conexión, pero tu Alquimia ya está en proceso en la nube. 🇦🇷✨");
       }
 
       if (!resultData?.success) {
