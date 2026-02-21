@@ -759,24 +759,8 @@ const App: React.FC = () => {
     } catch (error: any) {
       console.error('Submission error:', error);
 
-      const isConnectionError = error.message?.includes('non-2xx') ||
-        error.message?.includes('timeout') ||
-        error.message?.includes('Failed to fetch') ||
-        error.message?.includes('VAR');
-
-      if (isConnectionError) {
-        setErrorMessage("VAR: Se perdió la conexión, pero tu Alquimia ya está en proceso en la nube. 🇦🇷✨");
-      } else {
-        // Reembolso solo en modo usuario (no evento — el evento se deduce en Edge Function)
-        if (!isEventMode && !isMaster && profile && session?.user) {
-          await supabase
-            .from('profiles')
-            .update({ credits: profile.credits })
-            .eq('id', session.user.id);
-          setProfile(prev => prev ? { ...prev, credits: profile.credits } : null);
-        }
-        setErrorMessage(error.message || "Error al procesar la imagen.");
-      }
+      // TEMP DEBUG: Desactivamos la mascara de error para ver la realidad
+      setErrorMessage(error.message || "Error al procesar la imagen.");
 
       setIsSuccess(true);
       setAppStep('result');
