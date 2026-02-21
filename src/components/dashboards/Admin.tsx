@@ -3,6 +3,7 @@ import { supabase } from '../../lib/supabaseClient';
 import { Search } from 'lucide-react';
 import { IDENTITIES } from '../../lib/constants';
 import Background3D from '../Background3D';
+import { motion, AnimatePresence } from 'framer-motion';
 
 // Interfaces
 interface Partner {
@@ -79,6 +80,16 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
         is_premium: false,
         usage_count: 0
     });
+
+    const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | null }>({
+        message: '',
+        type: null
+    });
+
+    const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
+        setToast({ message, type });
+        setTimeout(() => setToast({ message: '', type: null }), 4000);
+    };
     const [recentLogs, setRecentLogs] = useState<any[]>([]);
     const [stylesMetadata, setStylesMetadata] = useState<any[]>([]);
     const [styleSearchQuery, setStyleSearchQuery] = useState('');
@@ -142,7 +153,8 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                     prompt: dbPrompt?.master_prompt || '',
                     tags: dbStyle?.tags || staticStyle.tags || [],
                     is_premium: dbStyle?.is_premium ?? staticStyle.isPremium,
-                    usage_count: dbStyle?.usage_count || 0
+                    usage_count: dbStyle?.usage_count || 0,
+                    source: 'static'
                 });
             });
 
@@ -159,7 +171,8 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                         prompt: dbPrompt?.master_prompt || '',
                         tags: dbStyle.tags || [],
                         is_premium: dbStyle.is_premium || false,
-                        usage_count: dbStyle.usage_count || 0
+                        usage_count: dbStyle.usage_count || 0,
+                        source: 'db_metadata'
                     });
                 }
             });
@@ -176,16 +189,28 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                         prompt: dbPrompt.master_prompt,
                         tags: [],
                         is_premium: false,
-                        usage_count: 0
+                        usage_count: 0,
+                        source: 'db_prompt_only'
                     });
                 }
             });
 
             // Convert map to list and filter out obvious trash
+            // Final Merge & Filter
             const finalStyles = Array.from(styleMap.values()).filter(s => {
-                // Ignore styles that are just category names (likely bad migration data)
-                const isLikelyCategory = ['Magia', 'Urbano', 'Superhéroes', 'Series', 'Sports'].includes(s.id);
+                // EXCLUSIÓN CRÍTICA: Evitar que categorías aparezcan como estilos
+                const excludeKeywords = ['magia', 'urbano', 'superhéroes', 'series', 'sports', 'general', 'legacy', 'all'];
+                const isLikelyCategory = excludeKeywords.includes(s.id.toLowerCase()) ||
+                    excludeKeywords.includes((s.label || '').toLowerCase());
+
+                // car_a, car_b, etc deben pasar siempre
                 return s.id && !isLikelyCategory;
+            });
+
+            console.log(`[Styles Sync] Found ${finalStyles.length} active styles.`, {
+                totalInMap: styleMap.size,
+                dbPrompts: dbPrompts.length,
+                carStyles: finalStyles.filter(s => s.id.includes('car')).map(s => s.id)
             });
 
             setStylesMetadata(finalStyles);
@@ -285,12 +310,12 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
 
             if (error) throw error;
 
-            alert('Usuario actualizado correctamente');
+            showToast('Usuario actualizado correctamente');
             setEditingUser(null);
             fetchData();
         } catch (error: any) {
             console.error('Error updating user:', error);
-            alert('Error al actualizar usuario: ' + error.message);
+            showToast('Error al actualizar usuario: ' + error.message, 'error');
         } finally {
             setIsSavingUser(false);
         }
@@ -304,7 +329,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
             const { data: existingUser } = await supabase.from('profiles').select('id').eq('email', newUserForm.email).maybeSingle();
 
             if (existingUser) {
-                alert('Este usuario ya existe en la base de datos.');
+                showToast('Este usuario ya existe en la base de datos.', 'info');
                 setIsSavingUser(false);
                 return;
             }
@@ -318,13 +343,13 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
 
             if (profError) throw profError;
 
-            alert('Usuario B2C creado correctamente.');
+            showToast('Usuario B2C creado correctamente.');
             setShowNewUserModal(false);
             setNewUserForm({ email: '', credits: 1000, packs: '' });
             fetchData();
         } catch (error) {
             console.error('Error creating user:', error);
-            alert('Error al crear usuario. Revisa la consola.');
+            showToast('Error al crear usuario: ' + (error as any).message, 'error');
         } finally {
             setIsSavingUser(false);
         }
@@ -371,13 +396,13 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
 
             if (partError) throw partError;
 
-            alert('Partner creado con éxito.');
+            showToast('Partner creado con éxito.');
             setShowCreatePartner(false);
             setNewPartner({ name: '', email: '', password: '', initialCredits: 1000 });
             fetchData();
         } catch (error: any) {
             console.error('Error creating partner:', error);
-            alert('Error al crear partner: ' + (error.message || 'Error desconocido'));
+            showToast('Error al crear partner: ' + (error.message || 'Error desconocido'), 'error');
         } finally {
             setLoading(false);
         }
@@ -390,24 +415,45 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
         try {
             setLoading(true);
             const fileExt = file.name.split('.').pop();
-            const fileName = `${styleForm.id || 'new'}-${Math.random()}.${fileExt}`;
+            const fileName = `${styleForm.id || 'new'}-${Date.now()}.${fileExt}`;
             const filePath = `styles/${fileName}`;
 
-            const { error: uploadError } = await supabase.storage
-                .from('generations')
-                .upload(filePath, file);
+            // --- STRATEGY: Try multiple buckets in order of probability ---
+            const buckets = ['public', 'styles', 'logos', 'generations'];
+            let uploadSuccess = false;
+            let finalPublicUrl = '';
 
-            if (uploadError) throw uploadError;
+            for (const bucket of buckets) {
+                try {
+                    const { data, error: uploadError } = await supabase.storage
+                        .from(bucket)
+                        .upload(filePath, file);
 
-            const { data: { publicUrl } } = supabase.storage
-                .from('generations')
-                .getPublicUrl(filePath);
+                    if (!uploadError && data) {
+                        const { data: { publicUrl } } = supabase.storage
+                            .from(bucket)
+                            .getPublicUrl(filePath);
 
-            setStyleForm(prev => ({ ...prev, image_url: publicUrl }));
-            alert('Imagen subida correctamente');
+                        finalPublicUrl = publicUrl;
+                        uploadSuccess = true;
+                        console.log(`[Upload] Success in bucket: ${bucket}`);
+                        break;
+                    }
+                } catch (e) {
+                    console.log(`[Upload] Failed in bucket: ${bucket}, trying next...`);
+                }
+            }
+
+            if (!uploadSuccess) {
+                showToast("No se encontró el bucket 'public'. Por favor créalo en Supabase Storage.", 'error');
+                return;
+            }
+
+            setStyleForm(prev => ({ ...prev, image_url: finalPublicUrl }));
+            showToast('Imagen vinculada al protocolo correctamente');
         } catch (error: any) {
             console.error('Error uploading image:', error);
-            alert('Error al subir imagen: ' + error.message);
+            showToast('Error al subir imagen: ' + error.message, 'error');
         } finally {
             setLoading(false);
         }
@@ -417,22 +463,41 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
         if (!editingStyle) return;
         try {
             setLoading(true);
-            const { error } = await supabase
+
+            // 1. Update Metadata
+            const { error: metaError } = await supabase
                 .from('styles_metadata')
                 .upsert({
                     id: styleForm.id,
                     label: styleForm.label,
                     category: styleForm.category,
+                    subcategory: styleForm.subcategory,
+                    image_url: styleForm.image_url,
                     is_premium: styleForm.is_premium,
+                    tags: Array.isArray(styleForm.tags) ? styleForm.tags : styleForm.tags.split(',').map(t => t.trim()).filter(t => t),
                     updated_at: new Date().toISOString()
                 });
 
-            if (error) throw error;
-            alert('Estilo actualizado correctamente');
+            if (metaError) throw metaError;
+
+            // 2. Update Prompt
+            if (styleForm.prompt) {
+                const { error: promptError } = await supabase
+                    .from('identity_prompts')
+                    .upsert({
+                        id: styleForm.id,
+                        master_prompt: styleForm.prompt,
+                        created_at: new Date().toISOString()
+                    });
+                if (promptError) throw promptError;
+            }
+
+            showToast('Estilo y Prompt actualizados correctamente');
             setEditingStyle(null);
             fetchData();
         } catch (error: any) {
-            alert('Error al actualizar estilo: ' + error.message);
+            console.error('Error syncing style:', error);
+            showToast('Error al sincronizar estilo: ' + error.message, 'error');
         } finally {
             setLoading(false);
         }
@@ -468,12 +533,12 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                 }
             }
 
-            alert('Créditos actualizados exitosamente');
+            showToast('Créditos actualizados exitosamente');
             setShowTopUp(null);
             fetchData();
         } catch (error: any) {
             console.error('Error al recargar créditos:', error);
-            alert('Error al recargar créditos: ' + error.message);
+            showToast('Error al recargar créditos: ' + error.message, 'error');
         } finally {
             setLoading(false);
         }
@@ -1092,7 +1157,35 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                     .map(style => (
                                         <div
                                             key={style.id}
-                                            onClick={() => {
+                                            className="bg-[#121413] border border-[#1f2b24] rounded-[32px] overflow-hidden group hover:border-[#13ec80]/50 transition-all cursor-pointer relative"
+                                        >
+                                            {/* Purge Button (Direct) */}
+                                            <button
+                                                onClick={async (e) => {
+                                                    e.stopPropagation();
+                                                    if (confirm(`🚨 PURGA CRÍTICA: ¿Estás seguro de eliminar "${style.id}" definitivamente?`)) {
+                                                        try {
+                                                            setLoading(true);
+                                                            await Promise.all([
+                                                                supabase.from('styles_metadata').delete().eq('id', style.id),
+                                                                supabase.from('identity_prompts').delete().eq('id', style.id)
+                                                            ]);
+                                                            showToast('Identidad purgada del sistema');
+                                                            fetchData();
+                                                        } catch (err: any) {
+                                                            showToast('Error al purgar: ' + err.message, 'error');
+                                                        } finally {
+                                                            setLoading(false);
+                                                        }
+                                                    }
+                                                }}
+                                                className="absolute top-4 right-4 z-20 w-8 h-8 rounded-full bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all hover:bg-red-500 hover:text-white"
+                                                title="Purgar Identidad"
+                                            >
+                                                <span className="material-symbols-outlined !text-sm">delete_forever</span>
+                                            </button>
+
+                                            <div onClick={() => {
                                                 setEditingStyle(style);
                                                 setStyleForm({
                                                     id: style.id,
@@ -1105,42 +1198,49 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                                     subcategory: style.subcategory || '',
                                                     image_url: style.image_url || ''
                                                 } as any);
-                                            }}
-                                            className="bg-[#121413] border border-[#1f2b24] rounded-[32px] overflow-hidden group hover:border-[#13ec80]/50 transition-all cursor-pointer relative"
-                                        >
-                                            {/* Preview Image */}
-                                            <div className="aspect-[4/5] relative overflow-hidden">
-                                                <img
-                                                    src={style.image_url || '/placeholder-style.jpg'}
-                                                    alt={style.label}
-                                                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 opacity-60 group-hover:opacity-100"
-                                                    onError={(e) => (e.currentTarget.src = '/placeholder-style.jpg')}
-                                                />
-                                                <div className="absolute inset-0 bg-gradient-to-t from-[#0a0c0b] via-transparent to-transparent opacity-90 group-hover:opacity-40 transition-opacity"></div>
+                                            }}>
+                                                {/* Preview Image */}
+                                                <div className="aspect-[4/5] relative overflow-hidden">
+                                                    <img
+                                                        src={
+                                                            !style.image_url ? '/placeholder-style.jpg' :
+                                                                (style.image_url.startsWith('http') || style.image_url.startsWith('blob')) ? style.image_url :
+                                                                    (style.image_url.startsWith('/') ? style.image_url : `/${style.image_url}`)
+                                                        }
+                                                        alt={style.label}
+                                                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 opacity-60 group-hover:opacity-100"
+                                                        onError={(e) => {
+                                                            const img = e.target as HTMLImageElement;
+                                                            if (img.src.includes('placeholder')) return;
+                                                            img.src = '/placeholder-style.jpg';
+                                                        }}
+                                                    />
+                                                    <div className="absolute inset-0 bg-gradient-to-t from-[#0a0c0b] via-transparent to-transparent opacity-90 group-hover:opacity-40 transition-opacity"></div>
 
-                                                {/* Badges */}
-                                                <div className="absolute top-4 left-4 flex gap-2">
-                                                    {style.is_premium && (
-                                                        <span className="bg-[#ff5500] text-white text-[8px] font-black px-2 py-1 rounded-md uppercase tracking-tighter">Premium</span>
-                                                    )}
-                                                    <span className="bg-[#1f2b24]/80 backdrop-blur-md text-white text-[8px] font-black px-2 py-1 rounded-md uppercase tracking-tighter border border-white/10">
-                                                        {style.category}
-                                                    </span>
+                                                    {/* Badges */}
+                                                    <div className="absolute top-4 left-4 flex gap-2">
+                                                        {style.is_premium && (
+                                                            <span className="bg-[#ff5500] text-white text-[8px] font-black px-2 py-1 rounded-md uppercase tracking-tighter">Premium</span>
+                                                        )}
+                                                        <span className="bg-[#1f2b24]/80 backdrop-blur-md text-white text-[8px] font-black px-2 py-1 rounded-md uppercase tracking-tighter border border-white/10">
+                                                            {style.category}
+                                                        </span>
+                                                    </div>
                                                 </div>
-                                            </div>
 
-                                            {/* Content */}
-                                            <div className="p-6 absolute bottom-0 left-0 right-0">
-                                                <h4 className="text-xl font-black text-white italic uppercase tracking-tighter mb-1 group-hover:text-[#13ec80] transition-colors">{style.label}</h4>
-                                                <p className="text-[10px] text-slate-400 line-clamp-2 leading-relaxed italic opacity-60 group-hover:opacity-100 transition-opacity">
-                                                    "{style.prompt || 'Sin prompt definido...'}"
-                                                </p>
+                                                {/* Content */}
+                                                <div className="p-6 absolute bottom-0 left-0 right-0">
+                                                    <h4 className="text-xl font-black text-white italic uppercase tracking-tighter mb-1 group-hover:text-[#13ec80] transition-colors">{style.label}</h4>
+                                                    <p className="text-[10px] text-slate-400 line-clamp-2 leading-relaxed italic opacity-60 group-hover:opacity-100 transition-opacity">
+                                                        "{style.prompt || 'Sin prompt definido...'}"
+                                                    </p>
 
-                                                <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between opacity-40 group-hover:opacity-100 transition-opacity">
-                                                    <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
-                                                        SUB: {style.subcategory || 'General'}
-                                                    </span>
-                                                    <span className="material-symbols-outlined !text-sm text-slate-600">chevron_right</span>
+                                                    <div className="mt-4 pt-4 border-t border-white/5 flex items-center justify-between opacity-40 group-hover:opacity-100 transition-opacity">
+                                                        <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">
+                                                            SUB: {style.subcategory || 'General'}
+                                                        </span>
+                                                        <span className="material-symbols-outlined !text-sm text-slate-600">chevron_right</span>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -1490,14 +1590,23 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                             <div className="relative z-10 w-full mb-8">
                                 <div className="aspect-[4/5] rounded-[32px] overflow-hidden border-2 border-[#13ec80]/30 shadow-2xl relative group">
                                     <img
-                                        src={styleForm.image_url || '/placeholder-style.jpg'}
+                                        src={
+                                            !styleForm.image_url ? '/placeholder-style.jpg' :
+                                                (styleForm.image_url.startsWith('http') || styleForm.image_url.startsWith('blob')) ? styleForm.image_url :
+                                                    (styleForm.image_url.startsWith('/') ? styleForm.image_url : `/${styleForm.image_url}`)
+                                        }
                                         alt="Preview"
-                                        className="w-full h-full object-cover"
-                                        onError={(e) => (e.currentTarget.src = '/placeholder-style.jpg')}
+                                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000 opacity-60 group-hover:opacity-100"
+                                        onError={(e) => {
+                                            const img = e.target as HTMLImageElement;
+                                            if (img.src.includes('placeholder')) return;
+                                            img.src = '/placeholder-style.jpg';
+                                        }}
                                     />
-                                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <label className="cursor-pointer bg-white text-black px-4 py-2 rounded-full text-[10px] font-black uppercase">
-                                            Cambiar Imagen
+                                    <div className="absolute inset-0 bg-gradient-to-t from-[#0a0c0b] via-transparent to-transparent opacity-80"></div>
+                                    <div className="absolute inset-x-0 bottom-0 p-6 flex flex-col items-center">
+                                        <label className="w-12 h-12 bg-[#13ec80] rounded-full flex items-center justify-center cursor-pointer hover:scale-110 active:scale-95 transition-all shadow-[0_0_20px_rgba(19,236,128,0.4)] group/btn">
+                                            <span className="material-symbols-outlined text-[#0a0c0b] group-hover:rotate-90 transition-transform">add_a_photo</span>
                                             <input
                                                 type="file"
                                                 className="hidden"
@@ -1509,17 +1618,19 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                 </div>
                                 <div className="mt-6 text-center">
                                     <p className="text-[10px] font-black text-[#13ec80] uppercase tracking-[4px] mb-2">Protocolo Activo</p>
-                                    <h4 className="text-xl font-black text-white italic uppercase">{styleForm.label || 'Nueva Identidad'}</h4>
+                                    <h4 className="text-xl font-black text-white italic uppercase tracking-tighter">{styleForm.label || 'Nueva Identidad'}</h4>
                                 </div>
                             </div>
 
                             <div className="w-full space-y-4 pt-4 border-t border-white/5">
                                 <div className="flex justify-between items-center text-[8px] font-black text-slate-500 uppercase tracking-widest">
                                     <span>Sync Status:</span>
-                                    <span className="text-[#13ec80]">Standby</span>
+                                    <span className={loading ? "text-amber-400 animate-pulse" : "text-[#13ec80]"}>
+                                        {loading ? "PROCESANDO..." : "STANDBY"}
+                                    </span>
                                 </div>
                                 <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
-                                    <div className="w-[100%] h-full bg-[#13ec80] opacity-50"></div>
+                                    <div className={`h-full bg-[#13ec80] transition-all duration-500 ${loading ? 'w-1/2 animate-pulse' : 'w-full opacity-50'}`}></div>
                                 </div>
                             </div>
 
@@ -1568,28 +1679,47 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
 
                                 <div className="space-y-1.5">
                                     <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">System URL / Storage Path</label>
-                                    <input
-                                        className="w-full bg-[#121413] border border-[#1f2b24] rounded-xl px-4 py-3 text-white outline-none focus:border-[#13ec80] font-mono text-[10px]"
-                                        value={(styleForm as any).image_url}
-                                        onChange={(e) => setStyleForm({ ...styleForm, image_url: e.target.value } as any)}
-                                    />
+                                    <div className="flex gap-2">
+                                        <input
+                                            className="flex-1 bg-[#121413] border border-[#1f2b24] rounded-xl px-4 py-3 text-white outline-none focus:border-[#13ec80] font-mono text-[10px]"
+                                            value={styleForm.image_url}
+                                            onChange={(e) => setStyleForm({ ...styleForm, image_url: e.target.value } as any)}
+                                        />
+                                        <button
+                                            onClick={() => {
+                                                if (styleForm.image_url) {
+                                                    navigator.clipboard.writeText(styleForm.image_url);
+                                                    showToast('URL copiada al portapapeles');
+                                                }
+                                            }}
+                                            className="px-3 bg-white/5 border border-white/10 rounded-xl text-slate-500 hover:text-[#13ec80] transition-colors"
+                                            title="Copiar URL"
+                                        >
+                                            <span className="material-symbols-outlined !text-sm">content_copy</span>
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="space-y-1.5">
                                         <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Operational Category (Pack)</label>
-                                        <select
-                                            className="w-full bg-[#121413] border border-[#1f2b24] rounded-xl px-4 py-3 text-white outline-none focus:border-[#13ec80] appearance-none text-xs"
+                                        <input
+                                            list="category-suggestions"
+                                            className="w-full bg-[#121413] border border-[#1f2b24] rounded-xl px-4 py-3 text-white outline-none focus:border-[#13ec80] text-xs"
+                                            placeholder="Escribir o seleccionar categoría..."
                                             value={styleForm.category}
                                             onChange={(e) => setStyleForm({ ...styleForm, category: e.target.value } as any)}
-                                        >
-                                            <option value="">Seleccionar Pack</option>
-                                            <option value="cinema">Cinema (John Wick, Películas)</option>
-                                            <option value="sports">Sports (F1, Fútbol)</option>
-                                            <option value="series">Series (Breaking Bad, Suits)</option>
-                                            <option value="urban">Urban (Calle, Graffiti)</option>
-                                            <option value="fantasy">Fantasy (Magia, RPG)</option>
-                                        </select>
+                                        />
+                                        <datalist id="category-suggestions">
+                                            <option value="cinema" />
+                                            <option value="sports" />
+                                            <option value="series" />
+                                            <option value="urban" />
+                                            <option value="fantasy" />
+                                            <option value="cartoon" />
+                                            <option value="anime" />
+                                            <option value="photography" />
+                                        </datalist>
                                     </div>
                                     <div className="space-y-1.5">
                                         <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Legacy Subcategory</label>
@@ -1714,11 +1844,11 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
 
                                                 if (metaErr) throw metaErr;
 
-                                                alert('Protocol synced successfully in both cores.');
+                                                showToast('Identidad sincronizada en ambos núcleos');
                                                 setEditingStyle(null);
                                                 fetchData();
                                             } catch (err: any) {
-                                                alert('Sync Failure: ' + err.message);
+                                                showToast('Sync Failure: ' + err.message, 'error');
                                             } finally {
                                                 setLoading(false);
                                             }
@@ -1737,12 +1867,12 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                                             supabase.from('styles_metadata').delete().eq('id', styleForm.id),
                                                             supabase.from('identity_prompts').delete().eq('id', styleForm.id)
                                                         ]);
-                                                        alert('Target purged successfully.');
+                                                        showToast('Protocolo purgado correctamente');
                                                         setEditingStyle(null);
                                                         fetchData();
                                                     } catch (err: any) {
                                                         console.error(err);
-                                                        alert('Purge Error: ' + err.message);
+                                                        showToast('Falla al purgar: ' + err.message, 'error');
                                                     } finally {
                                                         setLoading(false);
                                                     }
@@ -1940,6 +2070,26 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                     100% { box-shadow: 0 0 0 0 rgba(19, 236, 128, 0); }
                 }
             `}</style>
+
+            {/* Toast System (Master Layer) */}
+            <AnimatePresence>
+                {toast.type && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 50, scale: 0.9 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 20, scale: 0.9 }}
+                        className={`fixed bottom-8 right-8 z-[200] px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-4 backdrop-blur-xl border ${toast.type === 'success' ? 'bg-[#13ec80]/10 border-[#13ec80]/30 text-[#13ec80]' :
+                            toast.type === 'error' ? 'bg-red-500/10 border-red-500/30 text-red-500' :
+                                'bg-blue-500/10 border-blue-500/30 text-blue-400'
+                            }`}
+                    >
+                        <span className="material-symbols-outlined">
+                            {toast.type === 'success' ? 'check_circle' : toast.type === 'error' ? 'error' : 'info'}
+                        </span>
+                        <p className="text-[11px] font-black uppercase tracking-widest">{toast.message}</p>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div >
     );
 };
