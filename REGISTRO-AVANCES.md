@@ -1,5 +1,22 @@
 # 📔 Registro de Avances - Creativa Labs (Cabina de Fotos)
  
+## [21-02-2026] - Resolución Crítica de Arquitectura (Timeouts y Autenticación en Edge Functions)
+
+### 🐛 El Asesino Silencioso de Conexiones (Gateway Timeout 504 / 500)
+- **Problema**: La aplicación arrojaba el mensaje rojo `"VAR: Se perdió la conexión..."` repetidamente, algunas veces tardando 60 segundos y otras veces casi inmediatamente (< 5 segundos). Esto afectaba de forma crítica la experiencia del usuario final en la foto-cabina.
+- **Raíz del Problema 1 (Timeout de 60s)**: Supabase tiene un límite estricto ("wall-time limit") en sus Edge Functions. Si Kie.ai tardaba 60 segundos o más en procesar la imagen volumétrica, el Ingress Controller de Supabase cortaba la conexión abruptamente, devolviendo un error de red al cliente.
+- **Solución 1**: Se reestructuró la lógica de *Polling Interno* (el `while` en `cabina-vision/index.ts`). Se redujo el límite máximo a 45 segundos (15 intentos x 3s). Si se alcanza, la Edge Function devuelve un falso positivo (HTTP 200 con éxito parcial y el ID de tarea). El front-end detecta esto y activa su propio mecanismo asíncrono de *Modo Rescate* consultando directamente a Kie.ai.
+
+### 🔐 El Error de los 5 segundos (JWT Bypass)
+- **Problema**: Después del primer arreglo, el error empezó a suceder instantáneamente. Esto levantó bandera roja, ya que descartaba el timeout de procesamiento de la IA.
+- **Investigación**: Para auditar el fallo, retiramos el escudo visual en `App.tsx` que ocultaba los errores de estado HTTP bajo la etiqueta genérica de "VAR: Se perdió la conexión". Esto expuso el error subyacente: `SUPABASE_INVOKE_ERROR: Edge Function returned a non-2xx status code`.
+- **Raíz del Problema 2 (Supabase CLI Default Behavior)**: Al actualizar y redesplegar la función Edge, se utilizó el comando `supabase functions deploy`. Por diseño de Supabase CLI V1/V2, esto restablece las políticas de ejecución de la Edge Function, forzándola a requerir una cabecera de autenticación JWT vigente. Como las cabinas operan con usuarios "Anónimos" (Públicos), Supabase rechazaba la petición en su API Gateway devolviendo `HTTP 401 Unauthorized` antes siquiera de ejecutar una línea de nuestro código TypeScript (Deno).
+- **Solución 2**: 
+    1. Redespliegue con bandera explícita: `supabase functions deploy cabina-vision --no-verify-jwt`. Esto reabrió la "aduana" para tráfico anónimo (Crucial en módulos PWA B2C).
+    2. Restauración del escudo visual (Catch block `isConnectionError`) para asegurar el reembolso asíncrono de créditos y feedback "amigable".
+
+> 📝 **Nota de Ingeniería de Plataforma**: Siempre que agreguemos integraciones de Inteligencia Artificial que usen render farm (Kie.ai, Banana.dev, RunPod) a través de Supabase Edge Functions, el Edge debe actuar ÚNICAMENTE como *API Gateway / Broker* y jamás en un modo "sincrónico 100%" sin predecir el límite de los 60 segundos del hosting. Además, para las funciones "Guest", el bypass JWT en el despliegue es estrictamente necesario.
+
 ## [19-02-2026] - Fase 5: Pulido y Despliegue Final
 - **Traducción Completa**: Localización 100% al castellano de todos los Dashboards (Admin, Partner, Cliente) y componentes de UX.
 - **Lógica de Dominios (Subdomain Rerouting)**: Implementado ruteo inteligente en `src/index.tsx` para separar productos:
