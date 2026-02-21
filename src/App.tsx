@@ -695,10 +695,10 @@ const App: React.FC = () => {
       });
 
       if (invokeError) {
-        console.warn("Invoke error (timeout), habilitando modo espera...");
-        // No arrojamos error inmediatamente, permitimos un pequeño delay antes del VAR
-        await new Promise(r => setTimeout(r, 2000));
-        throw new Error("VAR: Se perdió la conexión, pero tu Alquimia ya está en proceso en la nube. 🇦🇷✨");
+        console.warn("Invoke error real del backend:", JSON.stringify(invokeError));
+        // Temporal: Para que el usuario pueda VER y capturar el mensaje de error REAL 
+        // de la CLI edge function antes de comernos el mensaje real
+        throw new Error("SUPABASE_INVOKE_ERROR: " + (invokeError.message || JSON.stringify(invokeError)));
       }
 
       if (!resultData?.success) {
