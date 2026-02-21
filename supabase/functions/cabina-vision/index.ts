@@ -177,12 +177,12 @@ serve(async (req) => {
             supabase.from('api_key_pool').update({ last_used_at: new Date().toISOString(), usage_count: 1 }).eq('id', keyId).then(() => { }).catch(() => { });
         }
 
-        // 4. Polling Interno
+        // 4. Polling Interno (limitado a 45 segs max.)
         debugPath += "POLLING -> ";
         let kieImageUrl = null;
         let attempts = 0;
 
-        while (attempts < 60) {
+        while (attempts < 15) {
             await new Promise(r => setTimeout(r, 3000));
             try {
                 const queryRes = await fetch(`https://api.kie.ai/api/v1/jobs/recordInfo?taskId=${taskId}`, {
