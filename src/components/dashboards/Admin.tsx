@@ -8,12 +8,19 @@ import { motion, AnimatePresence } from 'framer-motion';
 // Interfaces
 interface Partner {
     id: string;
-    name: string;
+    name?: string;
+    business_name?: string;
+    company_name?: string;
     contact_email: string;
+    contact_phone?: string;
+    is_active?: boolean;
+    eventCount?: number;
+    activeEvents?: number;
     credits_total: number;
     credits_used: number;
     config?: any;
     user_id?: string;
+    is_from_profile?: boolean;
 }
 
 interface UserProfile {
@@ -82,6 +89,16 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
         is_active: true
     });
 
+    const [editingPartner, setEditingPartner] = useState<Partner | null>(null);
+    const [partnerForm, setPartnerForm] = useState({
+        name: '',
+        company_name: '',
+        contact_email: '',
+        contact_phone: '',
+        is_active: true
+    });
+    const [isSavingPartner, setIsSavingPartner] = useState(false);
+
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | null }>({
         message: '',
         type: null
@@ -123,12 +140,38 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
             if (partnersRes.error) throw partnersRes.error;
             if (profilesRes.error) throw profilesRes.error;
 
-            const partnersData = partnersRes.data || [];
+            const partnersFromTable = partnersRes.data || [];
             const profilesData = profilesRes.data || [];
             const eventsData = eventsRes.data || [];
             const generationsData = generationsRes.data || [];
 
-            setPartners(partnersData);
+            // --- MERGE PARTNERS LOGIC ---
+            // We take everything from the 'partners' table as primary
+            // But we also look for any profile with role: 'partner' that isn't in that table yet
+            const extraPartnersFromProfiles = profilesData
+                .filter(p => p.role === 'partner')
+                .filter(p => !partnersFromTable.some(pd => pd.contact_email?.toLowerCase() === p.email?.toLowerCase() || pd.user_id === p.id))
+                .map(p => ({
+                    id: p.id,
+                    name: p.full_name || p.email.split('@')[0],
+                    business_name: p.full_name,
+                    contact_email: p.email,
+                    credits_total: p.credits || 0,
+                    credits_used: p.total_generations || 0,
+                    user_id: p.id,
+                    is_from_profile: true
+                }));
+
+            const finalPartners = [...partnersFromTable, ...extraPartnersFromProfiles].map(p => {
+                const partnerEvents = eventsData.filter(e => e.partner_id === p.id);
+                return {
+                    ...p,
+                    eventCount: partnerEvents.length,
+                    activeEvents: partnerEvents.filter(e => e.is_active).length
+                };
+            });
+            setPartners(finalPartners);
+
             const b2cUsersData = profilesData.filter(p => p.role === 'user' || !p.role);
             setB2CUsers(b2cUsersData);
 
@@ -141,8 +184,8 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
             IDENTITIES.forEach(staticStyle => {
                 const dbStyle = dbStyles.find(s => s.id === staticStyle.id);
                 const dbPrompt = dbPrompts.find(p => p.id === staticStyle.id);
-                const subCatMeta = dbStyles.find(m => m.id === staticStyle.subCategory);
-                const catMeta = dbStyles.find(m => m.id === staticStyle.category);
+                const subCatMeta = dbStyles.find(m => m.id?.toLowerCase() === staticStyle.subCategory?.toLowerCase());
+                const catMeta = dbStyles.find(m => m.id?.toLowerCase() === staticStyle.category?.toLowerCase());
 
                 let isInheritedInactive = (catMeta?.is_active === false) || (subCatMeta?.is_active === false);
 
@@ -166,8 +209,8 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                 if (!dbStyle.label && !dbStyle.image_url) return;
                 if (!styleMap.has(dbStyle.id)) {
                     const dbPrompt = dbPrompts.find(p => p.id === dbStyle.id);
-                    const subCatMeta = dbStyles.find(m => m.id === dbStyle.subcategory);
-                    const catMeta = dbStyles.find(m => m.id === dbStyle.category);
+                    const subCatMeta = dbStyles.find(m => m.id?.toLowerCase() === dbStyle.subcategory?.toLowerCase());
+                    const catMeta = dbStyles.find(m => m.id?.toLowerCase() === dbStyle.category?.toLowerCase());
                     let isInheritedInactive = (catMeta?.is_active === false) || (subCatMeta?.is_active === false);
 
                     styleMap.set(dbStyle.id, {
@@ -187,7 +230,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
             });
 
             const finalStyles = Array.from(styleMap.values()).filter(s => {
-                const excludeKeywords = ['magia', 'urbano', 'superhéroes', 'series', 'sports', 'general', 'legacy', 'all', 'cartoon', 'fantasy', 'cinema', 'f1', 'formula 1'];
+                const excludeKeywords = ['magia', 'urbano', 'superhéroes', 'series', 'sports', 'general', 'legacy', 'all', 'fantasy', 'cinema', 'f1', 'formula 1'];
                 const isLikelyCategory = excludeKeywords.includes(s.id.toLowerCase()) ||
                     excludeKeywords.includes((s.label || '').toLowerCase());
                 return s.id && !isLikelyCategory;
@@ -196,15 +239,15 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
             setStylesMetadata(finalStyles);
 
             // Calculate Stats
-            const totalCredits = partnersData.reduce((acc, curr) => acc + (curr.credits_total || 0), 0);
-            const partnerUsageTotal = partnersData.reduce((acc, curr) => acc + (curr.credits_used || 0), 0);
+            const totalCredits = finalPartners.reduce((acc, curr) => acc + (curr.credits_total || 0), 0);
+            const partnerUsageTotal = finalPartners.reduce((acc, curr) => acc + (curr.credits_used || 0), 0);
             const b2cUsageTotal = b2cUsersData.reduce((acc, curr) => acc + (curr.total_generations || 0), 0);
             const totalGenerationsGlobal = partnerUsageTotal + b2cUsageTotal;
             const activeEventsCount = eventsData.filter(e => e.is_active).length || 0;
 
             setStats({
                 totalGenerations: totalGenerationsGlobal,
-                totalPartners: partnersData.length,
+                totalPartners: finalPartners.length,
                 totalCreditsSold: totalCredits,
                 activeEvents: activeEventsCount
             });
@@ -233,21 +276,13 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
             });
 
             const consumptionRate = totalCredits > 0 ? (partnerUsageTotal / totalCredits) * 100 : 0;
-            const partnerActivity = partnersData.map(p => {
-                const partnerEvents = eventsData.filter(e => e.partner_id === p.id);
-                return {
-                    ...p,
-                    eventCount: partnerEvents.length,
-                    activeEvents: partnerEvents.filter(e => e.is_active).length
-                };
-            }).sort((a, b) => b.eventCount - a.eventCount);
 
             setPartnerStats({
-                totalPartners: partnersData.length,
+                totalPartners: finalPartners.length,
                 totalEvents: eventsData.length,
                 creditsInCirculation: totalCredits - partnerUsageTotal,
                 avgConsumptionRate: consumptionRate,
-                topPartners: partnerActivity.slice(0, 5)
+                topPartners: [...finalPartners].sort((a, b) => (b.eventCount || 0) - (a.eventCount || 0)).slice(0, 5)
             });
 
             setRecentLogs(generationsData.slice(0, 10).map((g: any) => ({
@@ -333,25 +368,39 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
         try {
             setLoading(true);
 
-            // 1. Create Auth User for Partner
-            const { data: authData, error: authError } = await supabase.auth.signUp({
+            // 1. Check if user already exists in profiles
+            const { data: existingProfile } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('email', newPartner.email.toLowerCase())
+                .maybeSingle();
+
+            let targetUserId = existingProfile?.id;
+
+            if (!targetUserId) {
+                // Create Auth User ONLY if they don't exist
+                const { data: authData, error: authError } = await supabase.auth.signUp({
+                    email: newPartner.email.toLowerCase(),
+                    password: newPartner.password || 'Partner123!',
+                });
+
+                if (authError) throw authError;
+                targetUserId = authData.user?.id;
+            }
+
+            if (!targetUserId) throw new Error("No se pudo obtener o crear el ID del usuario");
+
+            // 2. Update Profile Role (Promote if existed, or set if new)
+            await supabase.from('profiles').upsert({
+                id: targetUserId,
                 email: newPartner.email.toLowerCase(),
-                password: newPartner.password || 'Partner123!', // Temporal
-            });
-
-            if (authError) throw authError;
-            const targetUserId = authData.user?.id;
-
-            if (!targetUserId) throw new Error("No se pudo obtener el ID del usuario");
-
-            // 2. Update Profile Role
-            await supabase.from('profiles').update({
                 role: 'partner',
                 full_name: newPartner.name
-            }).eq('id', targetUserId);
+            }, { onConflict: 'id' });
 
             // 3. Create Partner Entry
             const partnerObj: any = {
+                business_name: newPartner.name,
                 name: newPartner.name,
                 contact_email: newPartner.email.toLowerCase(),
                 user_id: targetUserId,
@@ -359,15 +408,20 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                 credits_used: 0
             };
 
-            // Only add config if it exists in the schema (resilience)
-            // Based on user report, config might be missing in some projects
-            // partnerObj.config = { primary_color: '#135bec', style_presets: ['Formula 1', 'John Wick'] };
-
             const { error: partError } = await supabase
                 .from('partners')
                 .insert(partnerObj);
 
-            if (partError) throw partError;
+            if (partError) {
+                // If it fails because partner already exists in partner table, we just update it
+                if (partError.code === '23505') {
+                    await supabase.from('partners')
+                        .update(partnerObj)
+                        .eq('contact_email', newPartner.email.toLowerCase());
+                } else {
+                    throw partError;
+                }
+            }
 
             showToast('Partner creado con éxito.');
             setShowCreatePartner(false);
@@ -378,6 +432,60 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
             showToast('Error al crear partner: ' + (error.message || 'Error desconocido'), 'error');
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleUpdatePartnerSettings = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingPartner) return;
+
+        try {
+            setIsSavingPartner(true);
+            const { error } = await supabase
+                .from('partners')
+                .update({
+                    name: partnerForm.name,
+                    company_name: partnerForm.company_name,
+                    business_name: partnerForm.company_name,
+                    contact_email: partnerForm.contact_email,
+                    contact_phone: partnerForm.contact_phone,
+                    is_active: partnerForm.is_active
+                })
+                .eq('id', editingPartner.id);
+
+            if (error) throw error;
+
+            showToast('Partner actualizado con éxito');
+            setEditingPartner(null);
+            fetchData();
+        } catch (error: any) {
+            console.error('Error updating partner:', error);
+            showToast('Error al actualizar partner: ' + error.message, 'error');
+        } finally {
+            setIsSavingPartner(false);
+        }
+    };
+
+    const handleDeletePartner = async (id: string) => {
+        if (!window.confirm('¿Estás seguro de que deseas dar de baja este partner? Esta acción desactivará su acceso.')) return;
+
+        try {
+            setIsSavingPartner(true);
+            // Instead of deleting, we deactivate by default as requested (dar de baja)
+            const { error } = await supabase
+                .from('partners')
+                .update({ is_active: false })
+                .eq('id', id);
+
+            if (error) throw error;
+
+            showToast('Partner desactivado correctamente');
+            fetchData();
+        } catch (error: any) {
+            console.error('Error deactivating partner:', error);
+            showToast('Error al desactivar partner: ' + error.message, 'error');
+        } finally {
+            setIsSavingPartner(false);
         }
     };
 
@@ -886,10 +994,12 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                                     <td className="px-6 py-4">
                                                         <div className="flex items-center gap-3">
                                                             <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[#13ec80]/20 to-transparent flex items-center justify-center text-[#13ec80] font-black border border-[#13ec80]/20 shadow-inner">
-                                                                {(p.name || 'P')[0]}
+                                                                {(p.business_name || p.name || p.company_name || p.contact_email || 'P')[0].toUpperCase()}
                                                             </div>
                                                             <div>
-                                                                <p className="font-bold text-white group-hover:text-[#13ec80] transition-colors">{p.name}</p>
+                                                                <p className="font-bold text-white group-hover:text-[#13ec80] transition-colors">
+                                                                    {p.business_name || p.name || p.company_name || p.contact_email?.split('@')[0] || 'Partner Sin Nombre'}
+                                                                </p>
                                                                 <p className="text-[10px] text-slate-500 font-mono flex items-center gap-1">
                                                                     <span className="w-1 h-1 rounded-full bg-[#13ec80]"></span>
                                                                     {p.contact_email}
@@ -899,7 +1009,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                                     </td>
                                                     <td className="px-6 py-4 text-center">
                                                         <div className="flex flex-col items-center">
-                                                            <span className="text-sm font-bold text-white">{(partnerStats.topPartners.find(tp => tp.id === p.id)?.eventCount || 0)}</span>
+                                                            <span className="text-sm font-bold text-white">{p.eventCount || 0}</span>
                                                             <span className="text-[10px] text-slate-500 uppercase tracking-tighter">Eventos creados</span>
                                                         </div>
                                                     </td>
@@ -927,12 +1037,24 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                                     <td className="px-6 py-4 text-right">
                                                         <div className="flex items-center justify-end gap-2">
                                                             <button
-                                                                onClick={() => setShowTopUp({ id: p.id, name: p.name })}
+                                                                onClick={() => setShowTopUp({ id: p.id, name: p.business_name || p.name })}
                                                                 className="text-[10px] font-black text-[#13ec80] border border-[#13ec80]/30 px-4 py-2 rounded-lg hover:bg-[#13ec80]/10 transition-all flex items-center gap-2"
                                                             >
                                                                 RECARGAR
                                                             </button>
-                                                            <button className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-500 hover:text-white hover:bg-white/5 transition-all">
+                                                            <button
+                                                                onClick={() => {
+                                                                    setEditingPartner(p);
+                                                                    setPartnerForm({
+                                                                        name: p.name || '',
+                                                                        company_name: p.company_name || p.business_name || '',
+                                                                        contact_email: p.contact_email || '',
+                                                                        contact_phone: (p as any).contact_phone || '',
+                                                                        is_active: p.is_active !== false
+                                                                    });
+                                                                }}
+                                                                className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-500 hover:text-white hover:bg-white/5 transition-all"
+                                                            >
                                                                 <span className="material-symbols-outlined !text-lg">settings</span>
                                                             </button>
                                                         </div>
@@ -1596,7 +1718,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                         </div>
                     )}
                 </div>
-            </main >
+            </main>
 
             {/* Create Partner Modal */}
             {
@@ -1665,6 +1787,105 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                 )
             }
 
+            {/* Partner Edit Modal */}
+            {editingPartner && (
+                <div className="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-black/90 backdrop-blur-xl">
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        className="bg-[#121413] border border-[#1f2b24] p-8 rounded-[32px] w-full max-w-lg shadow-[0_0_100px_rgba(0,0,0,1)] relative overflow-hidden"
+                    >
+                        {/* Status Light */}
+                        <div className={`absolute top-0 right-0 w-32 h-32 blur-[80px] opacity-20 pointer-events-none ${partnerForm.is_active ? 'bg-[#13ec80]' : 'bg-red-500'}`}></div>
+
+                        <div className="flex justify-between items-start mb-8 relative z-10">
+                            <div>
+                                <h3 className="text-2xl font-black text-white uppercase tracking-tight italic">Partner <span className="text-[#13ec80]">Settings</span></h3>
+                                <p className="text-slate-500 text-[10px] font-bold uppercase tracking-[3px] mt-1">Configuración Maestro de Canal</p>
+                            </div>
+                            <button
+                                onClick={() => setEditingPartner(null)}
+                                className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-slate-500 hover:text-white transition-colors"
+                            >
+                                <span className="material-symbols-outlined">close</span>
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleUpdatePartnerSettings} className="space-y-6 relative z-10">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="col-span-2">
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Razón Social / Empresa</label>
+                                    <input
+                                        className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-xl px-4 py-3 text-white outline-none focus:border-[#13ec80] transition-all"
+                                        value={partnerForm.company_name}
+                                        onChange={(e) => setPartnerForm({ ...partnerForm, company_name: e.target.value })}
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Nombre de Contacto</label>
+                                    <input
+                                        className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-xl px-4 py-3 text-white outline-none focus:border-[#13ec80] transition-all"
+                                        value={partnerForm.name}
+                                        onChange={(e) => setPartnerForm({ ...partnerForm, name: e.target.value })}
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Teléfono de Contacto</label>
+                                    <input
+                                        className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-xl px-4 py-3 text-white outline-none focus:border-[#13ec80] transition-all"
+                                        value={partnerForm.contact_phone}
+                                        onChange={(e) => setPartnerForm({ ...partnerForm, contact_phone: e.target.value })}
+                                        placeholder="+54 9 11..."
+                                    />
+                                </div>
+                                <div className="col-span-2">
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Email del Partner</label>
+                                    <input
+                                        className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-xl px-4 py-3 text-white/50 outline-none cursor-not-allowed"
+                                        value={partnerForm.contact_email}
+                                        readOnly
+                                    />
+                                    <p className="text-[9px] text-slate-600 mt-1 italic">* El email es el identificador único y no puede cambiarse.</p>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl border border-white/5">
+                                <div>
+                                    <p className="text-xs font-bold text-white uppercase italic">Estado de Cuenta</p>
+                                    <p className="text-[10px] text-slate-500 font-medium">Permitir acceso y operaciones</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setPartnerForm({ ...partnerForm, is_active: !partnerForm.is_active })}
+                                    className={`relative w-12 h-6 rounded-full transition-colors duration-300 ${partnerForm.is_active ? 'bg-[#13ec80]' : 'bg-slate-700'}`}
+                                >
+                                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-transform duration-300 ${partnerForm.is_active ? 'left-7' : 'left-1'}`}></div>
+                                </button>
+                            </div>
+
+                            <div className="flex gap-4 pt-4">
+                                <button
+                                    type="button"
+                                    onClick={() => handleDeletePartner(editingPartner.id)}
+                                    className="px-6 py-4 rounded-xl border border-red-500/30 text-red-500 text-[10px] font-black uppercase tracking-widest hover:bg-red-500/10 transition-all"
+                                >
+                                    Dar de Baja
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isSavingPartner}
+                                    className="flex-1 py-4 bg-[#13ec80] text-[#0a0c0b] font-black text-[10px] rounded-xl shadow-[0_10px_30px_rgba(19,236,128,0.2)] hover:scale-[1.02] transition-all disabled:opacity-50 uppercase tracking-widest"
+                                >
+                                    {isSavingPartner ? 'Sincronizando...' : 'Guardar Cambios'}
+                                </button>
+                            </div>
+                        </form>
+                    </motion.div>
+                </div>
+            )}
+
             {/* Top Up Modal */}
             {
                 showTopUp && (
@@ -1690,504 +1911,510 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
             }
 
             {/* Style Edit Modal - ADVANCED VERSION */}
-            {editingStyle && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6 bg-black/95 backdrop-blur-3xl overflow-hidden">
-                    <div className="bg-[#0a0c0b] border border-[#1f2b24] rounded-[40px] w-full max-w-5xl max-h-[90vh] shadow-[0_0_100px_rgba(0,0,0,1)] overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95 duration-300">
-                        {/* Left Side: Preview */}
-                        <div className="w-full md:w-[35%] bg-white/5 p-8 flex flex-col items-center justify-start border-r border-[#1f2b24] relative overflow-y-auto no-scrollbar">
-                            <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
-                                <div className="absolute top-[-100px] left-[-100px] w-[300px] h-[300px] bg-[#13ec80] blur-[150px] rounded-full"></div>
+            {
+                editingStyle && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6 bg-black/95 backdrop-blur-3xl overflow-hidden">
+                        <div className="bg-[#0a0c0b] border border-[#1f2b24] rounded-[40px] w-full max-w-5xl max-h-[90vh] shadow-[0_0_100px_rgba(0,0,0,1)] overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95 duration-300">
+                            {/* Left Side: Preview */}
+                            <div className="w-full md:w-[35%] bg-white/5 p-8 flex flex-col items-center justify-start border-r border-[#1f2b24] relative overflow-y-auto no-scrollbar">
+                                <div className="absolute top-0 left-0 w-full h-full opacity-10 pointer-events-none">
+                                    <div className="absolute top-[-100px] left-[-100px] w-[300px] h-[300px] bg-[#13ec80] blur-[150px] rounded-full"></div>
+                                </div>
+
+                                <div className="relative z-10 w-full mb-8">
+                                    <div className="aspect-[4/5] rounded-[32px] overflow-hidden border-2 border-[#13ec80]/30 shadow-2xl relative group">
+                                        <img
+                                            src={
+                                                !styleForm.image_url ? '/placeholder-style.jpg' :
+                                                    (styleForm.image_url.startsWith('http') || styleForm.image_url.startsWith('blob')) ? styleForm.image_url :
+                                                        (styleForm.image_url.startsWith('/') ? styleForm.image_url : `/${styleForm.image_url}`)
+                                            }
+                                            alt="Preview"
+                                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000 opacity-60 group-hover:opacity-100"
+                                            onError={(e) => {
+                                                const img = e.target as HTMLImageElement;
+                                                if (img.src.includes('placeholder')) return;
+                                                img.src = '/placeholder-style.jpg';
+                                            }}
+                                        />
+                                        <div className="absolute inset-0 bg-gradient-to-t from-[#0a0c0b] via-transparent to-transparent opacity-80"></div>
+                                        <div className="absolute inset-x-0 bottom-0 p-6 flex flex-col items-center">
+                                            <label className="w-12 h-12 bg-[#13ec80] rounded-full flex items-center justify-center cursor-pointer hover:scale-110 active:scale-95 transition-all shadow-[0_0_20px_rgba(19,236,128,0.4)] group/btn">
+                                                <span className="material-symbols-outlined text-[#0a0c0b] group-hover:rotate-90 transition-transform">add_a_photo</span>
+                                                <input
+                                                    type="file"
+                                                    className="hidden"
+                                                    accept="image/*"
+                                                    onChange={handleImageUpload}
+                                                />
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div className="mt-6 text-center">
+                                        <p className="text-[10px] font-black text-[#13ec80] uppercase tracking-[4px] mb-2">Protocolo Activo</p>
+                                        <h4 className="text-xl font-black text-white italic uppercase tracking-tighter">{styleForm.label || 'Nueva Identidad'}</h4>
+                                    </div>
+                                </div>
+
+                                <div className="w-full space-y-4 pt-4 border-t border-white/5">
+                                    <div className="flex justify-between items-center text-[8px] font-black text-slate-500 uppercase tracking-widest">
+                                        <span>Sync Status:</span>
+                                        <span className={loading ? "text-amber-400 animate-pulse" : "text-[#13ec80]"}>
+                                            {loading ? "PROCESANDO..." : "STANDBY"}
+                                        </span>
+                                    </div>
+                                    <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                                        <div className={`h-full bg-[#13ec80] transition-all duration-500 ${loading ? 'w-1/2 animate-pulse' : 'w-full opacity-50'}`}></div>
+                                    </div>
+                                </div>
+
+                                <div className="mt-auto pt-8 flex flex-col items-center">
+                                    <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest italic antialiased text-center">
+                                        IDENTITY PREVIEW MODULE <br />
+                                        <span className="text-[#13ec80]/40">V 1.5.0-STABLE</span>
+                                    </p>
+                                </div>
                             </div>
 
-                            <div className="relative z-10 w-full mb-8">
-                                <div className="aspect-[4/5] rounded-[32px] overflow-hidden border-2 border-[#13ec80]/30 shadow-2xl relative group">
-                                    <img
-                                        src={
-                                            !styleForm.image_url ? '/placeholder-style.jpg' :
-                                                (styleForm.image_url.startsWith('http') || styleForm.image_url.startsWith('blob')) ? styleForm.image_url :
-                                                    (styleForm.image_url.startsWith('/') ? styleForm.image_url : `/${styleForm.image_url}`)
-                                        }
-                                        alt="Preview"
-                                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-1000 opacity-60 group-hover:opacity-100"
-                                        onError={(e) => {
-                                            const img = e.target as HTMLImageElement;
-                                            if (img.src.includes('placeholder')) return;
-                                            img.src = '/placeholder-style.jpg';
-                                        }}
-                                    />
-                                    <div className="absolute inset-0 bg-gradient-to-t from-[#0a0c0b] via-transparent to-transparent opacity-80"></div>
-                                    <div className="absolute inset-x-0 bottom-0 p-6 flex flex-col items-center">
-                                        <label className="w-12 h-12 bg-[#13ec80] rounded-full flex items-center justify-center cursor-pointer hover:scale-110 active:scale-95 transition-all shadow-[0_0_20px_rgba(19,236,128,0.4)] group/btn">
-                                            <span className="material-symbols-outlined text-[#0a0c0b] group-hover:rotate-90 transition-transform">add_a_photo</span>
+                            {/* Right Side: Form */}
+                            <div className="flex-1 p-6 md:p-10 overflow-y-auto no-scrollbar">
+                                <div className="flex justify-between items-start mb-6">
+                                    <div>
+                                        <h3 className="text-xl md:text-2xl font-black text-white italic uppercase tracking-tighter">
+                                            {editingStyle === 'new' ? 'Initialize Protocol' : 'Sync Identity Data'}
+                                        </h3>
+                                        <p className="text-[8px] text-slate-500 font-bold uppercase tracking-[3px] mt-1 text-center md:text-left">Sintonización de Red Neuronal</p>
+                                    </div>
+                                    <button onClick={() => setEditingStyle(null)} className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-slate-500 hover:text-white transition-colors">
+                                        <span className="material-symbols-outlined !text-lg">close</span>
+                                    </button>
+                                </div>
+
+                                <div className="space-y-6">
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="space-y-1.5">
+                                            <label className="text-[9px] font-black text-[#13ec80] uppercase tracking-widest ml-1">Identity Handle (ID)</label>
                                             <input
-                                                type="file"
-                                                className="hidden"
-                                                accept="image/*"
-                                                onChange={handleImageUpload}
+                                                className="w-full bg-[#121413] border border-[#1f2b24] rounded-xl px-4 py-3 text-white outline-none focus:border-[#13ec80] font-mono text-xs"
+                                                value={styleForm.id}
+                                                disabled={editingStyle !== 'new'}
+                                                onChange={(e) => setStyleForm({ ...styleForm, id: e.target.value.toLowerCase() } as any)}
                                             />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Visual Title</label>
+                                            <input
+                                                className="w-full bg-[#121413] border border-[#1f2b24] rounded-xl px-4 py-3 text-white outline-none focus:border-[#13ec80] text-sm"
+                                                value={styleForm.label}
+                                                onChange={(e) => setStyleForm({ ...styleForm, label: e.target.value } as any)}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-1.5">
+                                        <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">System URL / Storage Path</label>
+                                        <div className="flex gap-2">
+                                            <input
+                                                className="flex-1 bg-[#121413] border border-[#1f2b24] rounded-xl px-4 py-3 text-white outline-none focus:border-[#13ec80] font-mono text-[10px]"
+                                                value={styleForm.image_url}
+                                                onChange={(e) => setStyleForm({ ...styleForm, image_url: e.target.value } as any)}
+                                            />
+                                            <button
+                                                onClick={() => {
+                                                    if (styleForm.image_url) {
+                                                        navigator.clipboard.writeText(styleForm.image_url);
+                                                        showToast('URL copiada al portapapeles');
+                                                    }
+                                                }}
+                                                className="px-3 bg-white/5 border border-white/10 rounded-xl text-slate-500 hover:text-[#13ec80] transition-colors"
+                                                title="Copiar URL"
+                                            >
+                                                <span className="material-symbols-outlined !text-sm">content_copy</span>
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="space-y-1.5">
+                                            <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Operational Category (Pack)</label>
+                                            <input
+                                                list="category-suggestions"
+                                                className="w-full bg-[#121413] border border-[#1f2b24] rounded-xl px-4 py-3 text-white outline-none focus:border-[#13ec80] text-xs"
+                                                placeholder="Escribir o seleccionar categoría..."
+                                                value={styleForm.category}
+                                                onChange={(e) => setStyleForm({ ...styleForm, category: e.target.value } as any)}
+                                            />
+                                            <datalist id="category-suggestions">
+                                                {Array.from(new Set(stylesMetadata.map(s => s.category).filter(Boolean).map(c => c.toLowerCase()))).map(cat => (
+                                                    <option key={cat} value={cat} />
+                                                ))}
+                                            </datalist>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Legacy Subcategory</label>
+                                            <input
+                                                list="subcategory-suggestions"
+                                                className="w-full bg-[#121413] border border-[#1f2b24] rounded-xl px-4 py-3 text-white outline-none focus:border-[#13ec80] font-mono text-[10px]"
+                                                value={(styleForm as any).subcategory}
+                                                onChange={(e) => setStyleForm({ ...styleForm, subcategory: e.target.value } as any)}
+                                            />
+                                            <datalist id="subcategory-suggestions">
+                                                {Array.from(new Set(stylesMetadata.filter(s => s.category?.toLowerCase() === styleForm.category?.toLowerCase()).map(s => s.subcategory).filter(Boolean))).map(sub => (
+                                                    <option key={sub} value={sub} />
+                                                ))}
+                                            </datalist>
+                                        </div>
+                                    </div>
+
+                                    {/* Visibility Toggle */}
+                                    <div className="bg-[#121413] border border-[#1f2b24] rounded-[24px] p-6 flex items-center justify-between group hover:border-[#13ec80]/30 transition-all">
+                                        <div className="flex items-center gap-4">
+                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${styleForm.is_active ? 'bg-[#13ec80]/10 text-[#13ec80]' : 'bg-slate-500/10 text-slate-500'}`}>
+                                                <span className="material-symbols-outlined">{styleForm.is_active ? 'visibility' : 'visibility_off'}</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-xs font-black text-white uppercase tracking-widest block">Visibility Status</span>
+                                                <span className="text-[10px] text-slate-500 font-bold uppercase">{styleForm.is_active ? 'Active in application' : 'Hidden from users'}</span>
+                                            </div>
+                                        </div>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                className="sr-only peer"
+                                                checked={styleForm.is_active}
+                                                onChange={(e) => setStyleForm({ ...styleForm, is_active: e.target.checked } as any)}
+                                            />
+                                            <div className="w-14 h-7 bg-white/5 border border-white/10 rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-[#13ec80] after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all"></div>
                                         </label>
                                     </div>
-                                </div>
-                                <div className="mt-6 text-center">
-                                    <p className="text-[10px] font-black text-[#13ec80] uppercase tracking-[4px] mb-2">Protocolo Activo</p>
-                                    <h4 className="text-xl font-black text-white italic uppercase tracking-tighter">{styleForm.label || 'Nueva Identidad'}</h4>
-                                </div>
-                            </div>
 
-                            <div className="w-full space-y-4 pt-4 border-t border-white/5">
-                                <div className="flex justify-between items-center text-[8px] font-black text-slate-500 uppercase tracking-widest">
-                                    <span>Sync Status:</span>
-                                    <span className={loading ? "text-amber-400 animate-pulse" : "text-[#13ec80]"}>
-                                        {loading ? "PROCESANDO..." : "STANDBY"}
-                                    </span>
-                                </div>
-                                <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
-                                    <div className={`h-full bg-[#13ec80] transition-all duration-500 ${loading ? 'w-1/2 animate-pulse' : 'w-full opacity-50'}`}></div>
-                                </div>
-                            </div>
+                                    <div className="bg-[#121413] border border-[#1f2b24] rounded-[24px] p-6 flex items-center justify-between group hover:border-[#ff5500]/30 transition-all">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-10 h-10 rounded-full bg-[#ff5500]/10 flex items-center justify-center text-[#ff5500]">
+                                                <span className="material-symbols-outlined">workspace_premium</span>
+                                            </div>
+                                            <span className="text-xs font-black text-white uppercase tracking-widest">Elevate to Premium Status (VIP Access Only)</span>
+                                        </div>
+                                        <label className="relative inline-flex items-center cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                className="sr-only peer"
+                                                checked={styleForm.is_premium}
+                                                onChange={(e) => setStyleForm({ ...styleForm, is_premium: e.target.checked } as any)}
+                                            />
+                                            <div className="w-14 h-7 bg-white/5 border border-white/10 rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-[#ff5500] after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all"></div>
+                                        </label>
+                                    </div>
 
-                            <div className="mt-auto pt-8 flex flex-col items-center">
-                                <p className="text-[9px] font-bold text-slate-600 uppercase tracking-widest italic antialiased text-center">
-                                    IDENTITY PREVIEW MODULE <br />
-                                    <span className="text-[#13ec80]/40">V 1.5.0-STABLE</span>
-                                </p>
-                            </div>
-                        </div>
-
-                        {/* Right Side: Form */}
-                        <div className="flex-1 p-6 md:p-10 overflow-y-auto no-scrollbar">
-                            <div className="flex justify-between items-start mb-6">
-                                <div>
-                                    <h3 className="text-xl md:text-2xl font-black text-white italic uppercase tracking-tighter">
-                                        {editingStyle === 'new' ? 'Initialize Protocol' : 'Sync Identity Data'}
-                                    </h3>
-                                    <p className="text-[8px] text-slate-500 font-bold uppercase tracking-[3px] mt-1 text-center md:text-left">Sintonización de Red Neuronal</p>
-                                </div>
-                                <button onClick={() => setEditingStyle(null)} className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-slate-500 hover:text-white transition-colors">
-                                    <span className="material-symbols-outlined !text-lg">close</span>
-                                </button>
-                            </div>
-
-                            <div className="space-y-6">
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="space-y-1.5">
-                                        <label className="text-[9px] font-black text-[#13ec80] uppercase tracking-widest ml-1">Identity Handle (ID)</label>
-                                        <input
-                                            className="w-full bg-[#121413] border border-[#1f2b24] rounded-xl px-4 py-3 text-white outline-none focus:border-[#13ec80] font-mono text-xs"
-                                            value={styleForm.id}
-                                            disabled={editingStyle !== 'new'}
-                                            onChange={(e) => setStyleForm({ ...styleForm, id: e.target.value.toLowerCase() } as any)}
+                                    <div className="space-y-2">
+                                        <div className="flex justify-between">
+                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Master Generation Prompt (Cerebro Core)</label>
+                                            <span className="text-[8px] font-bold text-[#13ec80] uppercase">Neural Network Ready</span>
+                                        </div>
+                                        <textarea
+                                            className="w-full bg-[#121413] border border-[#1f2b24] rounded-[32px] px-8 py-6 text-white outline-none focus:border-[#13ec80] text-sm leading-relaxed min-h-[120px] resize-none"
+                                            value={(styleForm as any).prompt}
+                                            onChange={(e) => setStyleForm({ ...styleForm, prompt: e.target.value } as any)}
                                         />
                                     </div>
-                                    <div className="space-y-1.5">
-                                        <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Visual Title</label>
-                                        <input
-                                            className="w-full bg-[#121413] border border-[#1f2b24] rounded-xl px-4 py-3 text-white outline-none focus:border-[#13ec80] text-sm"
-                                            value={styleForm.label}
-                                            onChange={(e) => setStyleForm({ ...styleForm, label: e.target.value } as any)}
-                                        />
-                                    </div>
-                                </div>
 
-                                <div className="space-y-1.5">
-                                    <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">System URL / Storage Path</label>
-                                    <div className="flex gap-2">
-                                        <input
-                                            className="flex-1 bg-[#121413] border border-[#1f2b24] rounded-xl px-4 py-3 text-white outline-none focus:border-[#13ec80] font-mono text-[10px]"
-                                            value={styleForm.image_url}
-                                            onChange={(e) => setStyleForm({ ...styleForm, image_url: e.target.value } as any)}
-                                        />
-                                        <button
-                                            onClick={() => {
-                                                if (styleForm.image_url) {
-                                                    navigator.clipboard.writeText(styleForm.image_url);
-                                                    showToast('URL copiada al portapapeles');
-                                                }
-                                            }}
-                                            className="px-3 bg-white/5 border border-white/10 rounded-xl text-slate-500 hover:text-[#13ec80] transition-colors"
-                                            title="Copiar URL"
-                                        >
-                                            <span className="material-symbols-outlined !text-sm">content_copy</span>
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="space-y-1.5">
-                                        <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Operational Category (Pack)</label>
-                                        <input
-                                            list="category-suggestions"
-                                            className="w-full bg-[#121413] border border-[#1f2b24] rounded-xl px-4 py-3 text-white outline-none focus:border-[#13ec80] text-xs"
-                                            placeholder="Escribir o seleccionar categoría..."
-                                            value={styleForm.category}
-                                            onChange={(e) => setStyleForm({ ...styleForm, category: e.target.value } as any)}
-                                        />
-                                        <datalist id="category-suggestions">
-                                            {Array.from(new Set(stylesMetadata.map(s => s.category).filter(Boolean).map(c => c.toLowerCase()))).map(cat => (
-                                                <option key={cat} value={cat} />
+                                    <div className="space-y-4">
+                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Tactical Tags</label>
+                                        <div className="flex flex-wrap gap-2 mb-4">
+                                            {(Array.isArray(styleForm.tags) ? styleForm.tags : String(styleForm.tags || '').split(',').filter(Boolean)).map((tag, idx) => (
+                                                <span key={idx} className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-[10px] font-bold text-slate-300 flex items-center gap-2">
+                                                    {tag.trim()}
+                                                    <button onClick={() => {
+                                                        const currentTags = (Array.isArray(styleForm.tags) ? styleForm.tags : String(styleForm.tags).split(',')).filter(t => t.trim() !== tag.trim());
+                                                        setStyleForm({ ...styleForm, tags: currentTags } as any);
+                                                    }} className="text-slate-600 hover:text-white transition-colors">×</button>
+                                                </span>
                                             ))}
-                                        </datalist>
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest ml-1">Legacy Subcategory</label>
-                                        <input
-                                            list="subcategory-suggestions"
-                                            className="w-full bg-[#121413] border border-[#1f2b24] rounded-xl px-4 py-3 text-white outline-none focus:border-[#13ec80] font-mono text-[10px]"
-                                            value={(styleForm as any).subcategory}
-                                            onChange={(e) => setStyleForm({ ...styleForm, subcategory: e.target.value } as any)}
-                                        />
-                                        <datalist id="subcategory-suggestions">
-                                            {Array.from(new Set(stylesMetadata.filter(s => s.category?.toLowerCase() === styleForm.category?.toLowerCase()).map(s => s.subcategory).filter(Boolean))).map(sub => (
-                                                <option key={sub} value={sub} />
-                                            ))}
-                                        </datalist>
-                                    </div>
-                                </div>
-
-                                {/* Visibility Toggle */}
-                                <div className="bg-[#121413] border border-[#1f2b24] rounded-[24px] p-6 flex items-center justify-between group hover:border-[#13ec80]/30 transition-all">
-                                    <div className="flex items-center gap-4">
-                                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${styleForm.is_active ? 'bg-[#13ec80]/10 text-[#13ec80]' : 'bg-slate-500/10 text-slate-500'}`}>
-                                            <span className="material-symbols-outlined">{styleForm.is_active ? 'visibility' : 'visibility_off'}</span>
                                         </div>
-                                        <div>
-                                            <span className="text-xs font-black text-white uppercase tracking-widest block">Visibility Status</span>
-                                            <span className="text-[10px] text-slate-500 font-bold uppercase">{styleForm.is_active ? 'Active in application' : 'Hidden from users'}</span>
-                                        </div>
-                                    </div>
-                                    <label className="relative inline-flex items-center cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            className="sr-only peer"
-                                            checked={styleForm.is_active}
-                                            onChange={(e) => setStyleForm({ ...styleForm, is_active: e.target.checked } as any)}
-                                        />
-                                        <div className="w-14 h-7 bg-white/5 border border-white/10 rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-[#13ec80] after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all"></div>
-                                    </label>
-                                </div>
-
-                                <div className="bg-[#121413] border border-[#1f2b24] rounded-[24px] p-6 flex items-center justify-between group hover:border-[#ff5500]/30 transition-all">
-                                    <div className="flex items-center gap-4">
-                                        <div className="w-10 h-10 rounded-full bg-[#ff5500]/10 flex items-center justify-center text-[#ff5500]">
-                                            <span className="material-symbols-outlined">workspace_premium</span>
-                                        </div>
-                                        <span className="text-xs font-black text-white uppercase tracking-widest">Elevate to Premium Status (VIP Access Only)</span>
-                                    </div>
-                                    <label className="relative inline-flex items-center cursor-pointer">
-                                        <input
-                                            type="checkbox"
-                                            className="sr-only peer"
-                                            checked={styleForm.is_premium}
-                                            onChange={(e) => setStyleForm({ ...styleForm, is_premium: e.target.checked } as any)}
-                                        />
-                                        <div className="w-14 h-7 bg-white/5 border border-white/10 rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-[#ff5500] after:content-[''] after:absolute after:top-[4px] after:left-[4px] after:bg-white after:rounded-full after:h-6 after:w-6 after:transition-all"></div>
-                                    </label>
-                                </div>
-
-                                <div className="space-y-2">
-                                    <div className="flex justify-between">
-                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Master Generation Prompt (Cerebro Core)</label>
-                                        <span className="text-[8px] font-bold text-[#13ec80] uppercase">Neural Network Ready</span>
-                                    </div>
-                                    <textarea
-                                        className="w-full bg-[#121413] border border-[#1f2b24] rounded-[32px] px-8 py-6 text-white outline-none focus:border-[#13ec80] text-sm leading-relaxed min-h-[120px] resize-none"
-                                        value={(styleForm as any).prompt}
-                                        onChange={(e) => setStyleForm({ ...styleForm, prompt: e.target.value } as any)}
-                                    />
-                                </div>
-
-                                <div className="space-y-4">
-                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Tactical Tags</label>
-                                    <div className="flex flex-wrap gap-2 mb-4">
-                                        {(Array.isArray(styleForm.tags) ? styleForm.tags : String(styleForm.tags || '').split(',').filter(Boolean)).map((tag, idx) => (
-                                            <span key={idx} className="bg-white/5 border border-white/10 rounded-lg px-3 py-1.5 text-[10px] font-bold text-slate-300 flex items-center gap-2">
-                                                {tag.trim()}
-                                                <button onClick={() => {
-                                                    const currentTags = (Array.isArray(styleForm.tags) ? styleForm.tags : String(styleForm.tags).split(',')).filter(t => t.trim() !== tag.trim());
-                                                    setStyleForm({ ...styleForm, tags: currentTags } as any);
-                                                }} className="text-slate-600 hover:text-white transition-colors">×</button>
-                                            </span>
-                                        ))}
-                                    </div>
-                                    <div className="flex gap-2">
-                                        <input
-                                            className="flex-1 bg-[#121413] border border-[#1f2b24] rounded-2xl px-5 py-4 text-white outline-none focus:border-[#13ec80]"
-                                            id="new-tag-input"
-                                            placeholder="Add tactical label..."
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter') {
-                                                    const input = e.target as HTMLInputElement;
+                                        <div className="flex gap-2">
+                                            <input
+                                                className="flex-1 bg-[#121413] border border-[#1f2b24] rounded-2xl px-5 py-4 text-white outline-none focus:border-[#13ec80]"
+                                                id="new-tag-input"
+                                                placeholder="Add tactical label..."
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        const input = e.target as HTMLInputElement;
+                                                        const newTag = input.value.trim();
+                                                        if (newTag) {
+                                                            const currentTags = String((styleForm as any).tags || '');
+                                                            setStyleForm({ ...styleForm, tags: currentTags ? `${currentTags}, ${newTag}` : newTag } as any);
+                                                            input.value = '';
+                                                        }
+                                                    }
+                                                }}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const input = document.getElementById('new-tag-input') as HTMLInputElement;
                                                     const newTag = input.value.trim();
                                                     if (newTag) {
                                                         const currentTags = String((styleForm as any).tags || '');
                                                         setStyleForm({ ...styleForm, tags: currentTags ? `${currentTags}, ${newTag}` : newTag } as any);
                                                         input.value = '';
                                                     }
-                                                }
-                                            }}
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                const input = document.getElementById('new-tag-input') as HTMLInputElement;
-                                                const newTag = input.value.trim();
-                                                if (newTag) {
-                                                    const currentTags = String((styleForm as any).tags || '');
-                                                    setStyleForm({ ...styleForm, tags: currentTags ? `${currentTags}, ${newTag}` : newTag } as any);
-                                                    input.value = '';
-                                                }
-                                            }}
-                                            className="bg-white/5 border border-white/10 text-white px-6 rounded-2xl font-black text-[10px] uppercase hover:bg-white/10 transition-all"
-                                        >
-                                            Add
-                                        </button>
+                                                }}
+                                                className="bg-white/5 border border-white/10 text-white px-6 rounded-2xl font-black text-[10px] uppercase hover:bg-white/10 transition-all"
+                                            >
+                                                Add
+                                            </button>
+                                        </div>
                                     </div>
-                                </div>
 
-                                <div className="pt-8 flex gap-4">
-                                    <button
-                                        onClick={async () => {
-                                            try {
-                                                setLoading(true);
-                                                // 1. Sync Prompt to identity_prompts
-                                                const { error: promptErr } = await supabase
-                                                    .from('identity_prompts')
-                                                    .upsert({
-                                                        id: styleForm.id,
-                                                        master_prompt: styleForm.prompt
-                                                    });
-
-                                                if (promptErr) throw promptErr;
-
-                                                // 2. Sync Metadata to styles_metadata
-                                                const payload = {
-                                                    id: styleForm.id,
-                                                    label: styleForm.label,
-                                                    category: styleForm.category,
-                                                    is_premium: styleForm.is_premium,
-                                                    tags: Array.isArray(styleForm.tags) ? styleForm.tags : String(styleForm.tags).split(',').map(t => t.trim()).filter(Boolean),
-                                                    subcategory: styleForm.subcategory,
-                                                    image_url: styleForm.image_url,
-                                                    is_active: styleForm.is_active,
-                                                    updated_at: new Date().toISOString()
-                                                };
-
-                                                console.log('Syncing identity metadata:', payload);
-
-                                                const { error: metaErr } = await supabase
-                                                    .from('styles_metadata')
-                                                    .upsert(payload);
-
-                                                if (metaErr) throw metaErr;
-
-                                                showToast('Identidad sincronizada en ambos núcleos');
-                                                setEditingStyle(null);
-                                                fetchData();
-                                            } catch (err: any) {
-                                                showToast('Sync Failure: ' + err.message, 'error');
-                                            } finally {
-                                                setLoading(false);
-                                            }
-                                        }}
-                                        className="flex-1 py-6 bg-gradient-to-r from-orange-600 to-[#ff5500] text-white font-black rounded-[32px] text-xs tracking-[4px] shadow-[0_20px_40px_rgba(255,85,0,0.3)] hover:scale-[1.02] active:scale-95 transition-all uppercase italic"
-                                    >
-                                        Finalize Protocol Sync
-                                    </button>
-                                    {editingStyle !== 'new' && (
+                                    <div className="pt-8 flex gap-4">
                                         <button
                                             onClick={async () => {
-                                                if (confirm('🚨 ¡ELIMINACIÓN CRÍTICA!\n\n¿Estás seguro de purgar esta identidad de todos los registros del motor?')) {
-                                                    try {
-                                                        setLoading(true);
-                                                        await Promise.all([
-                                                            supabase.from('styles_metadata').delete().eq('id', styleForm.id),
-                                                            supabase.from('identity_prompts').delete().eq('id', styleForm.id)
-                                                        ]);
-                                                        showToast('Protocolo purgado correctamente');
-                                                        setEditingStyle(null);
-                                                        fetchData();
-                                                    } catch (err: any) {
-                                                        console.error(err);
-                                                        showToast('Falla al purgar: ' + err.message, 'error');
-                                                    } finally {
-                                                        setLoading(false);
-                                                    }
+                                                try {
+                                                    setLoading(true);
+                                                    // 1. Sync Prompt to identity_prompts
+                                                    const { error: promptErr } = await supabase
+                                                        .from('identity_prompts')
+                                                        .upsert({
+                                                            id: styleForm.id,
+                                                            master_prompt: styleForm.prompt
+                                                        });
+
+                                                    if (promptErr) throw promptErr;
+
+                                                    // 2. Sync Metadata to styles_metadata
+                                                    const payload = {
+                                                        id: styleForm.id,
+                                                        label: styleForm.label,
+                                                        category: styleForm.category,
+                                                        is_premium: styleForm.is_premium,
+                                                        tags: Array.isArray(styleForm.tags) ? styleForm.tags : String(styleForm.tags).split(',').map(t => t.trim()).filter(Boolean),
+                                                        subcategory: styleForm.subcategory,
+                                                        image_url: styleForm.image_url,
+                                                        is_active: styleForm.is_active,
+                                                        updated_at: new Date().toISOString()
+                                                    };
+
+                                                    console.log('Syncing identity metadata:', payload);
+
+                                                    const { error: metaErr } = await supabase
+                                                        .from('styles_metadata')
+                                                        .upsert(payload);
+
+                                                    if (metaErr) throw metaErr;
+
+                                                    showToast('Identidad sincronizada en ambos núcleos');
+                                                    setEditingStyle(null);
+                                                    fetchData();
+                                                } catch (err: any) {
+                                                    showToast('Sync Failure: ' + err.message, 'error');
+                                                } finally {
+                                                    setLoading(false);
                                                 }
                                             }}
-                                            className="px-6 border border-red-500/30 text-red-500 rounded-2xl font-black text-[10px] uppercase hover:bg-red-500/10 transition-all"
-                                            disabled={loading}
+                                            className="flex-1 py-6 bg-gradient-to-r from-orange-600 to-[#ff5500] text-white font-black rounded-[32px] text-xs tracking-[4px] shadow-[0_20px_40px_rgba(255,85,0,0.3)] hover:scale-[1.02] active:scale-95 transition-all uppercase italic"
                                         >
-                                            Purge
+                                            Finalize Protocol Sync
                                         </button>
-                                    )}
-                                    <button
-                                        onClick={() => setEditingStyle(null)}
-                                        className="aspect-square w-16 bg-white/5 border border-white/10 rounded-[28px] flex items-center justify-center text-slate-500 hover:text-white transition-all"
-                                    >
-                                        <span className="material-symbols-outlined">query_stats</span>
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {editingUser && (
-                <div className="fixed inset-0 bg-black/90 backdrop-blur-xl z-[100] flex items-center justify-center p-6">
-                    <div className="bg-[#121413] border border-[#1f2b24] w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
-                        <div className="p-8 border-b border-[#1f2b24]">
-                            <h3 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-3">
-                                <span className="material-symbols-outlined text-blue-500">manage_accounts</span>
-                                Editar Usuario B2C
-                            </h3>
-                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">{editingUser.email}</p>
-                        </div>
-                        <form onSubmit={handleUpdateUser} className="p-8 space-y-6">
-                            <div className="grid grid-cols-2 gap-6">
-                                <div>
-                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Nombre Completo</label>
-                                    <input
-                                        type="text"
-                                        value={editingUser.full_name || ''}
-                                        onChange={e => setEditingUser({ ...editingUser, full_name: e.target.value })}
-                                        className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-xl px-4 py-3 text-white outline-none focus:border-blue-500 transition-colors"
-                                        placeholder="Nombre del usuario..."
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Créditos</label>
-                                    <input
-                                        type="number"
-                                        value={editingUser.credits}
-                                        onChange={e => setEditingUser({ ...editingUser, credits: parseInt(e.target.value) || 0 })}
-                                        className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-xl px-4 py-3 text-white outline-none focus:border-blue-500"
-                                    />
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Packs Desbloqueados</label>
-                                <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto p-4 bg-[#0a0c0b] rounded-xl border border-[#1f2b24] custom-scrollbar">
-                                    {Array.from(new Set(stylesMetadata.map(s => s.category))).filter(c => c).map(category => {
-                                        const isChecked = editingUser.unlocked_packs?.includes(category);
-                                        return (
-                                            <label key={category} className="flex items-center gap-3 cursor-pointer group">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={isChecked}
-                                                    onChange={e => {
-                                                        const packs = editingUser.unlocked_packs || [];
-                                                        if (e.target.checked) {
-                                                            setEditingUser({ ...editingUser, unlocked_packs: [...packs, category] });
-                                                        } else {
-                                                            setEditingUser({ ...editingUser, unlocked_packs: packs.filter(p => p !== category) });
+                                        {editingStyle !== 'new' && (
+                                            <button
+                                                onClick={async () => {
+                                                    if (confirm('🚨 ¡ELIMINACIÓN CRÍTICA!\n\n¿Estás seguro de purgar esta identidad de todos los registros del motor?')) {
+                                                        try {
+                                                            setLoading(true);
+                                                            await Promise.all([
+                                                                supabase.from('styles_metadata').delete().eq('id', styleForm.id),
+                                                                supabase.from('identity_prompts').delete().eq('id', styleForm.id)
+                                                            ]);
+                                                            showToast('Protocolo purgado correctamente');
+                                                            setEditingStyle(null);
+                                                            fetchData();
+                                                        } catch (err: any) {
+                                                            console.error(err);
+                                                            showToast('Falla al purgar: ' + err.message, 'error');
+                                                        } finally {
+                                                            setLoading(false);
                                                         }
-                                                    }}
-                                                    className="hidden"
-                                                />
-                                                <div className={`w-4 h-4 rounded border ${isChecked ? 'bg-blue-600 border-blue-600' : 'border-[#1f2b24] group-hover:border-slate-600'} flex items-center justify-center transition-all`}>
-                                                    {isChecked && <span className="material-symbols-outlined !text-[12px] text-white">check</span>}
-                                                </div>
-                                                <span className={`text-[11px] uppercase font-bold tracking-tight ${isChecked ? 'text-white' : 'text-slate-500'}`}>{category}</span>
-                                            </label>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-
-                            <div className="flex gap-4 pt-4">
-                                <button
-                                    type="button"
-                                    onClick={() => setEditingUser(null)}
-                                    className="flex-1 px-6 py-4 rounded-xl font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all uppercase text-[10px] tracking-widest"
-                                >
-                                    Cancelar
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={isSavingUser}
-                                    className="flex-1 px-6 py-4 bg-blue-600 text-white rounded-xl font-black uppercase text-[10px] tracking-[2px] shadow-lg shadow-blue-500/20 hover:scale-[1.02] transition-all disabled:opacity-50"
-                                >
-                                    {isSavingUser ? 'GUARDANDO...' : 'GUARDAR CAMBIOS'}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
-
-            {showNewUserModal && (
-                <div className="fixed inset-0 bg-black/90 backdrop-blur-xl z-[100] flex items-center justify-center p-6">
-                    <div className="bg-[#121413] border border-[#1f2b24] w-full max-w-md rounded-3xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
-                        <div className="p-8 border-b border-[#1f2b24]">
-                            <h3 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-3">
-                                <span className="material-symbols-outlined text-blue-500">person_add</span>
-                                Nuevo Usuario B2C
-                            </h3>
-                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Alta de cuenta pública y créditos</p>
-                        </div>
-                        <form onSubmit={handleCreateUser} className="p-8 space-y-6">
-                            <div>
-                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Email del Usuario</label>
-                                <input
-                                    type="email"
-                                    required
-                                    value={newUserForm.email}
-                                    onChange={e => setNewUserForm({ ...newUserForm, email: e.target.value })}
-                                    className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-xl px-4 py-3 text-white outline-none focus:border-blue-500 transition-colors"
-                                    placeholder="ejemplo@usuario.com"
-                                />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Créditos Iniciales</label>
-                                    <input
-                                        type="number"
-                                        required
-                                        value={newUserForm.credits}
-                                        onChange={e => setNewUserForm({ ...newUserForm, credits: parseInt(e.target.value) })}
-                                        className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-xl px-4 py-3 text-white outline-none focus:border-blue-500"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Rol Asignado</label>
-                                    <div className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-xl px-4 py-3 text-slate-400 text-xs font-bold uppercase tracking-widest">
-                                        USUARIO B2C
+                                                    }
+                                                }}
+                                                className="px-6 border border-red-500/30 text-red-500 rounded-2xl font-black text-[10px] uppercase hover:bg-red-500/10 transition-all"
+                                                disabled={loading}
+                                            >
+                                                Purge
+                                            </button>
+                                        )}
+                                        <button
+                                            onClick={() => setEditingStyle(null)}
+                                            className="aspect-square w-16 bg-white/5 border border-white/10 rounded-[28px] flex items-center justify-center text-slate-500 hover:text-white transition-all"
+                                        >
+                                            <span className="material-symbols-outlined">query_stats</span>
+                                        </button>
                                     </div>
                                 </div>
                             </div>
-                            <div>
-                                <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Packs Desbloqueados (Separar por coma)</label>
-                                <input
-                                    type="text"
-                                    value={newUserForm.packs}
-                                    onChange={e => setNewUserForm({ ...newUserForm, packs: e.target.value })}
-                                    className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-xl px-4 py-3 text-white outline-none focus:border-blue-500"
-                                    placeholder="Formula 1, John Wick, Magia..."
-                                />
-                                <p className="text-[9px] text-slate-600 mt-2 italic">* Los nombres deben coincidir con la subcategoría en el Motor de Estilos.</p>
-                            </div>
-                            <div className="flex gap-4 pt-4">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowNewUserModal(false)}
-                                    className="flex-1 px-6 py-4 rounded-xl font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all uppercase text-[10px] tracking-widest"
-                                >
-                                    Cancelar
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={isSavingUser}
-                                    className="flex-1 px-6 py-4 bg-blue-600 text-white rounded-xl font-black uppercase text-[10px] tracking-[2px] shadow-lg shadow-blue-500/20 hover:scale-[1.02] transition-all disabled:opacity-50"
-                                >
-                                    {isSavingUser ? 'CREANDO...' : 'CREAR USUARIO'}
-                                </button>
-                            </div>
-                        </form>
+                        </div>
                     </div>
-                </div>
-            )}
+                )
+            }
+
+            {
+                editingUser && (
+                    <div className="fixed inset-0 bg-black/90 backdrop-blur-xl z-[100] flex items-center justify-center p-6">
+                        <div className="bg-[#121413] border border-[#1f2b24] w-full max-w-lg rounded-3xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+                            <div className="p-8 border-b border-[#1f2b24]">
+                                <h3 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-3">
+                                    <span className="material-symbols-outlined text-blue-500">manage_accounts</span>
+                                    Editar Usuario B2C
+                                </h3>
+                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">{editingUser.email}</p>
+                            </div>
+                            <form onSubmit={handleUpdateUser} className="p-8 space-y-6">
+                                <div className="grid grid-cols-2 gap-6">
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Nombre Completo</label>
+                                        <input
+                                            type="text"
+                                            value={editingUser.full_name || ''}
+                                            onChange={e => setEditingUser({ ...editingUser, full_name: e.target.value })}
+                                            className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-xl px-4 py-3 text-white outline-none focus:border-blue-500 transition-colors"
+                                            placeholder="Nombre del usuario..."
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Créditos</label>
+                                        <input
+                                            type="number"
+                                            value={editingUser.credits}
+                                            onChange={e => setEditingUser({ ...editingUser, credits: parseInt(e.target.value) || 0 })}
+                                            className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-xl px-4 py-3 text-white outline-none focus:border-blue-500"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Packs Desbloqueados</label>
+                                    <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto p-4 bg-[#0a0c0b] rounded-xl border border-[#1f2b24] custom-scrollbar">
+                                        {Array.from(new Set(stylesMetadata.map(s => s.category))).filter(c => c).map(category => {
+                                            const isChecked = editingUser.unlocked_packs?.includes(category);
+                                            return (
+                                                <label key={category} className="flex items-center gap-3 cursor-pointer group">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={isChecked}
+                                                        onChange={e => {
+                                                            const packs = editingUser.unlocked_packs || [];
+                                                            if (e.target.checked) {
+                                                                setEditingUser({ ...editingUser, unlocked_packs: [...packs, category] });
+                                                            } else {
+                                                                setEditingUser({ ...editingUser, unlocked_packs: packs.filter(p => p !== category) });
+                                                            }
+                                                        }}
+                                                        className="hidden"
+                                                    />
+                                                    <div className={`w-4 h-4 rounded border ${isChecked ? 'bg-blue-600 border-blue-600' : 'border-[#1f2b24] group-hover:border-slate-600'} flex items-center justify-center transition-all`}>
+                                                        {isChecked && <span className="material-symbols-outlined !text-[12px] text-white">check</span>}
+                                                    </div>
+                                                    <span className={`text-[11px] uppercase font-bold tracking-tight ${isChecked ? 'text-white' : 'text-slate-500'}`}>{category}</span>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-4 pt-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setEditingUser(null)}
+                                        className="flex-1 px-6 py-4 rounded-xl font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all uppercase text-[10px] tracking-widest"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={isSavingUser}
+                                        className="flex-1 px-6 py-4 bg-blue-600 text-white rounded-xl font-black uppercase text-[10px] tracking-[2px] shadow-lg shadow-blue-500/20 hover:scale-[1.02] transition-all disabled:opacity-50"
+                                    >
+                                        {isSavingUser ? 'GUARDANDO...' : 'GUARDAR CAMBIOS'}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )
+            }
+
+            {
+                showNewUserModal && (
+                    <div className="fixed inset-0 bg-black/90 backdrop-blur-xl z-[100] flex items-center justify-center p-6">
+                        <div className="bg-[#121413] border border-[#1f2b24] w-full max-w-md rounded-3xl overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200">
+                            <div className="p-8 border-b border-[#1f2b24]">
+                                <h3 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-3">
+                                    <span className="material-symbols-outlined text-blue-500">person_add</span>
+                                    Nuevo Usuario B2C
+                                </h3>
+                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Alta de cuenta pública y créditos</p>
+                            </div>
+                            <form onSubmit={handleCreateUser} className="p-8 space-y-6">
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Email del Usuario</label>
+                                    <input
+                                        type="email"
+                                        required
+                                        value={newUserForm.email}
+                                        onChange={e => setNewUserForm({ ...newUserForm, email: e.target.value })}
+                                        className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-xl px-4 py-3 text-white outline-none focus:border-blue-500 transition-colors"
+                                        placeholder="ejemplo@usuario.com"
+                                    />
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Créditos Iniciales</label>
+                                        <input
+                                            type="number"
+                                            required
+                                            value={newUserForm.credits}
+                                            onChange={e => setNewUserForm({ ...newUserForm, credits: parseInt(e.target.value) })}
+                                            className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-xl px-4 py-3 text-white outline-none focus:border-blue-500"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Rol Asignado</label>
+                                        <div className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-xl px-4 py-3 text-slate-400 text-xs font-bold uppercase tracking-widest">
+                                            USUARIO B2C
+                                        </div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-2">Packs Desbloqueados (Separar por coma)</label>
+                                    <input
+                                        type="text"
+                                        value={newUserForm.packs}
+                                        onChange={e => setNewUserForm({ ...newUserForm, packs: e.target.value })}
+                                        className="w-full bg-[#0a0c0b] border border-[#1f2b24] rounded-xl px-4 py-3 text-white outline-none focus:border-blue-500"
+                                        placeholder="Formula 1, John Wick, Magia..."
+                                    />
+                                    <p className="text-[9px] text-slate-600 mt-2 italic">* Los nombres deben coincidir con la subcategoría en el Motor de Estilos.</p>
+                                </div>
+                                <div className="flex gap-4 pt-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowNewUserModal(false)}
+                                        className="flex-1 px-6 py-4 rounded-xl font-bold text-slate-400 hover:text-white hover:bg-white/5 transition-all uppercase text-[10px] tracking-widest"
+                                    >
+                                        Cancelar
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        disabled={isSavingUser}
+                                        className="flex-1 px-6 py-4 bg-blue-600 text-white rounded-xl font-black uppercase text-[10px] tracking-[2px] shadow-lg shadow-blue-500/20 hover:scale-[1.02] transition-all disabled:opacity-50"
+                                    >
+                                        {isSavingUser ? 'CREANDO...' : 'CREAR USUARIO'}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                )
+            }
 
             <style>{`
                 .custom-scrollbar::-webkit-scrollbar {
@@ -2226,7 +2453,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                     </motion.div>
                 )}
             </AnimatePresence>
-        </div >
+        </div>
     );
 };
 

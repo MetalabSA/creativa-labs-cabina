@@ -114,15 +114,7 @@ export const BubbleMenu: React.FC<BubbleMenuProps> = ({
                                     className="px-4 pb-6"
                                 >
                                     <div className="space-y-2 mt-4">
-                                        {(profile?.is_master || profile?.role === 'master' || profile?.role === 'partner' || profile?.role === 'admin') && (
-                                            <MenuItem
-                                                icon={Shield}
-                                                label="Dashboard Admin"
-                                                onClick={() => window.location.href = '/dashboard.html'}
-                                                active={false}
-                                                highlight
-                                            />
-                                        )}
+
 
 
 

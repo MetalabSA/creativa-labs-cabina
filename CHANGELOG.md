@@ -25,6 +25,42 @@
 
 ---
 
+## v3.3.0 — 22 de Febrero de 2026
+
+### 🛡️ Estabilización y Mejoras del Panel Admin
+
+Este ciclo se centró en la resolución de fallos críticos de arquitectura y el refinamiento de la experiencia de gestión para Partners y Administradores.
+
+---
+
+### ✅ Nuevas funcionalidades y Mejoras
+
+#### 🔄 Sincronización y Edición de Partners (Ojo de Águila)
+- **Editor Maestro de Partners**: Se habilitó la funcionalidad completa del icono ⚙️ en la tabla de socios.
+- **Gestión de Identidad**: Permite modificar Razón Social, Contacto y Teléfono de cada socio.
+- **Sistema de Baja**: Implementada la lógica de desactivación de cuentas ("Dar de Baja") bajo demanda.
+- **Normalización de Datos**: Se implementó una lógica robusta para la comparación de identificadores de partners, resolviendo problemas de visibilidad en cuentas específicas.
+- **Blindaje de Interfaz**: Se agregaron guardas para prevenir errores de renderizado ("pantalla negra") cuando se encuentran datos incompletos en la base de datos.
+- **Merge de Perfiles**: Ahora el panel Admin unifica correctamente la información de la tabla `profiles` con la tabla `partners`.
+
+#### 📦 Empaquetado y Despliegue
+- **Versión de Producción Validada**: El proceso de build (`npm run build`) ha sido optimizado y verificado.
+- **Estabilidad de Dominios**: Confirmado el correcto funcionamiento del ruteo inteligente basado en subdominios (`app.` para la App y `kiosk.` para el Dashboard).
+
+#### 🛠️ Core IA (Cabina Vision)
+- **Polling de Rescate**: Frontend actualizado para manejar timeouts de forma elegante, permitiendo la recuperación asíncrona de fotos generadas.
+- **Bypass JWT**: Redespliegue de la Edge Function con política `--no-verify-jwt` para garantizar el acceso a invitados de eventos.
+
+### 🔧 Archivos modificados
+
+| Archivo | Cambio |
+|---------|--------|
+| `REGISTRO-AVANCES.md` | Actualización de hitos y confirmación de estabilidad |
+| `src/components/dashboards/Admin.tsx` | Fixes de casing y guardas de datos nulos |
+| `src/App.tsx` | Mejoras en el carrusel de categorías y gestión de timeouts |
+
+---
+
 ## v3.2.0 — 18 de Febrero de 2026
 
 ### 🏢 Partner Dashboard + Marca Blanca (White Label)

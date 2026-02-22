@@ -114,5 +114,34 @@ ALTER TABLE events ADD COLUMN IF NOT EXISTS client_access_pin text;
 CREATE INDEX IF NOT EXISTS idx_events_client_email ON events(client_email);
 ```
 
+### 🗓️ 22 de Febrero 2024 - Sincronización Admin & Mejoras UI Premium
+
+#### 🔧 Sincronización y Visibilidad (Fixes Críticos)
+- **Normalización de Casing**: Implementada comparación `toLowerCase()` en `Admin.tsx` y `App.tsx` para registros de control de visibilidad. Esto garantiza que desactivar una categoría (ej: "Formula 1") funcione correctamente aunque en la DB esté como "formula 1".
+- **Rescate de "Cartoon"**: Eliminada la palabra "cartoon" de la lista negra `excludeKeywords` en `Admin.tsx`. La categoría y sus estilos ahora son gestionables desde el panel.
+- **Lógica Anti-Duplicados**: Agregada función `uniqueByLabel` en la App para fusionar visualmente categorías duplicadas (ej: "Cartoon" y "CARTOON") que venían de la base de datos.
+
+#### 🎨 Interfaz de Usuario (App B2C)
+- **Carrusel de Categorías Premium**: Rediseñado el filtro de estilos con un carrusel que incluye:
+  - Flechas de navegación (Next/Prev) dinámicas.
+  - Efectos de desvanecimiento (Fade) en los bordes para un look de alta gama.
+  - Scroll suave (Smooth scrolling) y optimizado para múltiples categorías.
+- **Limpieza de Menú**: Eliminado el acceso a "Dashboard Admin" desde el `BubbleMenu` de la app pública para mantener la separación de entornos y evitar confusiones del usuario final.
+
+### 🗓️ 22 de Febrero 2026 - Confirmación de Estabilidad y Despliegue
+
+#### ✅ Sincronización de Partners (OK)
+- Se confirma que la sincronización de datos de Partners en el panel de administración está funcionando correctamente. Los registros vinculados desde `profiles` y la tabla `partners` se visualizan sin errores.
+
+#### ⚙️ Gestión de Partners Avanzada (NUEVO)
+- **Editor de Socios**: Implementado el modal de ajustes para partners (icono ⚙️).
+- **Control de Datos**: Capacidad para editar Razón Social, Nombre de Contacto y Teléfono de contacto.
+- **Baja de Socios**: Implementada función de "Dar de Baja" y toggle de "Estado de Cuenta" para gestionar el acceso de forma segura.
+- **Estadísticas en Tiempo Real**: Sincronización de conteo de eventos y créditos directamente en la tabla de administración.
+
+#### 📦 Empaquetado de Versión (OK)
+- El proceso de build y empaquetado para despliegue está validado y operativo. La separación de entornos (`app.` y `kiosk.`) se mantiene estable tras las últimas correcciones de rutas.
+
 ---
-*Documento generado por Antigravity para mantener la persistencia del proyecto.*
+
+*Documento actualizado con el feedback del usuario.*

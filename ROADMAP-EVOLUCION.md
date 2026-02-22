@@ -115,4 +115,12 @@ Para mantener un mantenimiento bajo pero gran escalabilidad:
 - ✅ **Visual Polish**: Refinamiento de la estética de carga y transiciones.
 
 ---
-> 💡 **Nota**: No eliminaremos nada, solo moveremos las "piezas" a su lugar correcto para que el sistema sea escalable a miles de eventos simultáneos.
+
+## 2026-02-22 (Hoy) - Mantenimiento & Estabilización de Plataforma
+- ✅ **Sincronización Eagle-Eye**: Validación completa de la lógica de sincronización de Partners entre perfiles de usuario y tabla de negocio.
+- ✅ **Gestión de Partners Avanzada**: Implementación del editor de socios (⚙️) con soporte para edición de contacto, razón social y desactivación de cuentas (Baja).
+- ✅ **Versión Estable (v3.3.1)**: Empaquetado y build de producción verificado para despliegue en subdominios.
+- ✅ **Core Resilience**: Confirmado el bypass de autenticación (JWT) para invitados en eventos, permitiendo un flujo de generación sin fricciones.
+
+---
+> 💡 **Nota**: La plataforma ha alcanzado un estado de madurez operativa alto. El foco ahora se desplaza hacia la expansión de estilos IA y optimización de costes de generación.

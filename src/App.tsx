@@ -103,8 +103,8 @@ const App: React.FC = () => {
     // 1. Map static identities and check for overrides (Individual, Subcategory, Category)
     const staticStyles = IDENTITIES.map(style => {
       const individualMeta = stylesMetadata.find((m: any) => m.id === style.id);
-      const subCatMeta = stylesMetadata.find((m: any) => m.id === style.subCategory);
-      const catMeta = stylesMetadata.find((m: any) => m.id === style.category);
+      const subCatMeta = stylesMetadata.find((m: any) => m.id?.toLowerCase() === style.subCategory?.toLowerCase());
+      const catMeta = stylesMetadata.find((m: any) => m.id?.toLowerCase() === style.category?.toLowerCase());
 
       // Inheritance logic for visibility: Category -> Subcategory -> Individual
       let isActive = style.isActive ?? true;
@@ -126,8 +126,8 @@ const App: React.FC = () => {
       .filter((m: any) => m.label && m.image_url) // Must have label and image to be considered a style
       .map((m: any) => {
         // Also check category level overrides for these custom styles
-        const catMeta = stylesMetadata.find((cat: any) => cat.id === m.category);
-        const subCatMeta = stylesMetadata.find((sub: any) => sub.id === m.subcategory);
+        const catMeta = stylesMetadata.find((cat: any) => cat.id?.toLowerCase() === m.category?.toLowerCase());
+        const subCatMeta = stylesMetadata.find((sub: any) => sub.id?.toLowerCase() === m.subcategory?.toLowerCase());
 
         let isActive = m.is_active ?? true;
         if (catMeta && catMeta.is_active === false) isActive = false;
@@ -196,9 +196,16 @@ const App: React.FC = () => {
     });
 
     // Merge with static 'all' and maintain order if possible
+    const tempCats = dynamicCats.filter(c => c.id !== 'all');
+
+    // Filter duplicates by label (Case Insensitive)
+    const uniqueByLabel = tempCats.filter((cat, index, self) =>
+      index === self.findIndex((t) => t.label.toLowerCase() === cat.label.toLowerCase())
+    );
+
     return [
       CATEGORIES.find(c => c.id === 'all')!,
-      ...dynamicCats.filter(c => c.id !== 'all')
+      ...uniqueByLabel
     ];
   }, [availableIdentities]);
 
@@ -1406,34 +1413,75 @@ const App: React.FC = () => {
                 </div>
               )}
 
-              {/* Dynamic Category Filter Bar */}
-              <div className="flex gap-4 overflow-x-auto pb-8 no-scrollbar -mx-4 px-4 mb-16">
-                {dynamicCategories.map((cat) => (
-                  <button
-                    key={cat.id}
-                    onClick={() => setActiveCategory(cat.id)}
-                    className={`flex-shrink-0 flex items-center gap-3 px-8 py-4 rounded-2xl font-black text-[10px] tracking-[4px] uppercase transition-all duration-500
-                      ${activeCategory === cat.id
-                        ? 'bg-accent text-white shadow-[0_0_40px_var(--accent-glow)] scale-105 border-accent'
-                        : 'bg-white/5 text-white/40 border border-white/5 hover:bg-white/10 hover:border-white/20'}`}
-                  >
-                    <cat.icon className={`w-4 h-4 ${activeCategory === cat.id ? 'animate-pulse' : 'opacity-40'}`} />
-                    {cat.label}
-                  </button>
-                ))}
+              {/* Category Filters with Premium Navigation */}
+              <div className="relative mb-16 max-w-5xl mx-auto px-4 group/carousel">
+                {/* Horizontal Scroll with Arrows */}
+                <div className="relative overflow-hidden">
+                  {/* Left Fade */}
+                  <div className="absolute left-0 top-0 bottom-0 w-16 bg-gradient-to-r from-[#050505] to-transparent z-10 pointer-events-none opacity-0 group-hover/carousel:opacity-100 transition-opacity duration-500" />
 
-                {!eventConfig && (
-                  <button
-                    onClick={() => setActiveCategory('favorites')}
-                    className={`flex-shrink-0 flex items-center gap-3 px-8 py-4 rounded-2xl border-2 transition-all duration-500
-                      ${activeCategory === 'favorites'
-                        ? 'bg-gradient-to-r from-pink-500 to-rose-500 border-pink-500 text-white shadow-[0_0_30px_rgba(244,63,94,0.3)] scale-105'
-                        : 'bg-white/5 border-white/5 text-white/40 hover:text-pink-400 hover:border-pink-500/30'}`}
+                  {/* Scroll Container */}
+                  <div
+                    id="category-scroll-container"
+                    className="flex gap-4 overflow-x-auto no-scrollbar scroll-smooth py-4 px-8"
                   >
-                    <Heart className={`w-5 h-5 ${activeCategory === 'favorites' ? 'fill-current animate-pulse' : ''}`} />
-                    <span className="font-black tracking-[2px] uppercase text-[10px]">Favoritos</span>
-                  </button>
-                )}
+                    {[
+                      ...dynamicCategories.filter(c => c.id === 'all'),
+                      ...dynamicCategories.filter(c => c.id !== 'all').sort((a, b) => a.label.localeCompare(b.label))
+                    ].map((cat) => (
+                      <button
+                        key={cat.id}
+                        onClick={() => {
+                          setActiveCategory(cat.id);
+                          setSearchQuery('');
+                        }}
+                        className={`flex-shrink-0 flex items-center gap-3 px-8 py-4 rounded-2xl font-black text-[10px] tracking-[4px] uppercase transition-all duration-500 whitespace-nowrap border
+                          ${activeCategory === cat.id
+                            ? 'bg-accent text-white shadow-[0_0_40px_var(--accent-glow)] scale-105 border-accent'
+                            : 'bg-white/5 text-white/40 border-white/5 hover:bg-white/10 hover:border-white/20 hover:text-white'}`}
+                      >
+                        <cat.icon className={`w-4 h-4 ${activeCategory === cat.id ? 'animate-pulse text-white' : 'opacity-40'}`} />
+                        {cat.label}
+                      </button>
+                    ))}
+
+                    {!eventConfig && (
+                      <button
+                        onClick={() => setActiveCategory('favorites')}
+                        className={`flex-shrink-0 flex items-center gap-3 px-8 py-4 rounded-2xl border transition-all duration-500 whitespace-nowrap
+                          ${activeCategory === 'favorites'
+                            ? 'bg-gradient-to-r from-pink-500 to-rose-500 border-pink-500 text-white shadow-[0_0_30px_rgba(244,63,94,0.3)] scale-105'
+                            : 'bg-white/5 border-white/5 text-white/40 hover:text-pink-400 hover:border-pink-500/30'}`}
+                      >
+                        <Heart className={`w-5 h-5 ${activeCategory === 'favorites' ? 'fill-current animate-pulse text-white' : 'opacity-40'}`} />
+                        <span className="font-black tracking-[2px] uppercase text-[10px]">Favoritos</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Right Fade */}
+                  <div className="absolute right-0 top-0 bottom-0 w-16 bg-gradient-to-l from-[#050505] to-transparent z-10 pointer-events-none opacity-0 group-hover/carousel:opacity-100 transition-opacity duration-500" />
+                </div>
+
+                {/* Navigation Arrows */}
+                <button
+                  onClick={() => {
+                    const el = document.getElementById('category-scroll-container');
+                    if (el) el.scrollLeft -= 300;
+                  }}
+                  className="absolute left-[-10px] top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/60 border border-white/10 backdrop-blur-xl flex items-center justify-center text-white opacity-0 group-hover/carousel:opacity-100 transition-all hover:bg-accent hover:border-accent hover:scale-110 shadow-2xl z-20"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => {
+                    const el = document.getElementById('category-scroll-container');
+                    if (el) el.scrollLeft += 300;
+                  }}
+                  className="absolute right-[-10px] top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-black/60 border border-white/10 backdrop-blur-xl flex items-center justify-center text-white opacity-0 group-hover/carousel:opacity-100 transition-all hover:bg-accent hover:border-accent hover:scale-110 shadow-2xl z-20"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
               </div>
 
               {/* Grouped Identities */}
