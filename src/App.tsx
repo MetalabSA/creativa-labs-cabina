@@ -146,6 +146,25 @@ const App: React.FC = () => {
       .filter(id => (id.usageCount || 0) > 0);
   }, [availableIdentities]);
 
+  // Dynamic Categories calculation (Real-time sync)
+  const dynamicCategories = React.useMemo(() => {
+    const uniqueCategoryIds = Array.from(new Set(availableIdentities.map(id => id.category).filter(Boolean)));
+    const dynamicCats = uniqueCategoryIds.map(catId => {
+      const staticCat = CATEGORIES.find(c => c.id.toLowerCase() === catId?.toLowerCase());
+      return {
+        id: catId!,
+        label: staticCat?.label || (catId!.charAt(0).toUpperCase() + catId!.slice(1)),
+        icon: staticCat?.icon || Sparkles
+      };
+    });
+
+    // Merge with static 'all' and maintain order if possible
+    return [
+      CATEGORIES.find(c => c.id === 'all')!,
+      ...dynamicCats.filter(c => c.id !== 'all')
+    ];
+  }, [availableIdentities]);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -178,6 +197,28 @@ const App: React.FC = () => {
 
   useEffect(() => {
     fetchStylesMetadata();
+
+    // --- REALTIME SUBSCRIPTION ---
+    const channel = supabase
+      .channel('styles_sync')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'styles_metadata'
+        },
+        (payload) => {
+          console.log('Realtime update received for styles_metadata:', payload);
+          // Simple approach: re-fetch all metadata to stay consistent
+          fetchStylesMetadata();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [showAdmin]);
 
   useEffect(() => {
@@ -1036,7 +1077,7 @@ const App: React.FC = () => {
             await supabase.auth.signOut();
             window.location.href = '/';
           }}
-          categories={CATEGORIES}
+          categories={dynamicCategories}
           currentView={appStep}
         />
       ) : null}
@@ -1328,35 +1369,32 @@ const App: React.FC = () => {
                 </div>
               )}
 
-              {/* Category Selector */}
-              <div className="flex flex-wrap justify-center gap-4 mb-16">
-                {(eventConfig
-                  ? CATEGORIES.filter(cat => cat.id === 'all' || availableIdentities.some((id: any) => id.category === cat.id))
-                  : CATEGORIES
-                ).map((cat) => (
+              {/* Dynamic Category Filter Bar */}
+              <div className="flex gap-4 overflow-x-auto pb-8 no-scrollbar -mx-4 px-4 mb-16">
+                {dynamicCategories.map((cat) => (
                   <button
                     key={cat.id}
                     onClick={() => setActiveCategory(cat.id)}
-                    className={`flex items-center gap-3 px-8 py-4 rounded-2xl border-2 transition-all duration-500
+                    className={`flex-shrink-0 flex items-center gap-3 px-8 py-4 rounded-2xl font-black text-[10px] tracking-[4px] uppercase transition-all duration-500
                       ${activeCategory === cat.id
-                        ? 'bg-accent border-accent text-white shadow-[0_0_30px_rgba(255,85,0,0.3)] scale-105'
-                        : 'bg-white/5 border-white/5 text-white/40 hover:border-white/20'}`}
+                        ? 'bg-accent text-white shadow-[0_0_40px_var(--accent-glow)] scale-105 border-accent'
+                        : 'bg-white/5 text-white/40 border border-white/5 hover:bg-white/10 hover:border-white/20'}`}
                   >
-                    <cat.icon className={`w-5 h-5 ${activeCategory === cat.id ? 'animate-pulse' : ''}`} />
-                    <span className="font-black tracking-[2px] uppercase text-xs">{cat.label}</span>
+                    <cat.icon className={`w-4 h-4 ${activeCategory === cat.id ? 'animate-pulse' : 'opacity-40'}`} />
+                    {cat.label}
                   </button>
                 ))}
 
                 {!eventConfig && (
                   <button
                     onClick={() => setActiveCategory('favorites')}
-                    className={`flex items-center gap-3 px-8 py-4 rounded-2xl border-2 transition-all duration-500
-                        ${activeCategory === 'favorites'
+                    className={`flex-shrink-0 flex items-center gap-3 px-8 py-4 rounded-2xl border-2 transition-all duration-500
+                      ${activeCategory === 'favorites'
                         ? 'bg-gradient-to-r from-pink-500 to-rose-500 border-pink-500 text-white shadow-[0_0_30px_rgba(244,63,94,0.3)] scale-105'
                         : 'bg-white/5 border-white/5 text-white/40 hover:text-pink-400 hover:border-pink-500/30'}`}
                   >
                     <Heart className={`w-5 h-5 ${activeCategory === 'favorites' ? 'fill-current animate-pulse' : ''}`} />
-                    <span className="font-black tracking-[2px] uppercase text-xs">Favoritos</span>
+                    <span className="font-black tracking-[2px] uppercase text-[10px]">Favoritos</span>
                   </button>
                 )}
               </div>
@@ -1979,12 +2017,14 @@ const App: React.FC = () => {
       }
 
       {/* Modal QR del Evento */}
-      {showEventQR && eventConfig && (
-        <EventQRGenerator
-          eventConfig={eventConfig}
-          onClose={() => setShowEventQR(false)}
-        />
-      )}
+      {
+        showEventQR && eventConfig && (
+          <EventQRGenerator
+            eventConfig={eventConfig}
+            onClose={() => setShowEventQR(false)}
+          />
+        )
+      }
 
       {/* Modal de Precios */}
       {
