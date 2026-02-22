@@ -127,23 +127,24 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
             const profilesData = profilesRes.data || [];
             const eventsData = eventsRes.data || [];
             const generationsData = generationsRes.data || [];
-            const stylesMetadataData = stylesRes?.data || [];
 
             setPartners(partnersData);
             const b2cUsersData = profilesData.filter(p => p.role === 'user' || !p.role);
             setB2CUsers(b2cUsersData);
 
-            // --- MERGE LOGIC: DB is the source of truth ---
+            // --- MERGE LOGIC ---
             const dbStyles = stylesRes?.data || [];
             const dbPrompts = promptsRes?.data || [];
-
-            // Map to store styles and avoid duplicates
             const styleMap = new Map();
 
             // 1. Process Static IDENTITIES (Base)
             IDENTITIES.forEach(staticStyle => {
                 const dbStyle = dbStyles.find(s => s.id === staticStyle.id);
                 const dbPrompt = dbPrompts.find(p => p.id === staticStyle.id);
+                const subCatMeta = dbStyles.find(m => m.id === staticStyle.subCategory);
+                const catMeta = dbStyles.find(m => m.id === staticStyle.category);
+
+                let isInheritedInactive = (catMeta?.is_active === false) || (subCatMeta?.is_active === false);
 
                 styleMap.set(staticStyle.id, {
                     id: staticStyle.id,
@@ -155,15 +156,20 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                     tags: dbStyle?.tags || staticStyle.tags || [],
                     is_premium: dbStyle?.is_premium ?? staticStyle.isPremium,
                     usage_count: dbStyle?.usage_count || 0,
-                    is_active: dbStyle?.is_active ?? true,
+                    is_active: isInheritedInactive ? false : (dbStyle?.is_active ?? true),
                     source: 'static'
                 });
             });
 
-            // 2. Add DB Styles that are NOT in static list (Custom/Legacy)
+            // 2. Add DB Styles that are NOT in static list
             dbStyles.forEach(dbStyle => {
+                if (!dbStyle.label && !dbStyle.image_url) return;
                 if (!styleMap.has(dbStyle.id)) {
                     const dbPrompt = dbPrompts.find(p => p.id === dbStyle.id);
+                    const subCatMeta = dbStyles.find(m => m.id === dbStyle.subcategory);
+                    const catMeta = dbStyles.find(m => m.id === dbStyle.category);
+                    let isInheritedInactive = (catMeta?.is_active === false) || (subCatMeta?.is_active === false);
+
                     styleMap.set(dbStyle.id, {
                         id: dbStyle.id,
                         label: dbStyle.label || dbStyle.id,
@@ -174,51 +180,22 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                         tags: dbStyle.tags || [],
                         is_premium: dbStyle.is_premium || false,
                         usage_count: dbStyle.usage_count || 0,
-                        is_active: dbStyle.is_active ?? true,
+                        is_active: isInheritedInactive ? false : (dbStyle.is_active ?? true),
                         source: 'db_metadata'
                     });
                 }
             });
 
-            // 3. Add styles that ONLY exist in Prompts (Legacy)
-            dbPrompts.forEach(dbPrompt => {
-                if (!styleMap.has(dbPrompt.id)) {
-                    styleMap.set(dbPrompt.id, {
-                        id: dbPrompt.id,
-                        label: dbPrompt.id,
-                        category: 'Legacy',
-                        subcategory: 'Unknown',
-                        image_url: '/placeholder-style.jpg',
-                        prompt: dbPrompt.master_prompt,
-                        tags: [],
-                        is_premium: false,
-                        usage_count: 0,
-                        source: 'db_prompt_only'
-                    });
-                }
-            });
-
-            // Convert map to list and filter out obvious trash
-            // Final Merge & Filter
             const finalStyles = Array.from(styleMap.values()).filter(s => {
-                // EXCLUSIÓN CRÍTICA: Evitar que categorías aparezcan como estilos
-                const excludeKeywords = ['magia', 'urbano', 'superhéroes', 'series', 'sports', 'general', 'legacy', 'all'];
+                const excludeKeywords = ['magia', 'urbano', 'superhéroes', 'series', 'sports', 'general', 'legacy', 'all', 'cartoon', 'fantasy', 'cinema', 'f1', 'formula 1'];
                 const isLikelyCategory = excludeKeywords.includes(s.id.toLowerCase()) ||
                     excludeKeywords.includes((s.label || '').toLowerCase());
-
-                // car_a, car_b, etc deben pasar siempre
                 return s.id && !isLikelyCategory;
-            });
-
-            console.log(`[Styles Sync] Found ${finalStyles.length} active styles.`, {
-                totalInMap: styleMap.size,
-                dbPrompts: dbPrompts.length,
-                carStyles: finalStyles.filter(s => s.id.includes('car')).map(s => s.id)
             });
 
             setStylesMetadata(finalStyles);
 
-            // Calculate global stats
+            // Calculate Stats
             const totalCredits = partnersData.reduce((acc, curr) => acc + (curr.credits_total || 0), 0);
             const partnerUsageTotal = partnersData.reduce((acc, curr) => acc + (curr.credits_used || 0), 0);
             const b2cUsageTotal = b2cUsersData.reduce((acc, curr) => acc + (curr.total_generations || 0), 0);
@@ -232,11 +209,9 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                 activeEvents: activeEventsCount
             });
 
-            // Calculate B2C specific stats
             const totalB2CCredits = b2cUsersData.reduce((acc, curr) => acc + (curr.credits || 0), 0);
             const totalB2CGenerations = b2cUsageTotal;
 
-            // Calculate Top Styles
             const styleCounts: Record<string, number> = {};
             generationsData.forEach((g: any) => {
                 if (g.model_id) {
@@ -257,10 +232,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                 recentTransactions: generationsData.slice(0, 5)
             });
 
-            // Calculate Partner Stats
             const consumptionRate = totalCredits > 0 ? (partnerUsageTotal / totalCredits) * 100 : 0;
-
-            // Group events by partner to see activity
             const partnerActivity = partnersData.map(p => {
                 const partnerEvents = eventsData.filter(e => e.partner_id === p.id);
                 return {
@@ -287,10 +259,8 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
             })));
 
         } catch (error: any) {
-            console.error('Error fetching admin data:', error);
-            if (error.message?.includes('column')) {
-                console.warn('⚠️ Detectadas columnas faltantes en el esquema. Revisa la base de datos.');
-            }
+            console.error('Error fetching data:', error);
+            showToast('Error al cargar datos: ' + error.message, 'error');
         } finally {
             setLoading(false);
         }
@@ -1178,12 +1148,24 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
 
                                                 try {
                                                     setLoading(true);
-                                                    const { error } = await supabase
+
+                                                    // 1. Update individual styles in category
+                                                    const { error: updateError } = await supabase
                                                         .from('styles_metadata')
                                                         .update({ is_active: targetActive })
                                                         .ilike('category', selectedCategoryFilter);
+                                                    if (updateError) throw updateError;
 
-                                                    if (error) throw error;
+                                                    // 2. Upsert master category switch
+                                                    const { error: upsertError } = await supabase
+                                                        .from('styles_metadata')
+                                                        .upsert({
+                                                            id: selectedCategoryFilter.toLowerCase(),
+                                                            is_active: targetActive,
+                                                            category: selectedCategoryFilter
+                                                        }, { onConflict: 'id' });
+                                                    if (upsertError) throw upsertError;
+
                                                     showToast(`Categoría ${targetActive ? 'activada' : 'ocultada'} correctamente`);
                                                     fetchData();
                                                 } catch (err: any) {
@@ -1224,13 +1206,26 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
 
                                                         try {
                                                             setLoading(true);
-                                                            const { error } = await supabase
+
+                                                            // 1. Update individual styles in subcategory
+                                                            const { error: updateError } = await supabase
                                                                 .from('styles_metadata')
                                                                 .update({ is_active: targetActive })
                                                                 .eq('subcategory', sub)
                                                                 .ilike('category', selectedCategoryFilter);
+                                                            if (updateError) throw updateError;
 
-                                                            if (error) throw error;
+                                                            // 2. Upsert master subcategory switch
+                                                            const { error: upsertError } = await supabase
+                                                                .from('styles_metadata')
+                                                                .upsert({
+                                                                    id: sub.toLowerCase(),
+                                                                    is_active: targetActive,
+                                                                    subcategory: sub,
+                                                                    category: selectedCategoryFilter
+                                                                }, { onConflict: 'id' });
+                                                            if (upsertError) throw upsertError;
+
                                                             showToast(`Subcategoría ${targetActive ? 'activada' : 'ocultada'} correctamente`);
                                                             fetchData();
                                                         } catch (err: any) {

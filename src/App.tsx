@@ -100,16 +100,53 @@ const App: React.FC = () => {
 
   // Merge static identities with DB metadata
   const mergedIdentities = React.useMemo(() => {
-    return IDENTITIES.map(style => {
-      // Check for individual override OR category-level override
-      const meta = stylesMetadata.find((m: any) => m.id === style.id || m.id === style.subCategory);
+    // 1. Map static identities and check for overrides (Individual, Subcategory, Category)
+    const staticStyles = IDENTITIES.map(style => {
+      const individualMeta = stylesMetadata.find((m: any) => m.id === style.id);
+      const subCatMeta = stylesMetadata.find((m: any) => m.id === style.subCategory);
+      const catMeta = stylesMetadata.find((m: any) => m.id === style.category);
+
+      // Inheritance logic for visibility: Category -> Subcategory -> Individual
+      let isActive = style.isActive ?? true;
+      if (catMeta && catMeta.is_active === false) isActive = false;
+      if (subCatMeta && subCatMeta.is_active === false) isActive = false;
+      if (individualMeta && individualMeta.is_active === false) isActive = false;
+
       return {
         ...style,
-        isPremium: meta ? meta.is_premium : style.isPremium,
-        usageCount: meta?.usage_count || 0,
-        isActive: meta ? (meta.is_active ?? true) : true
+        isPremium: individualMeta ? individualMeta.is_premium : style.isPremium,
+        usageCount: individualMeta?.usage_count || 0,
+        isActive
       };
     });
+
+    // 2. Add DB-only identities (Styles created in Admin NOT in the static list)
+    const dbOnlyStyles = stylesMetadata
+      .filter((m: any) => !IDENTITIES.some(id => id.id === m.id)) // Only those not in static
+      .filter((m: any) => m.label && m.image_url) // Must have label and image to be considered a style
+      .map((m: any) => {
+        // Also check category level overrides for these custom styles
+        const catMeta = stylesMetadata.find((cat: any) => cat.id === m.category);
+        const subCatMeta = stylesMetadata.find((sub: any) => sub.id === m.subcategory);
+
+        let isActive = m.is_active ?? true;
+        if (catMeta && catMeta.is_active === false) isActive = false;
+        if (subCatMeta && subCatMeta.is_active === false) isActive = false;
+
+        return {
+          id: m.id,
+          title: m.label,
+          category: m.category || 'General',
+          subCategory: m.subcategory || 'General',
+          url: m.image_url,
+          isPremium: m.is_premium || false,
+          usageCount: m.usage_count || 0,
+          isActive: isActive,
+          tags: Array.isArray(m.tags) ? m.tags : []
+        };
+      });
+
+    return [...staticStyles, ...dbOnlyStyles];
   }, [stylesMetadata]);
 
   const availableIdentities = React.useMemo(() => {
