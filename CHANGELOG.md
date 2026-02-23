@@ -2,6 +2,13 @@
 
 ---
 
+## v3.3.1 — 23 de Febrero de 2026
+
+### 🛠️ Corrección de Error Crítico y Refinamiento UX
+- **Fix "Baja de Partner"**: Se resolvió un error que impedía desactivar partners debido a que el sistema intentaba escribir en una columna inexistente (`name`) en la tabla `partners`.
+- **Nuevo Modal de Confirmación**: Se reemplazó el diálogo nativo del navegador (`window.confirm`) por un modal in-app con estética premium, coherente con el lenguaje visual de la plataforma.
+- **Normalización de Base de Datos**: Eliminadas todas las referencias a la columna `name` en inserciones/actualizaciones de partners, derivando esta información correctamente de la tabla `profiles` o usando `company_name`.
+
 ## 🗺️ PRÓXIMOS PASOS — Roadmap
 
 ### Fase 2: Dashboard del Organizador ✅ / 🔄
@@ -236,7 +243,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 | Archivo | Cambio |
 |---------|--------|
 | `App.tsx` | Auth bypass, handleSubmit con modo evento, header de evento, BubbleMenu condicional |
-| `supabase/functions/cabina-vision/index.ts` | RPC `increment_event_credit`, `event_id` en insert de `generations` |
+| `supabase/functions/cabina-vision/index.ts` | RPC `increment_event_credit`, `event_id` in insert of `generations` |
 | Supabase DB | `generations.user_id` nullable, función RPC `increment_event_credit` |
 
 ### ⚙️ Estructura de la tabla `events`
@@ -270,7 +277,7 @@ Se actualizó la Edge Function `cabina-vision` para replicar la lógica robusta 
 - Se implementó un sistema de rotación automática de API keys de KIE.AI.
 - Lee la tabla `api_key_pool` en Supabase y selecciona la llave que haga más tiempo no se usa.
 - Si el pool está vacío o falla, usa la key por defecto (`BANANA_API_KEY`).
-- Después de cada uso, actualiza `last_used_at` y `usage_count` de forma asincrónica.
+- Después de cada uso, actualiza `last_used_at` and `usage_count` de forma asincrónica.
 
 #### 📸 Upload inteligente de selfies (Híbrido)
 - **Método primario**: Uploader nativo de KIE.AI (`/api/file-base64-upload`).
@@ -289,10 +296,6 @@ Se actualizó la Edge Function `cabina-vision` para replicar la lógica robusta 
 - Después de que KIE.AI genera la imagen, se **descarga y re-sube a Supabase Storage** (bucket `generations`).
 - Esto garantiza URLs permanentes (las de KIE.AI son temporales y requieren auth).
 - Si la persistencia falla, usa la URL original de KIE.AI como fallback.
-
-#### 📊 Registro en base de datos
-- Cada generación exitosa se registra en la tabla `generations` con:
-  - `user_id`, `style_id`, `image_url`, `aspect_ratio`, `prompt`.
 
 #### 📬 Notificaciones multicanal
 - **Push Notification**: Si hay `user_id`, notifica vía `push-notification` Edge Function.
@@ -339,8 +342,3 @@ Se actualizó la Edge Function `cabina-vision` para replicar la lógica robusta 
 
 - `supabase/functions/cabina-vision/index.ts` — Edge Function principal (reescrita)
 - `CHANGELOG.md` — Este archivo
-
-### 📂 Archivos relacionados (referencia)
-
-- `../CIRCUITO_KIE_AI.md` — Documentación completa del circuito KIE.AI para todos los verticales
-- `../creativa-labs-futbol/supabase/functions/futbol-vision/index.ts` — Implementación de referencia
