@@ -33,7 +33,8 @@ import {
     Users,
     Mail,
     ExternalLink,
-    Link as LinkIcon
+    Link as LinkIcon,
+    AlertTriangle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { IDENTITIES, PREFERRED_PACK_ORDER } from '../../lib/constants';
