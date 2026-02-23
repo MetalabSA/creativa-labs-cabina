@@ -152,6 +152,7 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
                     name: profile.full_name || profile.email.split('@')[0],
                     credits_total: profile.credits || 0,
                     credits_used: profile.total_generations || 0,
+                    is_virtual: true,
                     config: {
                         primary_color: '#135bec',
                         logo_url: null
@@ -275,12 +276,21 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
 
             if (error) throw error;
 
-            // 2. Deduct credits from partner (Update used amount)
-            const { error: pError } = await supabase.from('partners')
-                .update({ credits_used: partner.credits_used + creditsNeeded })
-                .eq('id', partner.id);
-
-            if (pError) throw pError;
+            // 2. Deduct credits
+            if ((partner as any).is_virtual) {
+                // Si es virtual (legacy), descontamos directamente del profile
+                const { error: profError } = await supabase
+                    .from('profiles')
+                    .update({ credits: Math.max(0, partner.credits_total - creditsNeeded) })
+                    .eq('id', profile.id);
+                if (profError) throw profError;
+            } else {
+                // Si es un partner formal, actualizamos su consumo en la tabla partners
+                const { error: pError } = await supabase.from('partners')
+                    .update({ credits_used: (partner.credits_used || 0) + creditsNeeded })
+                    .eq('id', partner.id);
+                if (pError) throw pError;
+            }
 
             setShowCreateEventModal(false);
             setNewEvent({ name: '', slug: '', client_email: '', credits: 500, start_date: '', end_date: '' });
