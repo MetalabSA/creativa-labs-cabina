@@ -122,28 +122,70 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
     const fetchPartnerData = async () => {
         try {
             setLoading(true);
-            if (!profile.partner_id) {
-                setLoading(false);
-                return;
-            }
-            const [pRes, eRes] = await Promise.all([
-                supabase.from('partners').select('*').eq('id', profile.partner_id).single(),
-                supabase.from('events').select('*').eq('partner_id', profile.partner_id).order('created_at', { ascending: false }),
-                supabase.from('wallet_transactions').select('*').eq('partner_id', profile.partner_id).order('created_at', { ascending: false })
-            ]);
 
-            if (pRes.error) throw pRes.error;
-            setPartner(pRes.data);
-            setTransactions(tRes.data || []);
-            if (pRes.data.config) {
-                setBrandingConfig({
-                    primary_color: pRes.data.config.primary_color || '#135bec',
-                    logo_url: pRes.data.config.logo_url || '',
-                    radius: pRes.data.config.radius || '12px',
-                    style_presets: pRes.data.config.style_presets || ['Superhéroes', 'John Wick', 'Urbano']
-                });
+            // Si no hay partner_id en el profile, intentamos buscarlo por user_id o crear un "Partner Virtual" 
+            // basado en los créditos del perfil (caso de partners migrados o legacy).
+            let targetPartnerId = profile.partner_id;
+            let isVirtual = false;
+
+            if (!targetPartnerId) {
+                // Buscamos si existe un registro en la tabla partners que coincida con el user_id o email
+                const { data: existingPartner } = await supabase
+                    .from('partners')
+                    .select('id')
+                    .or(`user_id.eq.${profile.id},contact_email.eq.${profile.email}`)
+                    .single();
+
+                if (existingPartner) {
+                    targetPartnerId = existingPartner.id;
+                } else {
+                    isVirtual = true;
+                }
             }
-            setEvents(eRes.data || []);
+
+            if (isVirtual) {
+                // MODO VIRTUAL: Usamos la data del profile como si fuera un partner
+                setPartner({
+                    id: profile.id,
+                    name: profile.full_name || profile.email.split('@')[0],
+                    credits_total: profile.credits || 0,
+                    credits_used: profile.total_generations || 0,
+                    config: {
+                        primary_color: '#135bec',
+                        logo_url: null
+                    }
+                } as any);
+
+                // Buscamos eventos y transacciones usando el profile.id
+                const [eRes, tRes] = await Promise.all([
+                    supabase.from('events').select('*').eq('partner_id', profile.id).order('created_at', { ascending: false }),
+                    supabase.from('wallet_transactions').select('*').eq('partner_id', profile.id).order('created_at', { ascending: false })
+                ]);
+
+                setEvents(eRes.data || []);
+                setTransactions(tRes.data || []);
+            } else {
+                // NORMAL MODE: Tenemos un ID de partner válido
+                const [pRes, eRes, tRes] = await Promise.all([
+                    supabase.from('partners').select('*').eq('id', targetPartnerId).single(),
+                    supabase.from('events').select('*').eq('partner_id', targetPartnerId).order('created_at', { ascending: false }),
+                    supabase.from('wallet_transactions').select('*').eq('partner_id', targetPartnerId).order('created_at', { ascending: false })
+                ]);
+
+                if (pRes.error) throw pRes.error;
+                setPartner(pRes.data);
+                setTransactions(tRes.data || []);
+
+                if (pRes.data.config) {
+                    setBrandingConfig({
+                        primary_color: pRes.data.config.primary_color || '#135bec',
+                        logo_url: pRes.data.config.logo_url || '',
+                        radius: pRes.data.config.radius || '12px',
+                        style_presets: pRes.data.config.style_presets || ['Superhéroes', 'John Wick', 'Urbano']
+                    });
+                }
+                setEvents(eRes.data || []);
+            }
         } catch (error) {
             console.error('Error fetching partner data:', error);
         } finally {
