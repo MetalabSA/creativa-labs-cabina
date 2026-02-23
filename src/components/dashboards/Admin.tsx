@@ -673,6 +673,20 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                 }
             }
 
+            // --- REAL WALLET RECORDING ---
+            // Registramos la transacción en el historial para que el partner pueda verla en su billetera
+            try {
+                await supabase.from('wallet_transactions').insert({
+                    partner_id: showTopUp.id,
+                    amount: amount,
+                    type: 'top-up',
+                    description: `Recarga de créditos por Master Admin`
+                });
+            } catch (e) {
+                console.warn('Error recording wallet transaction:', e);
+                // No lanzamos error para no bloquear la actualización de créditos si solo falla el log
+            }
+
             showToast('Créditos actualizados exitosamente');
             setShowTopUp(null);
             fetchData();

@@ -27,7 +27,8 @@ import {
     Shield,
     Trash2,
     Edit2,
-    Smartphone
+    Smartphone,
+    ChevronLeft
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { PREFERRED_PACK_ORDER, IDENTITIES } from '../../lib/constants';
@@ -55,9 +56,10 @@ interface EventData {
 interface ClientDashboardProps {
     user: any;
     profile: any;
+    onBack?: () => void;
 }
 
-export const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, profile }) => {
+export const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, profile, onBack }) => {
     const [event, setEvent] = useState<EventData | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -248,6 +250,15 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, profile 
             <header className="border-b border-white/5 bg-[#0f172a]/80 backdrop-blur-xl sticky top-0 z-50">
                 <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
                     <div className="flex items-center gap-4">
+                        {onBack && (
+                            <button
+                                onClick={onBack}
+                                className="p-2.5 rounded-xl bg-white/5 hover:bg-[#7f13ec]/20 border border-white/10 hover:border-[#7f13ec]/30 text-slate-400 hover:text-[#7f13ec] transition-all group/back mr-2"
+                                title="Volver al Panel Partner"
+                            >
+                                <ChevronLeft className="size-5 group-hover/back:-translate-x-1 transition-transform" />
+                            </button>
+                        )}
                         <div className="relative group">
                             <div className="absolute -inset-1 bg-gradient-to-r from-[#7f13ec] to-[#ec4899] rounded-xl blur opacity-25 group-hover:opacity-50 transition duration-1000 group-hover:duration-200"></div>
                             <div className="relative bg-[#0f172a] p-2.5 rounded-xl border border-white/10 shadow-2xl">

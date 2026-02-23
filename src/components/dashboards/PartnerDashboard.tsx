@@ -70,15 +70,27 @@ interface PartnerDashboardProps {
     profile: any;
     onBack: () => void;
     initialView?: 'overview' | 'events' | 'wallet' | 'branding';
+    onProxyClient?: (email: string) => void;
 }
 
-export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profile, onBack, initialView = 'overview' }) => {
+export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profile, onBack, initialView = 'overview', onProxyClient }) => {
     const [view, setView] = useState<'overview' | 'events' | 'branding' | 'wallet'>(initialView);
     const [loading, setLoading] = useState(false);
     const [partner, setPartner] = useState<Partner | null>(null);
     const [events, setEvents] = useState<any[]>([]);
+    const [transactions, setTransactions] = useState<any[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [showCreateEventModal, setShowCreateEventModal] = useState(false);
+    const [eventToDelete, setEventToDelete] = useState<{ id: string, name: string } | null>(null);
+    const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | null }>({
+        message: '',
+        type: null
+    });
+
+    const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
+        setToast({ message, type });
+        setTimeout(() => setToast({ message: '', type: null }), 4000);
+    };
 
     // Sync view if initialView changes
     useEffect(() => {
@@ -116,11 +128,13 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
             }
             const [pRes, eRes] = await Promise.all([
                 supabase.from('partners').select('*').eq('id', profile.partner_id).single(),
-                supabase.from('events').select('*').eq('partner_id', profile.partner_id).order('created_at', { ascending: false })
+                supabase.from('events').select('*').eq('partner_id', profile.partner_id).order('created_at', { ascending: false }),
+                supabase.from('wallet_transactions').select('*').eq('partner_id', profile.partner_id).order('created_at', { ascending: false })
             ]);
 
             if (pRes.error) throw pRes.error;
             setPartner(pRes.data);
+            setTransactions(tRes.data || []);
             if (pRes.data.config) {
                 setBrandingConfig({
                     primary_color: pRes.data.config.primary_color || '#135bec',
@@ -147,7 +161,7 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
 
             if (error) throw error;
             setPartner({ ...partner, config: brandingConfig });
-            alert('Configuración de marca guardada');
+            showToast('Configuración de marca guardada');
         } catch (error) {
             console.error('Error updating branding:', error);
         }
@@ -181,7 +195,7 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
             }
         } catch (error) {
             console.error('Error uploading logo:', error);
-            alert('Error al subir logo: ' + (error as any).message);
+            showToast('Error al subir logo: ' + (error as any).message, 'error');
         } finally {
             setLoading(false);
         }
@@ -193,7 +207,7 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
 
         const creditsNeeded = Number(newEvent.credits);
         if (creditsNeeded > (partner.credits_total - partner.credits_used)) {
-            alert('Créditos insuficientes en tu balance mayorista.');
+            showToast('Créditos insuficientes en tu balance mayorista.', 'error');
             return;
         }
 
@@ -226,23 +240,30 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
 
             setShowCreateEventModal(false);
             setNewEvent({ name: '', slug: '', client_email: '', credits: 500, start_date: '', end_date: '' });
+            showToast('Evento creado con éxito');
             fetchPartnerData();
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error creating event:', error);
-            alert('Error al crear el evento. El slug podría estar duplicado.');
+            showToast('Error al crear el evento. ' + (error.message || 'El slug podría estar duplicado.'), 'error');
         } finally {
             setLoading(false);
         }
     };
 
-    const handleDeleteEvent = async (eventId: string) => {
-        if (!confirm('¿Estás seguro de eliminar este evento?')) return;
+    const handleDeleteEvent = async () => {
+        if (!eventToDelete) return;
         try {
-            const { error } = await supabase.from('events').delete().eq('id', eventId);
+            setLoading(true);
+            const { error } = await supabase.from('events').delete().eq('id', eventToDelete.id);
             if (error) throw error;
+            showToast('Evento eliminado permanentemente');
+            setEventToDelete(null);
             fetchPartnerData();
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error deleting event:', error);
+            showToast('Error al eliminar evento: ' + error.message, 'error');
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -517,18 +538,26 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
                                                         <button
                                                             onClick={() => window.open(`https://photobooth.creativa-labs.com/?event=${event.event_slug}`, '_blank')}
                                                             className="p-2.5 bg-slate-800/50 hover:bg-slate-800 border border-white/5 rounded-xl text-slate-400 hover:text-white transition-all group/action"
-                                                            title="Ver Evento"
+                                                            title="Ver Kiosco (Público)"
                                                         >
                                                             <ExternalLink className="w-4 h-4 group-hover/action:scale-110 transition-transform" />
                                                         </button>
+                                                        {onProxyClient && event.client_email && (
+                                                            <button
+                                                                onClick={() => onProxyClient(event.client_email!)}
+                                                                className="p-2.5 bg-[#135bec]/10 hover:bg-[#135bec] border border-[#135bec]/20 rounded-xl text-[#135bec] hover:text-white transition-all group/action"
+                                                                title="Gestionar Branding como Cliente"
+                                                            >
+                                                                <MonitorIcon className="w-4 h-4 group-hover/action:scale-110 transition-transform" />
+                                                            </button>
+                                                        )}
                                                         <button
-                                                            onClick={() => handleDeleteEvent(event.id)}
+                                                            onClick={() => setEventToDelete({ id: event.id, name: event.event_name })}
                                                             className="p-2.5 bg-rose-500/10 hover:bg-rose-500 border border-rose-500/20 rounded-xl text-rose-500 hover:text-white transition-all group/action"
                                                             title="Eliminar Instancia"
                                                         >
                                                             <Trash2 className="w-4 h-4 group-hover/action:scale-110 transition-transform" />
                                                         </button>
-                                                        <button className="px-5 py-2 bg-slate-100 hover:bg-white text-slate-900 text-[10px] font-black rounded-xl transition-all uppercase tracking-widest shadow-lg shadow-white/5">Gestionar</button>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -575,17 +604,17 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
                                     </div>
                                     <div className="mt-12 flex flex-wrap gap-8 items-end">
                                         <div className="space-y-1">
-                                            <p className="text-white/40 text-[10px] font-bold uppercase">Consumidos este mes</p>
+                                            <p className="text-white/40 text-[10px] font-bold uppercase">Consumo Total</p>
                                             <div className="flex items-center gap-2 text-white">
                                                 <TrendingUp className="size-5 text-emerald-400" />
-                                                <span className="text-2xl font-black">2.450</span>
+                                                <span className="text-2xl font-black">{partner?.credits_used?.toLocaleString() || 0}</span>
                                             </div>
                                         </div>
                                         <div className="space-y-1">
-                                            <p className="text-white/40 text-[10px] font-bold uppercase">Proyección Estimada</p>
+                                            <p className="text-white/40 text-[10px] font-bold uppercase">Eventos Activos</p>
                                             <div className="flex items-center gap-2 text-white/80">
                                                 <Zap className="size-5 text-yellow-400" />
-                                                <span className="text-2xl font-black">~12.000</span>
+                                                <span className="text-2xl font-black">{events.filter(e => e.is_active).length}</span>
                                             </div>
                                         </div>
                                         <button className="ml-auto px-8 py-4 bg-white text-[#135bec] font-black rounded-2xl hover:scale-105 transition-all text-xs uppercase tracking-[2px] shadow-xl">
@@ -601,20 +630,22 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
                                         <History className="size-5 text-[#135bec]" />
                                         Últimas Recargas
                                     </h3>
-                                    <div className="space-y-6">
-                                        {[
-                                            { date: '12 Feb 2024', amount: '+10.000', status: 'Completado' },
-                                            { date: '28 Ene 2024', amount: '+5.000', status: 'Completado' },
-                                            { date: '10 Ene 2024', amount: '+10.000', status: 'Completado' },
-                                        ].map((item, idx) => (
-                                            <div key={idx} className="flex justify-between items-center bg-white/[0.02] p-4 rounded-2xl border border-white/5">
+                                    <div className="space-y-6 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
+                                        {transactions.length > 0 ? transactions.map((item, idx) => (
+                                            <div key={item.id} className="flex justify-between items-center bg-white/[0.02] p-4 rounded-2xl border border-white/5 group hover:border-[#135bec]/30 transition-all">
                                                 <div>
-                                                    <p className="text-xs font-bold text-white">{item.amount} Créditos</p>
-                                                    <p className="text-[10px] text-slate-500 mt-1">{item.date}</p>
+                                                    <p className="text-xs font-bold text-white">+{item.amount.toLocaleString()} Créditos</p>
+                                                    <p className="text-[10px] text-slate-500 mt-1">{new Date(item.created_at).toLocaleDateString()}</p>
                                                 </div>
-                                                <span className="text-[9px] font-black text-emerald-500 uppercase px-2 py-1 bg-emerald-500/10 rounded-lg">{item.status}</span>
+                                                <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-lg ${item.type === 'top-up' ? 'text-emerald-500 bg-emerald-500/10' : 'text-blue-500 bg-blue-500/10'}`}>
+                                                    {item.type === 'top-up' ? 'Carga' : 'Ajuste'}
+                                                </span>
                                             </div>
-                                        ))}
+                                        )) : (
+                                            <div className="text-center py-10 opacity-40">
+                                                <p className="text-[10px] font-bold uppercase tracking-widest">Sin movimientos</p>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                                 <p className="text-[10px] text-slate-600 text-center mt-6">
@@ -626,21 +657,35 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
 
                         {/* Usage by Event */}
                         <section className="glass-card rounded-2xl p-8 border border-white/5 bg-slate-900/50 backdrop-blur-xl">
-                            <h3 className="text-lg font-black text-white uppercase tracking-tighter mb-8 bg-white/5 -mx-8 -mt-8 p-8 border-b border-white/5">Distribución de Consumo</h3>
+                            <h3 className="text-lg font-black text-white uppercase tracking-tighter mb-8 bg-white/5 -mx-8 -mt-8 p-8 border-b border-white/5">Consumo por Evento</h3>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                                {events.slice(0, 4).map(event => (
-                                    <div key={event.id} className="p-6 rounded-2xl bg-white/[0.03] border border-white/5 hover:border-[#135bec]/30 transition-all group">
-                                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">{event.event_name}</p>
-                                        <h4 className="text-2xl font-black text-white group-hover:text-[#135bec] transition-colors">{event.credits_used.toLocaleString()}</h4>
-                                        <p className="text-[9px] text-slate-600 font-bold uppercase mt-1">Créditos Utilizados</p>
-                                        <div className="mt-4 w-full h-1 bg-slate-800 rounded-full overflow-hidden">
-                                            <div
-                                                className="h-full bg-indigo-500"
-                                                style={{ width: `${Math.min(100, (event.credits_used / event.credits_allocated) * 100)}%` }}
-                                            ></div>
+                                {events.map(event => (
+                                    <div key={event.id} className="p-6 rounded-2xl bg-white/[0.03] border border-white/5 hover:border-[#135bec]/30 transition-all group relative overflow-hidden">
+                                        <div className="absolute -right-4 -top-4 size-20 bg-[#135bec]/5 rounded-full blur-2xl group-hover:bg-[#135bec]/10 transition-all"></div>
+                                        <div className="relative z-10">
+                                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 truncate pr-4">{event.event_name}</p>
+                                            <div className="flex items-end justify-between">
+                                                <h4 className="text-2xl font-black text-white">{event.credits_used || 0}</h4>
+                                                <p className="text-[10px] text-slate-600 font-bold">utilizados</p>
+                                            </div>
+                                            <div className="mt-4 w-full bg-slate-800 h-1 rounded-full overflow-hidden">
+                                                <div
+                                                    className="bg-[#135bec] h-full"
+                                                    style={{ width: `${Math.min(100, ((event.credits_used || 0) / (event.credits_allocated || 1)) * 100)}%` }}
+                                                ></div>
+                                            </div>
+                                            <div className="flex justify-between mt-2 text-[8px] font-bold uppercase tracking-widest text-slate-700">
+                                                <span>{Math.round(((event.credits_used || 0) / (event.credits_allocated || 1)) * 100)}%</span>
+                                                <span>de {event.credits_allocated}</span>
+                                            </div>
                                         </div>
                                     </div>
                                 ))}
+                                {events.length === 0 && (
+                                    <div className="col-span-full py-10 text-center opacity-30">
+                                        <p className="text-xs font-bold uppercase tracking-[2px]">No hay datos de consumo disponibles</p>
+                                    </div>
+                                )}
                             </div>
                         </section>
                     </motion.div>
@@ -935,6 +980,65 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
                     </div>
                 </div>
             )}
+            {/* Toast System */}
+            <AnimatePresence>
+                {toast.type && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 50, scale: 0.9 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.9 }}
+                        className="fixed bottom-8 right-8 z-[100]"
+                    >
+                        <div className={`px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-4 backdrop-blur-xl border ${toast.type === 'error' ? 'bg-rose-500/20 border-rose-500/30 text-rose-500' :
+                            toast.type === 'info' ? 'bg-[#135bec]/20 border-[#135bec]/30 text-[#135bec]' :
+                                'bg-[#13ec80]/20 border-[#13ec80]/30 text-[#13ec80]'
+                            }`}>
+                            {toast.type === 'error' ? <AlertTriangle className="size-5" /> :
+                                toast.type === 'info' ? <Info className="size-5" /> :
+                                    <CheckCircle2 className="size-5" />}
+                            <p className="text-xs font-black uppercase tracking-widest">{toast.message}</p>
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Delete Confirmation Modal */}
+            <AnimatePresence>
+                {eventToDelete && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                            className="w-full max-w-md bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
+                        >
+                            <div className="p-8 text-center">
+                                <div className="size-20 bg-rose-500/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-rose-500/20">
+                                    <AlertTriangle className="size-10 text-rose-500" />
+                                </div>
+                                <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-2">¿Eliminar Evento?</h3>
+                                <p className="text-slate-400 text-sm leading-relaxed">
+                                    Esta acción es permanente. Se eliminará el evento <span className="text-white font-bold">"{eventToDelete.name}"</span> y todos sus datos asociados.
+                                </p>
+                            </div>
+                            <div className="flex border-t border-white/5 p-4 bg-slate-950/50 gap-3">
+                                <button
+                                    onClick={() => setEventToDelete(null)}
+                                    className="flex-1 py-4 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-black rounded-xl transition-all uppercase tracking-[2px]"
+                                >
+                                    Cancelar
+                                </button>
+                                <button
+                                    onClick={handleDeleteEvent}
+                                    className="flex-1 py-4 bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-black rounded-xl transition-all shadow-lg shadow-rose-500/20 uppercase tracking-[2px]"
+                                >
+                                    Confirmar Baja
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
         </div>
     );
 };

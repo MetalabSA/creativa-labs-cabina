@@ -8,9 +8,15 @@
 - **Impacto**: Se restauró la capacidad de desactivar socios y crear nuevos. El filtro "Ver Inactivos" ahora funciona correctamente al poder persistirse el estado `is_active: false`.
 
 ### 💎 UX: Custom Confirmation Flow
-- **Mejora**: Implementación de un modal de confirmación personalizado para acciones críticas (Baja de Partner).
+- **Mejora**: Implementación de un modal de confirmación personalizado para acciones críticas (Baja de Partner y Eliminación de Eventos).
 - **Diseño**: Uso de desenfoque de fondo (backdrop blur), animaciones de entrada/salida con Framer Motion y una paleta de colores de advertencia coherente con el tema oscuro/neón.
 - **Resultado**: Reemplazo total de los diálogos nativos del navegador, elevando el valor percibido del panel administrativo a un estándar de producto premium.
+
+### 💰 Billetera Real y Gestión de Créditos
+- **Feature**: Implementación del historial de transacciones para Partners.
+- **Base de Datos**: Creada tabla `wallet_transactions` para auditar cada carga de crédito realizada por el Master Admin.
+- **Admin**: Integrado hook de grabación en `handleTopUp` para registrar el orígen y monto de cada recarga.
+- **Partner Dashboard**: Reemplazados los datos de demostración por un feed real de movimientos de billetera y una visualización de consumo per-evento basada en créditos asignados vs. utilizados.
 
 ## [21-02-2026] - Resolución Crítica de Arquitectura (Timeouts y Autenticación en Edge Functions)
 - **Problema**: La aplicación arrojaba el mensaje rojo `"VAR: Se perdió la conexión..."` repetidamente, algunas veces tardando 60 segundos y otras veces casi inmediatamente (< 5 segundos). Esto afectaba de forma crítica la experiencia del usuario final en la foto-cabina.

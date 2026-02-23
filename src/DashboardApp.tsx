@@ -31,6 +31,7 @@ const DashboardApp: React.FC = () => {
     const [profile, setProfile] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('overview');
+    const [proxyProfile, setProxyProfile] = useState<any>(null);
 
     useEffect(() => {
         supabase.auth.getSession().then(({ data: { session } }) => {
@@ -126,10 +127,14 @@ const DashboardApp: React.FC = () => {
         );
     }
 
-    if (profile?.role === 'client' || activeTab === 'client_view') {
+    if (profile?.role === 'client' || activeTab === 'client_view' || proxyProfile) {
         return (
             <Suspense fallback={<LoadingUI />}>
-                <ClientDashboard user={session.user} profile={profile} />
+                <ClientDashboard
+                    user={session.user}
+                    profile={proxyProfile || profile}
+                    onBack={proxyProfile ? () => setProxyProfile(null) : undefined}
+                />
             </Suspense>
         );
     }
@@ -212,7 +217,13 @@ const DashboardApp: React.FC = () => {
                         {activeTab === 'overview' && (
                             <div className="animate-fade-in">
                                 {profile?.role === 'partner' ? (
-                                    <PartnerDashboard user={session.user} profile={profile} onBack={() => { }} initialView="overview" />
+                                    <PartnerDashboard
+                                        user={session.user}
+                                        profile={profile}
+                                        onBack={() => { }}
+                                        initialView="overview"
+                                        onProxyClient={(email: string) => setProxyProfile({ ...profile, email, role: 'client' })}
+                                    />
                                 ) : isMaster ? (
                                     <div className="text-center py-20">
                                         <h2 className="text-2xl font-bold text-white italic">Panel de Control General</h2>
@@ -227,7 +238,15 @@ const DashboardApp: React.FC = () => {
                             </div>
                         )}
 
-                        {activeTab === 'events' && <PartnerDashboard user={session.user} profile={profile} onBack={() => { }} initialView="events" />}
+                        {activeTab === 'events' && (
+                            <PartnerDashboard
+                                user={session.user}
+                                profile={profile}
+                                onBack={() => { }}
+                                initialView="events"
+                                onProxyClient={(email: string) => setProxyProfile({ ...profile, email, role: 'client' })}
+                            />
+                        )}
                         {activeTab === 'wallet' && <PartnerDashboard user={session.user} profile={profile} onBack={() => { }} initialView="wallet" />}
                         {activeTab === 'branding' && <PartnerDashboard user={session.user} profile={profile} onBack={() => { }} initialView="branding" />}
                     </Suspense>
