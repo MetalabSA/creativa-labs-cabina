@@ -82,6 +82,7 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
     const [transactions, setTransactions] = useState<any[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
     const [showCreateEventModal, setShowCreateEventModal] = useState(false);
+    const [editingEvent, setEditingEvent] = useState<any | null>(null);
     const [eventToDelete, setEventToDelete] = useState<{ id: string, name: string } | null>(null);
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | null }>({
         message: '',
@@ -579,6 +580,13 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
                                                 <td className="px-6 py-5 text-right">
                                                     <div className="flex items-center justify-end gap-3">
                                                         <button
+                                                            onClick={() => setEditingEvent(event)}
+                                                            className="p-2.5 bg-slate-800/50 hover:bg-slate-800 border border-white/5 rounded-xl text-slate-400 hover:text-white transition-all group/action"
+                                                            title="Editar Evento"
+                                                        >
+                                                            <Edit2 className="w-4 h-4 group-hover/action:rotate-12 transition-transform" />
+                                                        </button>
+                                                        <button
                                                             onClick={() => window.open(`https://photobooth.creativa-labs.com/?event=${event.event_slug}`, '_blank')}
                                                             className="p-2.5 bg-slate-800/50 hover:bg-slate-800 border border-white/5 rounded-xl text-slate-400 hover:text-white transition-all group/action"
                                                             title="Ver Kiosco (Público)"
@@ -912,117 +920,233 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
                 )}
             </AnimatePresence>
 
-            {/* Create Event Modal */}
-            {showCreateEventModal && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl">
-                    <div className="glass-card w-full max-w-lg bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-300">
-                        <div className="flex items-center justify-between p-7 border-b border-white/5">
-                            <div>
-                                <h3 className="text-xl font-black text-white uppercase tracking-tighter">Crear Nuevo Evento</h3>
-                                <p className="text-xs text-slate-500 mt-1 uppercase tracking-widest font-bold">Configuración de instancia</p>
-                            </div>
-                            <button onClick={() => setShowCreateEventModal(false)} className="size-10 flex items-center justify-center rounded-xl bg-slate-800 text-slate-500 hover:text-white transition-all"><X className="w-6 h-6" /></button>
-                        </div>
-                        <form onSubmit={handleCreateEvent} className="p-7 space-y-6">
-                            <div className="space-y-4">
+            {/* UI Modals */}
+            <AnimatePresence>
+                {/* Create Event Modal */}
+                {showCreateEventModal && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                            className="w-full max-w-md bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
+                        >
+                            <div className="flex items-center justify-between p-7 border-b border-white/5">
                                 <div>
-                                    <label className="text-[10px] font-black uppercase tracking-[2px] text-slate-500 mb-2 block">Nombre del Evento</label>
-                                    <input
-                                        required
-                                        type="text"
-                                        placeholder="Ej: Boda de Lucía y Marcos"
-                                        className="w-full bg-[#0a0a0b] border border-white/10 rounded-xl px-5 py-4 text-white focus:border-[#135bec] outline-none transition-all placeholder:text-slate-800"
-                                        value={newEvent.name}
-                                        onChange={e => setNewEvent({ ...newEvent, name: e.target.value })}
-                                    />
+                                    <h3 className="text-xl font-black text-white uppercase tracking-tighter">Crear Evento</h3>
+                                    <p className="text-xs text-slate-500 mt-1 uppercase tracking-widest font-bold">Nueva instancia</p>
                                 </div>
-                                {/* Client Email Input */}
-                                <div>
-                                    <label className="text-[10px] font-black uppercase tracking-[2px] text-slate-500 mb-2 block">Email del Cliente (Asignación)</label>
-                                    <div className="relative">
-                                        <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-700 size-4" />
+                                <button onClick={() => setShowCreateEventModal(false)} className="size-10 flex items-center justify-center rounded-xl bg-slate-800 text-slate-500 hover:text-white transition-all">
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+                            <form onSubmit={handleCreateEvent} className="p-7 space-y-6">
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="text-[10px] font-black uppercase tracking-[2px] text-slate-500 mb-2 block">Nombre del Evento</label>
                                         <input
                                             required
-                                            type="email"
-                                            placeholder="cliente@ejemplo.com"
-                                            className="w-full bg-[#0a0a0b] border border-white/10 rounded-xl pl-11 pr-5 py-4 text-white focus:border-[#135bec] outline-none transition-all placeholder:text-slate-800 text-xs"
-                                            value={newEvent.client_email}
-                                            onChange={e => setNewEvent({ ...newEvent, client_email: e.target.value.toLowerCase() })}
+                                            type="text"
+                                            placeholder="Nombre comercial"
+                                            className="w-full bg-[#0a0a0b] border border-white/10 rounded-xl px-5 py-4 text-white focus:border-[#135bec] outline-none transition-all placeholder:text-slate-800"
+                                            value={newEvent.name}
+                                            onChange={e => setNewEvent({ ...newEvent, name: e.target.value })}
                                         />
                                     </div>
-                                    <p className="text-[9px] text-slate-500 mt-1.5 ml-1">Este email se usará para que el cliente acceda a su panel.</p>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="text-[10px] font-black uppercase tracking-[2px] text-slate-500 mb-2 block">Slug Personalizado</label>
+                                        <label className="text-[10px] font-black uppercase tracking-[2px] text-slate-500 mb-2 block">Email del Cliente (Asignación)</label>
                                         <div className="relative">
-                                            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-700 text-xs font-mono">/</span>
+                                            <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-700 size-4" />
+                                            <input
+                                                required
+                                                type="email"
+                                                placeholder="cliente@ejemplo.com"
+                                                className="w-full bg-[#0a0a0b] border border-white/10 rounded-xl pl-11 pr-5 py-4 text-white focus:border-[#135bec] outline-none transition-all placeholder:text-slate-800 text-xs"
+                                                value={newEvent.client_email}
+                                                onChange={e => setNewEvent({ ...newEvent, client_email: e.target.value.toLowerCase() })}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase tracking-[2px] text-slate-500 mb-2 block">Personalizado</label>
                                             <input
                                                 type="text"
-                                                placeholder="boda-lucia"
-                                                className="w-full bg-[#0a0a0b] border border-white/10 rounded-xl pl-8 pr-5 py-4 text-white focus:border-[#135bec] outline-none transition-all placeholder:text-slate-800 font-mono text-xs"
+                                                placeholder="slug"
+                                                className="w-full bg-[#0a0a0b] border border-white/10 rounded-xl px-4 py-3 text-white focus:border-[#135bec] outline-none transition-all text-xs font-mono"
                                                 value={newEvent.slug}
                                                 onChange={e => setNewEvent({ ...newEvent, slug: e.target.value.toLowerCase().replace(/\s+/g, '-') })}
                                             />
                                         </div>
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase tracking-[2px] text-slate-500 mb-2 block">Créditos</label>
+                                            <div className="relative">
+                                                <ShoppingCart className="absolute left-4 top-1/2 -translate-y-1/2 text-[#135bec] size-4" />
+                                                <input
+                                                    required
+                                                    type="number"
+                                                    className="w-full bg-[#0a0a0b] border border-white/10 rounded-xl pl-11 pr-5 py-3 text-white focus:border-[#135bec] outline-none transition-all text-xs font-bold"
+                                                    value={newEvent.credits}
+                                                    onChange={e => setNewEvent({ ...newEvent, credits: Number(e.target.value) })}
+                                                />
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <label className="text-[10px] font-black uppercase tracking-[2px] text-slate-500 mb-2 block">Carga de Créditos</label>
-                                        <div className="relative">
-                                            <ShoppingCart className="absolute left-4 top-1/2 -translate-y-1/2 text-[#135bec] size-4" />
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase tracking-[2px] text-slate-500 mb-2 block">Inicio</label>
                                             <input
                                                 required
-                                                type="number"
-                                                className="w-full bg-[#0a0a0b] border border-white/10 rounded-xl pl-11 pr-5 py-4 text-white focus:border-[#135bec] outline-none transition-all font-bold"
-                                                value={newEvent.credits}
-                                                onChange={e => setNewEvent({ ...newEvent, credits: Number(e.target.value) })}
+                                                type="date"
+                                                className="w-full bg-[#0a0a0b] border border-white/10 rounded-xl px-4 py-3 text-white focus:border-[#135bec] outline-none transition-all text-xs"
+                                                value={newEvent.start_date}
+                                                onChange={e => setNewEvent({ ...newEvent, start_date: e.target.value })}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase tracking-[2px] text-slate-500 mb-2 block">Fin</label>
+                                            <input
+                                                required
+                                                type="date"
+                                                className="w-full bg-[#0a0a0b] border border-white/10 rounded-xl px-4 py-3 text-white focus:border-[#135bec] outline-none transition-all text-xs"
+                                                value={newEvent.end_date}
+                                                onChange={e => setNewEvent({ ...newEvent, end_date: e.target.value })}
                                             />
                                         </div>
                                     </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4 pt-2">
-                                    <div>
-                                        <label className="text-[10px] font-black uppercase tracking-[2px] text-slate-500 mb-2 block">Inicio</label>
-                                        <input
-                                            type="date"
-                                            className="w-full bg-[#0a0a0b] border border-white/10 rounded-xl px-5 py-4 text-white focus:border-[#135bec] outline-none transition-all text-xs"
-                                            value={newEvent.start_date}
-                                            onChange={e => setNewEvent({ ...newEvent, start_date: e.target.value })}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="text-[10px] font-black uppercase tracking-[2px] text-slate-500 mb-2 block">Finalización</label>
-                                        <input
-                                            type="date"
-                                            className="w-full bg-[#0a0a0b] border border-white/10 rounded-xl px-5 py-4 text-white focus:border-[#135bec] outline-none transition-all text-xs"
-                                            value={newEvent.end_date}
-                                            onChange={e => setNewEvent({ ...newEvent, end_date: e.target.value })}
-                                        />
+
+                                    <div className="p-4 bg-[#135bec]/5 border border-[#135bec]/10 rounded-xl flex items-center gap-4">
+                                        <div className="size-8 rounded-lg bg-[#135bec]/10 flex items-center justify-center text-[#135bec]">
+                                            <CheckCircle2 className="size-4" />
+                                        </div>
+                                        <div>
+                                            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest leading-none">Verificación de Balance</p>
+                                            <p className="text-[11px] text-slate-400 mt-1 leading-tight">Se deducirán {newEvent.credits} créditos de tu balance mayorista ({availableCredits} disponibles).</p>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
 
-                            <div className="bg-[#135bec]/5 border border-[#135bec]/20 rounded-xl p-4 flex items-start gap-4">
-                                <div className="p-2 bg-[#135bec] rounded-lg text-white">
-                                    <CheckCircle2 className="size-4" />
-                                </div>
-                                <div>
-                                    <p className="text-[10px] font-black text-white uppercase tracking-widest">Verificación de Balance</p>
-                                    <p className="text-[11px] text-slate-400 mt-1">Se deducirán {newEvent.credits} créditos de tu balance mayorista ({availableCredits} disponibles).</p>
-                                </div>
-                            </div>
-
-                            <button
-                                type="submit"
-                                disabled={loading}
-                                className="w-full py-5 bg-[#135bec] hover:bg-[#135bec]/90 text-white font-black rounded-2xl shadow-2xl shadow-[#135bec]/30 transition-all uppercase tracking-[3px] text-xs"
-                            >
-                                {loading ? 'Sincronizando...' : 'Activar Instancia de Evento'}
-                            </button>
-                        </form>
+                                <button
+                                    disabled={loading}
+                                    type="submit"
+                                    className="w-full py-5 bg-[#135bec] hover:bg-[#135bec]/90 text-white text-[11px] font-black rounded-xl transition-all shadow-xl shadow-[#135bec]/20 uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed group/btn"
+                                >
+                                    {loading ? 'Creando...' : (
+                                        <span className="flex items-center justify-center gap-2">
+                                            Activar Instancia de Evento
+                                            <Zap className="size-4 group-hover:scale-110 transition-transform" />
+                                        </span>
+                                    )}
+                                </button>
+                            </form>
+                        </motion.div>
                     </div>
-                </div>
-            )}
+                )}
+
+                {/* Edit Event Modal */}
+                {editingEvent && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                            className="w-full max-w-md bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
+                        >
+                            <div className="flex items-center justify-between p-7 border-b border-white/5">
+                                <div>
+                                    <h3 className="text-xl font-black text-white uppercase tracking-tighter">Editar Evento</h3>
+                                    <p className="text-xs text-slate-500 mt-1 uppercase tracking-widest font-bold">Modificar parámetros</p>
+                                </div>
+                                <button onClick={() => setEditingEvent(null)} className="size-10 flex items-center justify-center rounded-xl bg-slate-800 text-slate-500 hover:text-white transition-all">
+                                    <X className="w-5 h-5" />
+                                </button>
+                            </div>
+                            <div className="p-7 space-y-6">
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="text-[10px] font-black uppercase tracking-[2px] text-slate-500 mb-2 block">Nombre del Evento</label>
+                                        <input
+                                            required
+                                            type="text"
+                                            className="w-full bg-[#0a0a0b] border border-white/10 rounded-xl px-5 py-4 text-white focus:border-[#135bec] outline-none transition-all placeholder:text-slate-800"
+                                            value={editingEvent.event_name}
+                                            onChange={e => setEditingEvent({ ...editingEvent, event_name: e.target.value })}
+                                        />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase tracking-[2px] text-slate-500 mb-2 block">Inicio</label>
+                                            <input
+                                                required
+                                                type="date"
+                                                className="w-full bg-[#0a0a0b] border border-white/10 rounded-xl px-4 py-3 text-white focus:border-[#135bec] outline-none transition-all text-xs"
+                                                value={new Date(editingEvent.start_date).toISOString().split('T')[0]}
+                                                onChange={e => setEditingEvent({ ...editingEvent, start_date: e.target.value })}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="text-[10px] font-black uppercase tracking-[2px] text-slate-500 mb-2 block">Fin</label>
+                                            <input
+                                                required
+                                                type="date"
+                                                className="w-full bg-[#0a0a0b] border border-white/10 rounded-xl px-4 py-3 text-white focus:border-[#135bec] outline-none transition-all text-xs"
+                                                value={new Date(editingEvent.end_date).toISOString().split('T')[0]}
+                                                onChange={e => setEditingEvent({ ...editingEvent, end_date: e.target.value })}
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-3 p-4 bg-white/5 rounded-2xl border border-white/5">
+                                        <div className={`size-10 rounded-xl flex items-center justify-center ${editingEvent.is_active ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
+                                            <Zap className="size-5" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="text-[10px] font-black uppercase text-white tracking-widest leading-none">Estado</p>
+                                            <p className="text-[9px] text-slate-500 uppercase mt-1 leading-none">{editingEvent.is_active ? 'En Línea' : 'Inactivo'}</p>
+                                        </div>
+                                        <button
+                                            onClick={() => setEditingEvent({ ...editingEvent, is_active: !editingEvent.is_active })}
+                                            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${editingEvent.is_active ? 'bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white' : 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white'}`}
+                                        >
+                                            {editingEvent.is_active ? 'Pausar' : 'Activar'}
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <button
+                                    disabled={loading}
+                                    onClick={async () => {
+                                        try {
+                                            setLoading(true);
+                                            const { error } = await supabase
+                                                .from('events')
+                                                .update({
+                                                    event_name: editingEvent.event_name,
+                                                    start_date: new Date(editingEvent.start_date).toISOString(),
+                                                    end_date: new Date(editingEvent.end_date).toISOString(),
+                                                    is_active: editingEvent.is_active
+                                                })
+                                                .eq('id', editingEvent.id);
+
+                                            if (error) throw error;
+                                            showToast('Evento actualizado correctamente');
+                                            setEditingEvent(null);
+                                            fetchPartnerData();
+                                        } catch (err: any) {
+                                            showToast('Error al actualizar: ' + err.message, 'error');
+                                        } finally {
+                                            setLoading(false);
+                                        }
+                                    }}
+                                    className="w-full py-5 bg-[#135bec] hover:bg-[#135bec]/90 text-white text-[11px] font-black rounded-xl transition-all shadow-xl shadow-[#135bec]/20 uppercase tracking-[3px] disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {loading ? 'Sincronizando...' : 'Guardar Cambios'}
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
             {/* Toast System */}
             <AnimatePresence>
                 {toast.type && (
