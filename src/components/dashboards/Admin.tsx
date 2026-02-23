@@ -626,27 +626,48 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
         if (!showTopUp) return;
         try {
             setLoading(true);
-            // Check if it's a partner or a B2C user
+            // Al cargar créditos a un partner, debemos asegurarnos de actualizar tanto la tabla 'partners'
+            // como la tabla 'profiles' por seguridad y redundancia, ya que algunos partners 
+            // pueden estar viviendo solo en 'profiles' inicialmente.
+
             const partner = partners.find(p => p.id === showTopUp.id);
             if (partner) {
-                const { error } = await supabase
-                    .from('partners')
-                    .update({ credits_total: (partner.credits_total || 0) + amount })
-                    .eq('id', partner.id);
+                if (partner.is_from_profile) {
+                    // El partner existe solo en profiles, actualizamos allí
+                    const { error } = await supabase
+                        .from('profiles')
+                        .update({ credits: (partner.credits_total || 0) + amount })
+                        .eq('id', partner.id);
+                    if (error) throw error;
+                } else {
+                    // Existe en la tabla partners
+                    const { error } = await supabase
+                        .from('partners')
+                        .update({ credits_total: (partner.credits_total || 0) + amount })
+                        .eq('id', partner.id);
 
-                if (error) {
-                    if (error.message.includes('credits_total')) {
-                        throw new Error('La columna "credits_total" no existe en la tabla "partners". Por favor, ejecuta la migración SQL necesaria.');
+                    if (error) {
+                        if (error.message.includes('credits_total')) {
+                            throw new Error('La columna "credits_total" no existe en la tabla "partners".');
+                        }
+                        throw error;
                     }
-                    throw error;
+
+                    // Opcionalmente actualizamos también el profile si tiene user_id
+                    if (partner.user_id) {
+                        await supabase
+                            .from('profiles')
+                            .update({ credits: (partner.credits_total || 0) + amount })
+                            .eq('id', partner.user_id);
+                    }
                 }
             } else {
-                // Assume it's a B2C user profile
+                // Es un usuario B2C normal
                 const user = b2cUsers.find(u => u.id === showTopUp.id);
                 if (user) {
                     const { error } = await supabase
                         .from('profiles')
-                        .update({ credits: (user.credits || 0) + amount })
+                        .update({ credits: (user.credits || user.credits_total || 0) + amount })
                         .eq('id', user.id);
                     if (error) throw error;
                 }
