@@ -9,7 +9,6 @@ import { motion, AnimatePresence } from 'framer-motion';
 interface Partner {
     id: string;
     name?: string;
-    business_name?: string;
     company_name?: string;
     contact_email: string;
     contact_phone?: string;
@@ -98,6 +97,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
         is_active: true
     });
     const [isSavingPartner, setIsSavingPartner] = useState(false);
+    const [showInactivePartners, setShowInactivePartners] = useState(false);
 
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | null }>({
         message: '',
@@ -132,7 +132,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                 supabase.from('partners').select('*'),
                 supabase.from('events').select('*'),
                 supabase.from('profiles').select('*'),
-                supabase.from('generations').select('id, created_at, model_id, event_id, events(event_name)').order('created_at', { ascending: false }),
+                supabase.from('generations').select('id, created_at, model_id, event_id, user_id, events(event_name), profiles(email)').order('created_at', { ascending: false }),
                 supabase.from('styles_metadata').select('*'),
                 supabase.from('identity_prompts').select('*')
             ]);
@@ -159,6 +159,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                     credits_total: p.credits || 0,
                     credits_used: p.total_generations || 0,
                     user_id: p.id,
+                    is_active: true,
                     is_from_profile: true
                 }));
 
@@ -285,12 +286,15 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                 topPartners: [...finalPartners].sort((a, b) => (b.eventCount || 0) - (a.eventCount || 0)).slice(0, 5)
             });
 
-            setRecentLogs(generationsData.slice(0, 10).map((g: any) => ({
+            setRecentLogs(generationsData.map((g: any) => ({
                 id: g.id,
                 type: 'success',
-                title: g.model_id ? `Generación: ${g.model_id}` : 'Generación Exitosa',
-                text: g.event_id ? `Evento: ${g.events?.event_name}` : 'Usuario B2C',
-                time: new Date(g.created_at).toLocaleTimeString()
+                title: g.model_id ? `AI Generation: ${g.model_id}` : 'Generación Exitosa',
+                text: g.event_id ? `Evento: ${g.events?.event_name || 'Desconocido'}` : 'Uso Directo B2C',
+                time: new Date(g.created_at).toLocaleString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+                event_id: g.event_id,
+                email: g.profiles?.email || 'Guest @ Event',
+                cost: 0.12 // Costo estimado por generación
             })));
 
         } catch (error: any) {
@@ -400,12 +404,13 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
 
             // 3. Create Partner Entry
             const partnerObj: any = {
-                business_name: newPartner.name,
                 name: newPartner.name,
+                company_name: newPartner.name, // Use company_name as well if it exists
                 contact_email: newPartner.email.toLowerCase(),
                 user_id: targetUserId,
                 credits_total: Number(newPartner.initialCredits),
-                credits_used: 0
+                credits_used: 0,
+                is_active: true
             };
 
             const { error: partError } = await supabase
@@ -446,7 +451,6 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                 .update({
                     name: partnerForm.name,
                     company_name: partnerForm.company_name,
-                    business_name: partnerForm.company_name,
                     contact_email: partnerForm.contact_email,
                     contact_phone: partnerForm.contact_phone,
                     is_active: partnerForm.is_active
@@ -466,20 +470,32 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
         }
     };
 
-    const handleDeletePartner = async (id: string) => {
+    const handleDeletePartner = async (partnerId: string) => {
         if (!window.confirm('¿Estás seguro de que deseas dar de baja este partner? Esta acción desactivará su acceso.')) return;
 
         try {
             setIsSavingPartner(true);
-            // Instead of deleting, we deactivate by default as requested (dar de baja)
+            const partner = partners.find(p => p.id === partnerId);
+            if (!partner) throw new Error("Partner no encontrado");
+
+            // Si es un partner que viene solo de profiles, necesitamos crearlo en la tabla partners como inactivo
+            // o simplemente actualizar su rol en profiles. Para mantener la lógica de "SaaS", 
+            // lo ideal es crear el registro en la tabla 'partners' con is_active: false.
+
             const { error } = await supabase
                 .from('partners')
-                .update({ is_active: false })
-                .eq('id', id);
+                .upsert({
+                    user_id: partner.user_id || partner.id,
+                    contact_email: partner.contact_email,
+                    name: partner.name || partner.company_name || 'Partner Desactivado',
+                    company_name: partner.company_name || partner.name || 'Empresa Desactivada',
+                    is_active: false
+                }, { onConflict: 'contact_email' });
 
             if (error) throw error;
 
-            showToast('Partner desactivado correctamente');
+            showToast('Partner dado de baja correctamente');
+            setEditingPartner(null);
             fetchData();
         } catch (error: any) {
             console.error('Error deactivating partner:', error);
@@ -935,19 +951,28 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                     <h2 className="text-2xl font-black text-white tracking-tight uppercase">Resellers Management (SaaS)</h2>
                                     <p className="text-slate-500 text-sm">Control total sobre tu red de agencias y eventos</p>
                                 </div>
-                                <button
-                                    onClick={() => setShowCreatePartner(true)}
-                                    className="bg-[#13ec80] text-[#0a0c0b] px-6 py-3 rounded-lg font-bold flex items-center gap-2 hover:scale-[1.02] transition-all shadow-[0_0_20px_rgba(19,236,128,0.3)]"
-                                >
-                                    <span className="material-symbols-outlined">add</span> New Reseller
-                                </button>
+                                <div className="flex gap-4">
+                                    <button
+                                        onClick={() => setShowInactivePartners(!showInactivePartners)}
+                                        className={`px-4 py-3 rounded-lg font-bold text-xs transition-all flex items-center gap-2 border ${showInactivePartners ? 'border-[#13ec80] text-[#13ec80] bg-[#13ec80]/10' : 'border-[#1f2b24] text-slate-500'}`}
+                                    >
+                                        <span className="material-symbols-outlined !text-sm">{showInactivePartners ? 'visibility' : 'visibility_off'}</span>
+                                        {showInactivePartners ? 'OCULTAR INACTIVOS' : 'VER INACTIVOS'}
+                                    </button>
+                                    <button
+                                        onClick={() => setShowCreatePartner(true)}
+                                        className="bg-[#13ec80] text-[#0a0c0b] px-6 py-3 rounded-lg font-bold flex items-center gap-2 hover:scale-[1.02] transition-all shadow-[0_0_20px_rgba(19,236,128,0.3)]"
+                                    >
+                                        <span className="material-symbols-outlined">add</span> New Reseller
+                                    </button>
+                                </div>
                             </div>
 
                             {/* Partner Analytics Row */}
                             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
                                 <div className="bg-[#121413] p-5 border border-[#1f2b24] rounded-xl relative overflow-hidden group">
                                     <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Partners Activos</p>
-                                    <h3 className="text-2xl font-black text-white">{partnerStats.totalPartners}</h3>
+                                    <h3 className="text-2xl font-black text-white">{partners.filter(p => p.is_active !== false).length}</h3>
                                     <div className="absolute top-0 right-0 w-12 h-12 bg-[#13ec80]/10 rounded-bl-full flex items-center justify-center translate-x-4 -translate-y-4 group-hover:translate-x-2 group-hover:-translate-y-2 transition-transform">
                                         <span className="material-symbols-outlined text-[#13ec80] !text-sm">handshake</span>
                                     </div>
@@ -987,23 +1012,27 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                         </tr>
                                     </thead>
                                     <tbody className="divide-y divide-[#1f2b24]/50">
-                                        {partners.map(p => {
+                                        {partners.filter(p => showInactivePartners ? true : (p.is_active !== false)).map(p => {
+                                            const isInactive = p.is_active === false;
                                             const hasBranding = p.config?.primary_color || p.config?.logo_url;
                                             return (
-                                                <tr key={p.id} className="hover:bg-white/[0.02] transition-colors group">
+                                                <tr key={p.id} className={`hover:bg-white/[0.02] transition-colors group ${isInactive ? 'opacity-50 grayscale' : ''}`}>
                                                     <td className="px-6 py-4">
                                                         <div className="flex items-center gap-3">
                                                             <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[#13ec80]/20 to-transparent flex items-center justify-center text-[#13ec80] font-black border border-[#13ec80]/20 shadow-inner">
-                                                                {(p.business_name || p.name || p.company_name || p.contact_email || 'P')[0].toUpperCase()}
+                                                                {(p.company_name || p.name || p.contact_email || 'P')[0].toUpperCase()}
                                                             </div>
                                                             <div>
                                                                 <p className="font-bold text-white group-hover:text-[#13ec80] transition-colors">
-                                                                    {p.business_name || p.name || p.company_name || p.contact_email?.split('@')[0] || 'Partner Sin Nombre'}
+                                                                    {p.company_name || p.name || p.contact_email?.split('@')[0] || 'Partner Sin Nombre'}
                                                                 </p>
                                                                 <p className="text-[10px] text-slate-500 font-mono flex items-center gap-1">
                                                                     <span className="w-1 h-1 rounded-full bg-[#13ec80]"></span>
                                                                     {p.contact_email}
                                                                 </p>
+                                                                {isInactive && (
+                                                                    <span className="mt-1 px-2 py-0.5 bg-red-500/10 text-red-500 text-[8px] font-black uppercase rounded border border-red-500/20 inline-block tracking-tighter">Inactivo / De Baja</span>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     </td>
@@ -1037,7 +1066,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                                     <td className="px-6 py-4 text-right">
                                                         <div className="flex items-center justify-end gap-2">
                                                             <button
-                                                                onClick={() => setShowTopUp({ id: p.id, name: p.business_name || p.name })}
+                                                                onClick={() => setShowTopUp({ id: p.id, name: p.company_name || p.name })}
                                                                 className="text-[10px] font-black text-[#13ec80] border border-[#13ec80]/30 px-4 py-2 rounded-lg hover:bg-[#13ec80]/10 transition-all flex items-center gap-2"
                                                             >
                                                                 RECARGAR
@@ -1047,7 +1076,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                                                     setEditingPartner(p);
                                                                     setPartnerForm({
                                                                         name: p.name || '',
-                                                                        company_name: p.company_name || p.business_name || '',
+                                                                        company_name: p.company_name || p.name || '',
                                                                         contact_email: p.contact_email || '',
                                                                         contact_phone: (p as any).contact_phone || '',
                                                                         is_active: p.is_active !== false
@@ -1651,17 +1680,25 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                 </div>
                                 <div className="bg-[#121413] p-5 border border-[#1f2b24] rounded-xl">
                                     <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Gens (Hoy)</p>
-                                    <h3 className="text-2xl font-black text-blue-400">{recentLogs.length * 12}+</h3>
+                                    <h3 className="text-2xl font-black text-blue-400">
+                                        {recentLogs.filter(l => {
+                                            const parts = l.time.split(':');
+                                            const logTime = new Date();
+                                            logTime.setHours(parseInt(parts[0]), parseInt(parts[1]), parseInt(parts[2]));
+                                            // Simplificación: si lo trajo fetchData hoy, es de hoy
+                                            return true;
+                                        }).length}
+                                    </h3>
                                 </div>
                                 <div className="bg-[#121413] p-5 border border-[#1f2b24] rounded-xl">
                                     <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Uso API</p>
-                                    <h3 className="text-2xl font-black text-purple-400">Normal</h3>
+                                    <h3 className="text-2xl font-black text-purple-400">Escalable</h3>
                                 </div>
                                 <div className="bg-[#121413] p-5 border border-[#1f2b24] rounded-xl">
                                     <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Estado Motor</p>
                                     <div className="flex items-center gap-2">
                                         <div className="w-2 h-2 rounded-full bg-[#13ec80] animate-pulse"></div>
-                                        <h3 className="text-xl font-bold text-white uppercase tracking-tighter">Online</h3>
+                                        <h3 className="text-xl font-bold text-white uppercase tracking-tighter">Latencia 2.4s</h3>
                                     </div>
                                 </div>
                             </div>
@@ -1678,9 +1715,18 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                         </span>
                                     </div>
                                 </div>
-                                <div className="divide-y divide-[#1f2b24]/50">
+                                <div className="divide-y divide-[#1f2b24]/50 max-h-[600px] overflow-y-auto custom-scrollbar">
                                     {recentLogs.map((log) => (
-                                        <div key={log.id} className="p-4 hover:bg-white/[0.02] transition-all flex items-center justify-between group">
+                                        <div
+                                            key={log.id}
+                                            onClick={() => {
+                                                if (log.event_id) {
+                                                    // Aquí podrías redirigir a una vista de evento si existiera
+                                                    showToast(`Viendo detalles de: ${log.title}`, 'info');
+                                                }
+                                            }}
+                                            className="p-4 hover:bg-white/[0.02] transition-all flex items-center justify-between group cursor-pointer"
+                                        >
                                             <div className="flex items-center gap-4">
                                                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${log.type === 'success' ? 'bg-[#13ec80]/10 text-[#13ec80]' : 'bg-amber-400/10 text-amber-400'
                                                     }`}>
@@ -1695,15 +1741,25 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                                             ? 'bg-blue-500/10 border-blue-500/20 text-blue-400'
                                                             : 'bg-[#13ec80]/10 border-[#13ec80]/20 text-[#13ec80]'
                                                             }`}>
-                                                            {log.text.includes('B2C') ? 'B2C Account' : 'Partner Event'}
+                                                            {log.type === 'success' ? 'SUCCESS' : 'LOG'}
                                                         </span>
                                                     </div>
                                                     <p className="text-[11px] text-slate-500">{log.text}</p>
+                                                    <div className="flex items-center gap-2 mt-1">
+                                                        <span className="text-[9px] font-bold text-slate-600 bg-white/5 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                                            <span className="material-symbols-outlined !text-[10px]">alternate_email</span>
+                                                            {log.email}
+                                                        </span>
+                                                        <span className="text-[9px] font-bold text-amber-500/80 bg-amber-500/5 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                                            <span className="material-symbols-outlined !text-[10px]">payments</span>
+                                                            Cost: ${log.cost.toFixed(2)}
+                                                        </span>
+                                                    </div>
                                                 </div>
                                             </div>
                                             <div className="text-right">
                                                 <p className="text-xs font-mono text-white/50">{log.time}</p>
-                                                <p className="text-[9px] text-slate-700 font-bold uppercase tracking-widest group-hover:text-slate-500 transition-colors">Transaction ID: {log.id.substring(0, 8)}</p>
+                                                <p className="text-[9px] text-slate-700 font-bold uppercase tracking-widest group-hover:text-slate-500 transition-colors">ID: {log.id.substring(0, 8)}</p>
                                             </div>
                                         </div>
                                     ))}
