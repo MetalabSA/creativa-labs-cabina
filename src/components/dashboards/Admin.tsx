@@ -475,14 +475,26 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
             const partner = partners.find(p => p.id === partnerId);
             if (!partner) throw new Error("Partner no encontrado");
 
-            const { error } = await supabase
-                .from('partners')
-                .upsert({
-                    user_id: partner.user_id || partner.id,
-                    contact_email: partner.contact_email,
-                    company_name: partner.company_name || partner.name || 'Empresa Desactivada',
-                    is_active: false
-                }, { onConflict: 'contact_email' });
+            let error;
+            if (partner.is_from_profile) {
+                // No existe en la tabla partners, lo creamos como inactivo
+                const { error: insertError } = await supabase
+                    .from('partners')
+                    .insert({
+                        user_id: partner.user_id || partner.id,
+                        contact_email: partner.contact_email,
+                        company_name: partner.company_name || partner.name || `Partner ${partner.id.substring(0, 8)}`,
+                        is_active: false
+                    });
+                error = insertError;
+            } else {
+                // Ya existe, lo actualizamos por ID
+                const { error: updateError } = await supabase
+                    .from('partners')
+                    .update({ is_active: false })
+                    .eq('id', partner.id);
+                error = updateError;
+            }
 
             if (error) throw error;
 

@@ -4,7 +4,7 @@
 
 ### 🛠️ Fix: Error de Esquema en Tabla Partners
 - **Problema**: Al intentar dar de baja a un partner o crear uno nuevo, el sistema fallaba con el error: `COULD NOT FIND THE 'NAME' COLUMN OF 'PARTNERS'`. Esto impedía la actualización del estado `is_active` y, por ende, el filtrado correcto en el dashboard.
-- **Solución**: Se eliminaron las referencias a la columna `name` en las llamadas a Supabase. Ahora la lógica SaaS prioriza `company_name` y utiliza los datos de perfil para el nombre de contacto.
+- **Solución**: Se eliminaron las referencias a la columna `name` en las llamadas a Supabase. Además, se refinó la lógica de baja para evitar el error `THERE IS NO UNIQUE OR EXCLUSION CONSTRAINT MATCHING THE ON CONFLICT SPECIFICATION`, delegando la acción a un `update` por ID si el registro existe, o un `insert` limpio si es un partner que solo existe en `profiles`.
 - **Impacto**: Se restauró la capacidad de desactivar socios y crear nuevos. El filtro "Ver Inactivos" ahora funciona correctamente al poder persistirse el estado `is_active: false`.
 
 ### 💎 UX: Custom Confirmation Flow

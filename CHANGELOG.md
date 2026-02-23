@@ -5,7 +5,7 @@
 ## v3.3.1 — 23 de Febrero de 2026
 
 ### 🛠️ Corrección de Error Crítico y Refinamiento UX
-- **Fix "Baja de Partner"**: Se resolvió un error que impedía desactivar partners debido a que el sistema intentaba escribir en una columna inexistente (`name`) en la tabla `partners`.
+- **Fix "Baja de Partner"**: Se resolvió un error que impedía desactivar partners debido a que el sistema intentaba escribir en una columna inexistente (`name`) en la tabla `partners`. Adicionalmente, se corrigió un fallo de base de datos (`matching conflict specification`) al reemplazar una operación `upsert` por una lógica condicional de `insert/update`, evitando el uso de columnas sin restricciones de unicidad.
 - **Nuevo Modal de Confirmación**: Se reemplazó el diálogo nativo del navegador (`window.confirm`) por un modal in-app con estética premium, coherente con el lenguaje visual de la plataforma.
 - **Normalización de Base de Datos**: Eliminadas todas las referencias a la columna `name` en inserciones/actualizaciones de partners, derivando esta información correctamente de la tabla `profiles` o usando `company_name`.
 
