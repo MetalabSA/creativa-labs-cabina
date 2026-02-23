@@ -83,6 +83,9 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
     const [searchTerm, setSearchTerm] = useState('');
     const [showCreateEventModal, setShowCreateEventModal] = useState(false);
     const [editingEvent, setEditingEvent] = useState<any | null>(null);
+    const [eventToTopUp, setEventToTopUp] = useState<any | null>(null);
+    const [topUpAmount, setTopUpAmount] = useState(100);
+    const [generationsData, setGenerationsData] = useState<any[]>([]);
     const [eventToDelete, setEventToDelete] = useState<{ id: string, name: string } | null>(null);
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | null }>({
         message: '',
@@ -167,6 +170,15 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
 
                 setEvents(eRes.data || []);
                 setTransactions(tRes.data || []);
+
+                if (eRes.data && eRes.data.length > 0) {
+                    const eventIds = eRes.data.map(ev => ev.id);
+                    const { data: gens } = await supabase
+                        .from('generations')
+                        .select('created_at, event_id')
+                        .in('event_id', eventIds);
+                    setGenerationsData(gens || []);
+                }
             } else {
                 // NORMAL MODE: Tenemos un ID de partner válido
                 const [pRes, eRes, tRes] = await Promise.all([
@@ -186,6 +198,14 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
                         radius: pRes.data.config.radius || '12px',
                         style_presets: pRes.data.config.style_presets || ['Superhéroes', 'John Wick', 'Urbano']
                     });
+                }
+                if (eRes.data && eRes.data.length > 0) {
+                    const eventIds = eRes.data.map(ev => ev.id);
+                    const { data: gens } = await supabase
+                        .from('generations')
+                        .select('created_at, event_id')
+                        .in('event_id', eventIds);
+                    setGenerationsData(gens || []);
                 }
                 setEvents(eRes.data || []);
             }
@@ -299,6 +319,60 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
         } catch (error: any) {
             console.error('Error creating event:', error);
             showToast('Error al crear el evento. ' + (error.message || 'El slug podría estar duplicado.'), 'error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleTopUpEvent = async () => {
+        if (!eventToTopUp || !partner) return;
+
+        const amount = Number(topUpAmount);
+        const available = (partner.credits_total || 0) - (partner.credits_used || 0);
+
+        if (amount > available) {
+            showToast('No tienes créditos suficientes.', 'error');
+            return;
+        }
+
+        try {
+            setLoading(true);
+
+            // 1. Update event
+            const { error: eErr } = await supabase
+                .from('events')
+                .update({ credits_allocated: (eventToTopUp.credits_allocated || 0) + amount })
+                .eq('id', eventToTopUp.id);
+            if (eErr) throw eErr;
+
+            // 2. Update partner balance
+            if ((partner as any).is_virtual) {
+                const { error: pErr } = await supabase
+                    .from('profiles')
+                    .update({ credits: Math.max(0, partner.credits_total - amount) })
+                    .eq('id', profile.id);
+                if (pErr) throw pErr;
+            } else {
+                const { error: pErr } = await supabase
+                    .from('partners')
+                    .update({ credits_used: (partner.credits_used || 0) + amount })
+                    .eq('id', partner.id);
+                if (pErr) throw pErr;
+            }
+
+            // 3. Log transaction
+            await supabase.from('wallet_transactions').insert({
+                partner_id: partner.id,
+                amount: amount,
+                type: 'usage',
+                description: `Transferencia a evento: ${eventToTopUp.event_name}`
+            });
+
+            showToast(`Se han transferido ${amount} créditos.`);
+            setEventToTopUp(null);
+            fetchPartnerData();
+        } catch (err: any) {
+            showToast('Error: ' + err.message, 'error');
         } finally {
             setLoading(false);
         }
@@ -499,6 +573,59 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
                                 </button>
                             </div>
                         </section>
+
+                        {/* Metrics Chart */}
+                        <div className="bg-slate-900/50 border border-white/5 rounded-[32px] p-8 glass-card">
+                            <div className="flex items-center justify-between mb-8">
+                                <div>
+                                    <h4 className="text-sm font-black text-white uppercase tracking-widest">Actividad de Generación</h4>
+                                    <p className="text-[10px] text-slate-500 uppercase font-bold mt-1">Fotos creadas por día (Últimos 7 días)</p>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <div className="size-2 rounded-full bg-[#135bec] animate-pulse" />
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase">Tiempo Real</span>
+                                </div>
+                            </div>
+
+                            <div className="h-48 flex items-end gap-2 px-2">
+                                {Array.from({ length: 7 }).map((_, i) => {
+                                    const date = new Date();
+                                    date.setDate(date.getDate() - (6 - i));
+                                    const dateStr = date.toISOString().split('T')[0];
+                                    const count = generationsData.filter(g => g.created_at.startsWith(dateStr)).length;
+
+                                    // Calculate max for normalization
+                                    const counts = Array.from({ length: 7 }).map((_, j) => {
+                                        const d = new Date();
+                                        d.setDate(d.getDate() - (6 - j));
+                                        const ds = d.toISOString().split('T')[0];
+                                        return generationsData.filter(g2 => g2.created_at.startsWith(ds)).length;
+                                    });
+                                    const maxCount = Math.max(...counts, 1);
+                                    const height = (count / maxCount) * 100;
+
+                                    return (
+                                        <div key={i} className="flex-1 flex flex-col items-center gap-3 group">
+                                            <div className="w-full relative h-[140px] flex items-end">
+                                                <motion.div
+                                                    initial={{ height: 0 }}
+                                                    animate={{ height: `${Math.max(height, 5)}%` }}
+                                                    className={`w-full rounded-t-xl transition-all duration-500 hover:brightness-125 ${count > 0 ? 'bg-gradient-to-t from-[#135bec] to-[#7f13ec]' : 'bg-white/5'}`}
+                                                />
+                                                {count > 0 && (
+                                                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-white text-[#0f172a] text-[9px] font-black px-2 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20">
+                                                        {count} fotos
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <span className="text-[8px] font-black text-slate-600 uppercase">
+                                                {date.toLocaleDateString('es-AR', { weekday: 'short' })}
+                                            </span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
                     </motion.div>
                 )}
 
@@ -589,6 +716,13 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
                                                 </td>
                                                 <td className="px-6 py-5 text-right">
                                                     <div className="flex items-center justify-end gap-3">
+                                                        <button
+                                                            onClick={() => setEventToTopUp(event)}
+                                                            className="p-2.5 bg-emerald-500/10 hover:bg-emerald-500 border border-emerald-500/20 rounded-xl text-emerald-500 hover:text-white transition-all group/action"
+                                                            title="Cargar Créditos"
+                                                        >
+                                                            <ShoppingCart className="w-4 h-4 group-hover/action:scale-110 transition-transform" />
+                                                        </button>
                                                         <button
                                                             onClick={() => setEditingEvent(event)}
                                                             className="p-2.5 bg-slate-800/50 hover:bg-slate-800 border border-white/5 rounded-xl text-slate-400 hover:text-white transition-all group/action"
@@ -1151,6 +1285,53 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
                                     className="w-full py-5 bg-[#135bec] hover:bg-[#135bec]/90 text-white text-[11px] font-black rounded-xl transition-all shadow-xl shadow-[#135bec]/20 uppercase tracking-[3px] disabled:opacity-50 disabled:cursor-not-allowed"
                                 >
                                     {loading ? 'Sincronizando...' : 'Guardar Cambios'}
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+
+                {/* Fast Top-up Modal */}
+                {eventToTopUp && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+                            className="w-full max-w-sm bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
+                        >
+                            <div className="p-7 border-b border-white/5 flex items-center justify-between">
+                                <div>
+                                    <h3 className="text-lg font-black text-white uppercase tracking-tighter">Recargar Evento</h3>
+                                    <p className="text-[10px] text-slate-500 uppercase font-bold mt-1">{eventToTopUp.event_name}</p>
+                                </div>
+                                <button onClick={() => setEventToTopUp(null)} className="size-8 flex items-center justify-center rounded-lg bg-slate-800 text-slate-500 hover:text-white transition-all">
+                                    <X className="w-4 h-4" />
+                                </button>
+                            </div>
+                            <div className="p-7 space-y-6">
+                                <div>
+                                    <label className="text-[10px] font-black uppercase tracking-[2px] text-slate-500 mb-2 block">Cantidad de Créditos</label>
+                                    <div className="relative">
+                                        <ShoppingCart className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-500 size-4" />
+                                        <input
+                                            type="number"
+                                            className="w-full bg-[#0a0a0b] border border-white/10 rounded-xl pl-11 pr-5 py-4 text-white focus:border-emerald-500 outline-none transition-all font-bold text-center text-xl"
+                                            value={topUpAmount}
+                                            onChange={e => setTopUpAmount(Number(e.target.value))}
+                                        />
+                                    </div>
+                                    <p className="text-[9px] text-slate-500 mt-3 text-center uppercase tracking-widest">
+                                        Disponibles: <span className="text-white">{availableCredits.toLocaleString()}</span>
+                                    </p>
+                                </div>
+
+                                <button
+                                    disabled={loading || topUpAmount <= 0 || topUpAmount > availableCredits}
+                                    onClick={handleTopUpEvent}
+                                    className="w-full py-5 bg-emerald-500 hover:bg-emerald-400 text-[#071121] text-[11px] font-black rounded-xl transition-all shadow-xl shadow-emerald-500/20 uppercase tracking-[3px] disabled:opacity-30 disabled:grayscale"
+                                >
+                                    {loading ? 'Procesando...' : 'Confirmar Transferencia'}
                                 </button>
                             </div>
                         </motion.div>
