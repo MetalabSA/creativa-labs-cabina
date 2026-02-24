@@ -7,7 +7,9 @@ Este documento detalla las funcionalidades e infraestructura implementadas recie
 
 ### 1. Panel de Partner (PartnerDashboard.tsx) - Moderación Avanzada
 Se ha transformado la vista de moderación de eventos en una herramienta de gestión de activos completa:
-
+- **Bulk Actions in Moderation:** Added a floating bar for mass delete and custom ZIP downloads.
+- **Top-Up Modal (Cards de Cristal):** Implemented a premium recharge modal with 3 credit packs (5k, 10k, 20k) and Mercado Pago visual integration.
+- **Wallet Alert System:** Integrated visual feedback in the "Overview" card for low/critical credit levels.
 *   **Sistema de Filtros Inteligentes:**
     *   **Búsqueda por Usuario/ID:** Capacidad de filtrar la galería por email del usuario o ID único de la foto.
     *   **Filtro Temporal:** Selector de fecha para navegar eventos de múltiples días.

@@ -97,6 +97,10 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
     const [moderationLoading, setModerationLoading] = useState(false);
     const [moderationSearchTerm, setModerationSearchTerm] = useState('');
     const [moderationDateFilter, setModerationDateFilter] = useState('');
+    const [recentGlobalPhotos, setRecentGlobalPhotos] = useState<any[]>([]);
+    const [selectedPhotos, setSelectedPhotos] = useState<string[]>([]);
+    const [showTopUpModal, setShowTopUpModal] = useState(false);
+    const [isProcessingPayment, setIsProcessingPayment] = useState(false);
 
     const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
         setToast({ message, type });
@@ -209,9 +213,11 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
                     const eventIds = eRes.data.map(ev => ev.id);
                     const { data: gens } = await supabase
                         .from('generations')
-                        .select('created_at, event_id')
-                        .in('event_id', eventIds);
+                        .select('id, created_at, event_id, image_url')
+                        .in('event_id', eventIds)
+                        .order('created_at', { ascending: false });
                     setGenerationsData(gens || []);
+                    setRecentGlobalPhotos(gens?.slice(0, 10) || []);
                 }
                 setEvents(eRes.data || []);
             }
@@ -420,6 +426,37 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
         }
     };
 
+    const handlePurchase = async (plan: any) => {
+        if (!partner) return;
+        try {
+            setIsProcessingPayment(true);
+            const redirectUrl = window.location.href;
+
+            const response = await fetch('https://elesttjfwfhvzdvldytn.supabase.co/functions/v1/mercadopago-payment', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    user_id: partner.id,
+                    credits: plan.qty,
+                    price: plan.price,
+                    pack_name: plan.label,
+                    redirect_url: redirectUrl
+                })
+            });
+
+            const data = await response.json();
+            if (data.init_point) {
+                window.location.href = data.init_point;
+            } else {
+                throw new Error(data.message || 'Error al iniciar pago');
+            }
+        } catch (err: any) {
+            showToast(err.message, 'error');
+        } finally {
+            setIsProcessingPayment(false);
+        }
+    };
+
     const handleDeleteEvent = async () => {
         if (!eventToDelete) return;
         try {
@@ -533,48 +570,99 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
                         {/* Stats Grid */}
                         <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
                             {/* Wholesale Credits Balance Card */}
-                            <div className="glass-card rounded-2xl p-6 flex flex-col justify-between group overflow-hidden relative border border-white/5 bg-gradient-to-br from-slate-900/80 to-slate-950/80 shadow-2xl">
-                                <div className="absolute -right-4 -top-4 opacity-[0.03] group-hover:opacity-[0.1] transition-opacity duration-500">
-                                    <Wallet className="size-40" />
-                                </div>
-                                <div className="flex justify-between items-start mb-6 relative z-10">
-                                    <div>
-                                        <div className="flex items-center gap-2 mb-1">
-                                            <div className="size-2 rounded-full bg-[#135bec] animate-pulse"></div>
-                                            <p className="text-slate-400 text-[10px] font-black uppercase tracking-[2px]">Wallet Mayorista</p>
+                            {(() => {
+                                const isLowCredits = availableCredits > 0 && availableCredits < (partner?.credits_total || 0) * 0.2;
+                                const isCriticalCredits = availableCredits > 0 && availableCredits < (partner?.credits_total || 0) * 0.1;
+
+                                return (
+                                    <div className={`glass-card rounded-2xl p-6 flex flex-col justify-between group overflow-hidden relative border transition-all duration-500 bg-gradient-to-br from-slate-900/80 to-slate-950/80 shadow-2xl ${isCriticalCredits ? 'border-rose-500 shadow-[0_0_30px_rgba(244,63,94,0.2)]' :
+                                        isLowCredits ? 'border-amber-500/50 shadow-[0_0_20px_rgba(245,158,11,0.1)]' :
+                                            'border-white/5'
+                                        }`}>
+                                        {/* Background pulse for critical state */}
+                                        {isCriticalCredits && (
+                                            <div className="absolute inset-0 bg-rose-500/5 animate-pulse pointer-events-none"></div>
+                                        )}
+
+                                        <div className="absolute -right-4 -top-4 opacity-[0.03] group-hover:opacity-[0.1] transition-opacity duration-500">
+                                            <Wallet className="size-40" />
                                         </div>
-                                        <h3 className="text-4xl font-black text-white">{availableCredits.toLocaleString()}</h3>
-                                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Créditos Disponibles</p>
+                                        <div className="flex justify-between items-start mb-6 relative z-10">
+                                            <div>
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <div className={`size-2 rounded-full animate-pulse ${isCriticalCredits ? 'bg-rose-500' :
+                                                        isLowCredits ? 'bg-amber-500' :
+                                                            'bg-[#135bec]'
+                                                        }`}></div>
+                                                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-[2px]">Wallet Mayorista</p>
+                                                </div>
+                                                <h3 className={`text-4xl font-black transition-colors ${isCriticalCredits ? 'text-rose-400' :
+                                                    isLowCredits ? 'text-amber-400' :
+                                                        'text-white'
+                                                    }`}>
+                                                    {availableCredits.toLocaleString()}
+                                                </h3>
+                                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Créditos Disponibles</p>
+                                            </div>
+                                            <div className={`p-3 rounded-xl shadow-inner transition-colors ${isCriticalCredits ? 'bg-rose-500/20 border border-rose-500/30 text-rose-500' :
+                                                isLowCredits ? 'bg-amber-500/20 border border-amber-500/30 text-amber-500' :
+                                                    'bg-[#135bec]/10 border border-[#135bec]/20 text-[#135bec]'
+                                                }`}>
+                                                <CreditCard className="w-6 h-6" />
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-3 relative z-10">
+                                            {isLowCredits && (
+                                                <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border mb-2 animate-in slide-in-from-top-2 duration-500 ${isCriticalCredits ? 'bg-rose-500/10 border-rose-500/20 text-rose-400' : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                                                    }`}>
+                                                    <span className="material-symbols-outlined !text-sm">warning</span>
+                                                    <span className="text-[9px] font-black uppercase tracking-widest">
+                                                        {isCriticalCredits ? 'Servicio en Riesgo Crítico' : 'Saldo bajo detectado'}
+                                                    </span>
+                                                </div>
+                                            )}
+
+                                            <div className="flex justify-between text-[11px] font-bold">
+                                                <span className="text-slate-500 uppercase tracking-[1px]">Consumo Global</span>
+                                                <span className={isCriticalCredits ? 'text-rose-400' : isLowCredits ? 'text-amber-400' : 'text-[#135bec]'}>
+                                                    {consumptionPercentage}%
+                                                </span>
+                                            </div>
+                                            <div className="w-full bg-slate-800/50 h-2.5 rounded-full overflow-hidden p-0.5 border border-white/5">
+                                                <motion.div
+                                                    initial={{ width: 0 }}
+                                                    animate={{ width: `${consumptionPercentage}%` }}
+                                                    transition={{ duration: 1, ease: 'easeOut' }}
+                                                    className={`h-full rounded-full shadow-lg transition-colors ${isCriticalCredits ? 'bg-gradient-to-r from-rose-600 to-rose-400' :
+                                                        isLowCredits ? 'bg-gradient-to-r from-amber-600 to-amber-400' :
+                                                            'bg-gradient-to-r from-[#135bec] to-[#3b82f6]'
+                                                        }`}
+                                                ></motion.div>
+                                            </div>
+                                            <div className="flex justify-between items-center text-[10px]">
+                                                <div className="flex flex-col">
+                                                    <span className="text-slate-500">Total: {partner?.credits_total?.toLocaleString()}</span>
+                                                    <span className="text-slate-700 text-[8px] font-bold mt-0.5 italic">Aprox. {availableCredits} fotos restantes</span>
+                                                </div>
+                                                <span className="text-slate-400 font-bold">Usados: {partner?.credits_used?.toLocaleString()}</span>
+                                            </div>
+                                            <button
+                                                onClick={() => {
+                                                    setView('wallet');
+                                                    setShowTopUpModal(true);
+                                                }}
+                                                className={`w-full py-2.5 text-white text-[9px] font-black rounded-lg border transition-all uppercase tracking-[2px] mt-2 block text-center ${isCriticalCredits ? 'bg-rose-500/20 border-rose-500/30 hover:bg-rose-500/30' :
+                                                    isLowCredits ? 'bg-amber-500/20 border-amber-500/30 hover:bg-amber-500/30' :
+                                                        'bg-white/5 border-white/5 hover:bg-white/10'
+                                                    }`}
+                                            >
+                                                Gestionar Saldo / Recargar
+                                            </button>
+                                        </div>
                                     </div>
-                                    <div className="p-3 bg-[#135bec]/10 border border-[#135bec]/20 rounded-xl text-[#135bec] shadow-inner">
-                                        <CreditCard className="w-6 h-6" />
-                                    </div>
-                                </div>
-                                <div className="space-y-3 relative z-10">
-                                    <div className="flex justify-between text-[11px] font-bold">
-                                        <span className="text-slate-500 uppercase tracking-[1px]">Consumo Global</span>
-                                        <span className="text-[#135bec]">{consumptionPercentage}%</span>
-                                    </div>
-                                    <div className="w-full bg-slate-800/50 h-2.5 rounded-full overflow-hidden p-0.5 border border-white/5">
-                                        <motion.div
-                                            initial={{ width: 0 }}
-                                            animate={{ width: `${consumptionPercentage}%` }}
-                                            transition={{ duration: 1, ease: 'easeOut' }}
-                                            className="bg-gradient-to-r from-[#135bec] to-[#3b82f6] h-full rounded-full shadow-[0_0_15px_rgba(19,91,236,0.3)]"
-                                        ></motion.div>
-                                    </div>
-                                    <div className="flex justify-between items-center text-[10px]">
-                                        <span className="text-slate-500">Total: {partner?.credits_total?.toLocaleString()}</span>
-                                        <span className="text-slate-400 font-bold">Usados: {partner?.credits_used?.toLocaleString()}</span>
-                                    </div>
-                                    <button
-                                        onClick={() => setView('wallet')}
-                                        className="w-full py-2.5 bg-white/5 hover:bg-white/10 text-white text-[9px] font-black rounded-lg border border-white/5 transition-all uppercase tracking-[2px] mt-2 block text-center"
-                                    >
-                                        Ver Detalles de Billetera
-                                    </button>
-                                </div>
-                            </div>
+                                );
+                            })()}
 
                             {/* Active Events Summary */}
                             <div className="glass-card rounded-2xl p-6 flex flex-col justify-between group overflow-hidden relative border border-white/5 bg-gradient-to-br from-slate-900/80 to-slate-950/80">
@@ -967,6 +1055,86 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
                             </div>
                         </div>
 
+                        {/* Floating Bulk Action Bar */}
+                        <AnimatePresence>
+                            {selectedPhotos.length > 0 && (
+                                <motion.div
+                                    initial={{ y: 100, opacity: 0 }}
+                                    animate={{ y: 0, opacity: 1 }}
+                                    exit={{ y: 100, opacity: 0 }}
+                                    className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[60] bg-slate-900/90 backdrop-blur-2xl border border-[#135bec]/30 rounded-2xl px-8 py-4 flex items-center gap-8 shadow-[0_20px_50px_rgba(0,0,0,0.5)]"
+                                >
+                                    <div className="flex flex-col">
+                                        <span className="text-[10px] font-black text-[#135bec] uppercase tracking-widest">Selección Activa</span>
+                                        <span className="text-xl font-black text-white">{selectedPhotos.length} <span className="text-xs text-slate-500 font-medium">Fotos</span></span>
+                                    </div>
+
+                                    <div className="w-px h-10 bg-white/10" />
+
+                                    <div className="flex items-center gap-3">
+                                        <button
+                                            onClick={() => setSelectedPhotos([])}
+                                            className="px-4 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-white transition-colors"
+                                        >
+                                            Cancelar
+                                        </button>
+                                        <button
+                                            onClick={async () => {
+                                                const zip = new JSZip();
+                                                showToast(`Preparando ZIP de ${selectedPhotos.length} fotos...`, 'info');
+                                                const folder = zip.folder(`seleccion-personalizada`);
+                                                const selectedFullPhotos = eventPhotos.filter(p => selectedPhotos.includes(p.id));
+
+                                                const promises = selectedFullPhotos.map(async (photo, i) => {
+                                                    const res = await fetch(photo.image_url);
+                                                    const blob = await res.blob();
+                                                    folder?.file(`photo-${i + 1}.jpg`, blob);
+                                                });
+                                                await Promise.all(promises);
+                                                const content = await zip.generateAsync({ type: 'blob' });
+                                                const url = window.URL.createObjectURL(content);
+                                                const a = document.createElement('a');
+                                                a.href = url;
+                                                a.download = `seleccion-fotos.zip`;
+                                                a.click();
+                                                showToast('ZIP de selección descargado');
+                                                setSelectedPhotos([]);
+                                            }}
+                                            className="px-6 py-2.5 bg-white text-black text-[10px] font-black rounded-xl hover:bg-slate-200 transition-all uppercase tracking-[2px] flex items-center gap-2"
+                                        >
+                                            <Download className="size-4" />
+                                            Descargar ZIP
+                                        </button>
+                                        <button
+                                            onClick={async () => {
+                                                if (confirm(`🚨 ACCIÓN MASIVA: ¿Estás seguro de eliminar ${selectedPhotos.length} fotos definitivamente?`)) {
+                                                    try {
+                                                        setModerationLoading(true);
+                                                        const { error } = await supabase
+                                                            .from('generations')
+                                                            .delete()
+                                                            .in('id', selectedPhotos);
+                                                        if (error) throw error;
+                                                        showToast(`${selectedPhotos.length} fotos eliminadas`);
+                                                        setSelectedPhotos([]);
+                                                        fetchEventPhotos(eventToModerate.id);
+                                                    } catch (err: any) {
+                                                        showToast(err.message, 'error');
+                                                    } finally {
+                                                        setModerationLoading(false);
+                                                    }
+                                                }
+                                            }}
+                                            className="px-6 py-2.5 bg-rose-500 text-white text-[10px] font-black rounded-xl hover:bg-rose-600 transition-all uppercase tracking-[2px] flex items-center gap-2"
+                                        >
+                                            <Trash2 className="size-4" />
+                                            Eliminar Seleccionadas
+                                        </button>
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+
                         {moderationLoading ? (
                             <div className="h-96 flex flex-col items-center justify-center gap-4">
                                 <div className="size-12 border-4 border-[#135bec]/30 border-t-[#135bec] rounded-full animate-spin" />
@@ -975,25 +1143,42 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
                         ) : (
                             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                                 {filteredPhotos.map((photo) => (
-                                    <div key={photo.id} className="group relative aspect-[3/4] rounded-2xl overflow-hidden border border-white/5 bg-slate-900 shadow-xl">
+                                    <div
+                                        key={photo.id}
+                                        onClick={() => {
+                                            if (selectedPhotos.includes(photo.id)) {
+                                                setSelectedPhotos(prev => prev.filter(id => id !== photo.id));
+                                            } else {
+                                                setSelectedPhotos(prev => [...prev, photo.id]);
+                                            }
+                                        }}
+                                        className={`group relative aspect-[3/4] rounded-2xl overflow-hidden border transition-all duration-300 cursor-pointer shadow-xl ${selectedPhotos.includes(photo.id) ? 'border-[#135bec] scale-[0.98] ring-4 ring-[#135bec]/20' : 'border-white/5 bg-slate-900'
+                                            }`}
+                                    >
+                                        {/* Selection Checkbox (Visual Only, parent handles click) */}
+                                        <div className={`absolute top-4 left-4 z-20 size-5 rounded-md border flex items-center justify-center transition-all ${selectedPhotos.includes(photo.id) ? 'bg-[#135bec] border-[#135bec] text-white' : 'bg-black/20 border-white/20 text-transparent opacity-0 group-hover:opacity-100'
+                                            }`}>
+                                            <span className="material-symbols-outlined !text-[14px] font-black">check</span>
+                                        </div>
+
                                         <img
                                             src={photo.image_url}
                                             alt="Generation"
-                                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                                            className={`w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 ${selectedPhotos.includes(photo.id) ? 'opacity-50' : ''}`}
                                         />
-                                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
-                                            <p className="text-[8px] font-mono text-white/50 mb-1 truncate">{photo.id}</p>
-                                            <p className="text-[10px] font-black text-white mb-4 truncate uppercase tracking-widest">{photo.profiles?.email || 'Anónimo'}</p>
+                                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-4 translate-y-2 group-hover:translate-y-0 transition-transform">
+                                            <p className="text-[8px] font-mono text-white/50 mb-0.5 truncate">{photo.id}</p>
+                                            <p className="text-[10px] font-black text-white mb-3 truncate uppercase tracking-widest">{photo.profiles?.email || 'Anónimo'}</p>
                                             <div className="flex gap-2">
                                                 <button
-                                                    onClick={() => handleDeletePhoto(photo.id)}
+                                                    onClick={(e) => { e.stopPropagation(); handleDeletePhoto(photo.id); }}
                                                     className="p-2.5 bg-rose-500/20 hover:bg-rose-500 border border-rose-500/30 rounded-xl text-rose-500 hover:text-white transition-all group/del"
                                                     title="Eliminar de la galería"
                                                 >
                                                     <Trash2 className="size-4 group-hover/del:scale-110 transition-transform" />
                                                 </button>
                                                 <button
-                                                    onClick={() => window.open(photo.image_url, '_blank')}
+                                                    onClick={(e) => { e.stopPropagation(); window.open(photo.image_url, '_blank'); }}
                                                     className="flex-1 py-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-xl text-white text-[9px] font-black uppercase tracking-widest hover:bg-white/20 transition-all flex items-center justify-center gap-2"
                                                 >
                                                     <ExternalLink className="size-3" />
@@ -1051,7 +1236,10 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
                                                 <span className="text-2xl font-black">{events.filter(e => e.is_active).length}</span>
                                             </div>
                                         </div>
-                                        <button className="ml-auto px-8 py-4 bg-white text-[#135bec] font-black rounded-2xl hover:scale-105 transition-all text-xs uppercase tracking-[2px] shadow-xl">
+                                        <button
+                                            onClick={() => setShowTopUpModal(true)}
+                                            className="ml-auto px-8 py-4 bg-white text-[#135bec] font-black rounded-2xl hover:scale-105 transition-all text-xs uppercase tracking-[2px] shadow-xl"
+                                        >
                                             Recargar Créditos
                                         </button>
                                     </div>
@@ -1347,6 +1535,65 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
                                             </div>
                                         </div>
                                     </div>
+                                </div>
+                            </div>
+
+                            {/* Live Feed Component - Global Activity */}
+                            <div className="mt-8">
+                                <div className="flex items-center justify-between mb-4 px-2">
+                                    <div className="flex items-center gap-3">
+                                        <div className="size-8 rounded-lg bg-orange-500/10 flex items-center justify-center text-orange-500">
+                                            <Zap className="size-4" />
+                                        </div>
+                                        <div>
+                                            <h4 className="text-xs font-black text-white uppercase tracking-widest">Global Live Feed</h4>
+                                            <p className="text-[9px] text-slate-500 font-bold uppercase tracking-[2px]">Últimas capturas en tus eventos</p>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => setView('events')}
+                                        className="text-[9px] font-black text-[#135bec] uppercase tracking-widest hover:underline"
+                                    >
+                                        Ver todos los eventos
+                                    </button>
+                                </div>
+
+                                <div className="relative group/feed">
+                                    <div className="flex gap-4 overflow-x-auto pb-6 pt-2 no-scrollbar scroll-smooth">
+                                        {recentGlobalPhotos.length > 0 ? (
+                                            recentGlobalPhotos.map((photo, idx) => (
+                                                <motion.div
+                                                    key={photo.id}
+                                                    initial={{ opacity: 0, scale: 0.9 }}
+                                                    animate={{ opacity: 1, scale: 1 }}
+                                                    transition={{ delay: idx * 0.1 }}
+                                                    className="min-w-[140px] md:min-w-[180px] aspect-[3/4] rounded-2xl overflow-hidden border border-white/5 bg-slate-900 shadow-xl relative group/item"
+                                                >
+                                                    <img
+                                                        src={photo.image_url}
+                                                        alt="Recent"
+                                                        className="w-full h-full object-cover grayscale-[0.5] group-hover/item:grayscale-0 transition-all duration-500"
+                                                    />
+                                                    <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/80 to-transparent">
+                                                        <p className="text-[7px] font-black text-white/50 uppercase tracking-widest mb-0.5">
+                                                            {events.find(e => e.id === photo.event_id)?.event_name || 'Evento'}
+                                                        </p>
+                                                        <p className="text-[8px] font-bold text-white uppercase">
+                                                            Hace {Math.floor((Date.now() - new Date(photo.created_at).getTime()) / 60000)}m
+                                                        </p>
+                                                    </div>
+                                                </motion.div>
+                                            ))
+                                        ) : (
+                                            <div className="w-full h-40 rounded-[32px] border border-dashed border-white/10 flex flex-col items-center justify-center text-slate-600">
+                                                <span className="material-symbols-outlined text-3xl mb-2 opacity-20">cloud_off</span>
+                                                <p className="text-[10px] font-black uppercase tracking-[2px]">Esperando actividad...</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                    {/* Gradient Masks for horizontal scroll */}
+                                    <div className="absolute inset-y-0 left-0 w-20 bg-gradient-to-r from-[#0a0c0b]/50 to-transparent pointer-events-none opacity-0 group-hover/feed:opacity-100 transition-opacity"></div>
+                                    <div className="absolute inset-y-0 right-0 w-20 bg-gradient-to-l from-[#0a0c0b]/50 to-transparent pointer-events-none opacity-0 group-hover/feed:opacity-100 transition-opacity"></div>
                                 </div>
                             </div>
                         </div>
@@ -1682,6 +1929,112 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
                                 >
                                     Confirmar Baja
                                 </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
+
+            {/* Top-Up Credits Modal (Cards de Cristal) */}
+            <AnimatePresence>
+                {showTopUpModal && (
+                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8">
+                        <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            onClick={() => setShowTopUpModal(false)}
+                            className="absolute inset-0 bg-slate-950/80 backdrop-blur-md"
+                        />
+                        <motion.div
+                            initial={{ scale: 0.9, opacity: 0, y: 30 }}
+                            animate={{ scale: 1, opacity: 1, y: 0 }}
+                            exit={{ scale: 0.9, opacity: 0, y: 30 }}
+                            className="relative w-full max-w-5xl glass-card rounded-[48px] overflow-hidden bg-gradient-to-br from-slate-900/40 to-slate-950/40 border border-white/5 shadow-[0_32px_100px_rgba(0,0,0,0.8)]"
+                        >
+                            {/* Modal Header */}
+                            <div className="p-10 pb-4 flex justify-between items-start">
+                                <div className="space-y-1">
+                                    <div className="flex items-center gap-3">
+                                        <div className="p-2.5 bg-[#135bec]/10 border border-[#135bec]/20 rounded-xl">
+                                            <Wallet className="size-5 text-[#135bec]" />
+                                        </div>
+                                        <h2 className="text-3xl font-black text-white uppercase tracking-tighter">Cargar Energía AI</h2>
+                                    </div>
+                                    <p className="text-slate-500 text-[10px] font-black uppercase tracking-[3px] mt-2">Selecciona un pack de créditos para continuar operando</p>
+                                </div>
+                                <button
+                                    onClick={() => setShowTopUpModal(false)}
+                                    className="p-4 hover:bg-white/5 rounded-full text-slate-500 transition-colors group"
+                                >
+                                    <X className="size-6 group-hover:rotate-90 transition-transform duration-300" />
+                                </button>
+                            </div>
+
+                            {/* Cards Grid */}
+                            <div className="p-10 grid grid-cols-1 md:grid-cols-3 gap-8">
+                                {[
+                                    { qty: 5000, label: 'Pack Inicial', price: 30000, color: 'from-blue-600/10 to-transparent', border: 'border-blue-500/20' },
+                                    { qty: 10000, label: 'Pack Pro', price: 60000, color: 'from-[#135bec]/20 to-[#135bec]/5', border: 'border-[#135bec]/40', featured: true },
+                                    { qty: 20000, label: 'Pack Elite', price: 120000, color: 'from-purple-600/10 to-transparent', border: 'border-purple-500/20' }
+                                ].map((plan, i) => (
+                                    <motion.button
+                                        key={i}
+                                        disabled={isProcessingPayment}
+                                        whileHover={isProcessingPayment ? {} : { scale: 1.02, y: -8 }}
+                                        whileTap={isProcessingPayment ? {} : { scale: 0.98 }}
+                                        onClick={() => handlePurchase(plan)}
+                                        className={`relative group p-10 rounded-[40px] border ${plan.border} bg-gradient-to-br ${plan.color} backdrop-blur-3xl flex flex-col text-left transition-all overflow-hidden h-full ${isProcessingPayment ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    >
+                                        {plan.featured && (
+                                            <div className="absolute top-0 right-0 px-6 py-2 bg-[#135bec] text-white text-[9px] font-black uppercase tracking-widest rounded-bl-2xl shadow-lg animate-pulse">
+                                                Popular
+                                            </div>
+                                        )}
+
+                                        <div className="mb-12">
+                                            <p className="text-white/40 text-[10px] font-black uppercase tracking-[2px] mb-2">{plan.label}</p>
+                                            <h3 className="text-5xl font-black text-white flex items-baseline gap-2">
+                                                {plan.qty.toLocaleString()}
+                                                <span className="text-sm text-white/20 font-medium uppercase tracking-[3px]">Cds</span>
+                                            </h3>
+                                        </div>
+
+                                        <div className="mt-auto pt-10 border-t border-white/5 flex items-end justify-between">
+                                            <div className="space-y-1">
+                                                <p className="text-white/20 text-[9px] font-black uppercase tracking-widest">Inversión</p>
+                                                <h4 className="text-3xl font-black text-white tracking-tighter">${plan.price.toLocaleString()} <span className="text-xs text-white/30 font-medium uppercase tracking-widest ml-1">Ars</span></h4>
+                                            </div>
+                                            <div className="size-14 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-center group-hover:bg-white text-white group-hover:text-black transition-all shadow-xl">
+                                                {isProcessingPayment ? (
+                                                    <div className="size-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                                                ) : (
+                                                    <ArrowUpRight className="size-6" />
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Decorative details */}
+                                        <div className="absolute -bottom-10 -right-10 size-40 bg-white/5 rounded-full blur-[80px] group-hover:bg-white/10 transition-all opacity-0 group-hover:opacity-100" />
+                                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                                    </motion.button>
+                                ))}
+                            </div>
+
+                            {/* Trust Footer */}
+                            <div className="p-10 pt-0 flex flex-col items-center">
+                                <div className="flex items-center gap-8 opacity-40 hover:opacity-100 transition-all duration-500 grayscale hover:grayscale-0">
+                                    <img src="https://logodownload.org/wp-content/uploads/2019/06/mercado-pago-logo.png" className="h-5" alt="Mercado Pago" />
+                                    <div className="w-px h-6 bg-white/10" />
+                                    <div className="flex gap-4">
+                                        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Visa_Inc._logo.svg/2560px-Visa_Inc._logo.svg.png" className="h-3.5" alt="Visa" />
+                                        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Mastercard-logo.svg/1280px-Mastercard-logo.svg.png" className="h-5" alt="Mastercard" />
+                                    </div>
+                                </div>
+                                <p className="text-[9px] text-slate-600 font-black uppercase tracking-[3px] mt-8 flex items-center gap-3">
+                                    <Shield className="size-4 text-emerald-500/50" />
+                                    Transacciones encriptadas y aseguradas por Mercado Pago Gateway
+                                </p>
                             </div>
                         </motion.div>
                     </div>
