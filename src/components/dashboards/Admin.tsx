@@ -135,7 +135,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                 supabase.from('partners').select('*'),
                 supabase.from('events').select('*'),
                 supabase.from('profiles').select('*'),
-                supabase.from('generations').select('id, created_at, model_id, event_id, user_id, image_url, events(event_name, partner_id), profiles(email)').order('created_at', { ascending: false }).limit(200),
+                supabase.from('generations').select('id, created_at, style_id, event_id, user_id, image_url, events(event_name, partner_id), profiles(email)').order('created_at', { ascending: false }).limit(200),
                 supabase.from('styles_metadata').select('*'),
                 supabase.from('identity_prompts').select('*')
             ]);
@@ -262,8 +262,8 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
 
             const styleCounts: Record<string, number> = {};
             generationsData.forEach((g: any) => {
-                if (g.model_id) {
-                    styleCounts[g.model_id] = (styleCounts[g.model_id] || 0) + 1;
+                if (g.style_id) {
+                    styleCounts[g.style_id] = (styleCounts[g.style_id] || 0) + 1;
                 }
             });
 
@@ -293,7 +293,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
             setRecentLogs(generationsData.map((g: any) => ({
                 id: g.id,
                 type: 'success',
-                title: g.model_id ? `AI Generation: ${g.model_id}` : 'Generación Exitosa',
+                title: g.style_id ? `AI Generation: ${g.style_id}` : 'Generación Exitosa',
                 text: g.event_id ? `Evento: ${g.events?.event_name || 'Desconocido'}` : 'Uso Directo B2C',
                 time: new Date(g.created_at).toLocaleString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
                 event_id: g.event_id,
@@ -2389,7 +2389,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
 
                                             <div className="grid grid-cols-4 gap-3">
                                                 {stats.allGenerations
-                                                    .filter(g => g.model_id === (editingStyle as any).id)
+                                                    .filter(g => g.style_id === (editingStyle as any).id)
                                                     .slice(0, 4)
                                                     .map((gen, idx) => (
                                                         <div key={idx} className="aspect-square rounded-2xl overflow-hidden border border-white/5 bg-slate-900 group/outcome relative">
@@ -2406,7 +2406,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                                             </div>
                                                         </div>
                                                     ))}
-                                                {stats.allGenerations.filter(g => g.model_id === (editingStyle as any).id).length === 0 && (
+                                                {stats.allGenerations.filter(g => g.style_id === (editingStyle as any).id).length === 0 && (
                                                     <div className="col-span-4 h-24 rounded-2xl border border-dashed border-[#1f2b24] flex items-center justify-center">
                                                         <p className="text-[9px] font-black text-slate-700 uppercase tracking-[2px]">No hay ejecuciones recientes detectadas</p>
                                                     </div>

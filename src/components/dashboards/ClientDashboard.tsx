@@ -64,6 +64,10 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, profile,
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [recentPhotos, setRecentPhotos] = useState<any[]>([]);
+    const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | null }>({
+        message: '',
+        type: null
+    });
 
     // Config state
     const [config, setConfig] = useState<EventConfig>({
@@ -79,6 +83,11 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, profile,
     useEffect(() => {
         fetchEventForClient();
     }, [profile.email]);
+
+    const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
+        setToast({ message, type });
+        setTimeout(() => setToast({ message: '', type: null }), 3000);
+    };
 
     const fetchEventForClient = async () => {
         try {
@@ -238,7 +247,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, profile,
         </div>
     );
 
-    const eventLink = `https://photobooth.creativa-labs.com/?event=${event.event_slug}`;
+    const eventLink = `https://kiosk.metalabia.com/?event=${event.event_slug}`;
     const creditsUsed = event.credits_used || 0;
     const creditsTotal = event.credits_allocated || 500;
     const percentageUsed = Math.min(100, Math.round((creditsUsed / creditsTotal) * 100));
@@ -607,20 +616,20 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, profile,
                                 </div>
                             </div>
 
-                            <div className="space-y-4">
-                                <button className="w-full py-4.5 bg-white text-[#0f172a] font-black text-xs uppercase tracking-widest rounded-2xl flex items-center justify-center gap-3 shadow-xl hover:scale-[1.03] transition-transform active:scale-95 group">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <button className="w-full py-4 bg-white text-[#0f172a] font-black text-[10px] uppercase tracking-widest rounded-2xl flex items-center justify-center gap-2 shadow-xl hover:scale-[1.02] transition-transform active:scale-95 group">
                                     <Download className="w-4 h-4 group-hover:animate-bounce" />
-                                    Descargar QR para Imprimir
+                                    Descargar QR
                                 </button>
                                 <button
                                     onClick={() => {
                                         navigator.clipboard.writeText(eventLink);
-                                        alert('¡Link copiado al portapapeles!');
+                                        showToast('¡Link copiado con éxito! ✨');
                                     }}
-                                    className="w-full py-4.5 bg-white/5 text-white/70 hover:text-white border border-white/10 font-bold text-xs uppercase tracking-widest rounded-2xl flex items-center justify-center gap-3 hover:bg-white/10 transition-all"
+                                    className="w-full py-4 bg-white/10 text-white border border-white/10 font-black text-[10px] uppercase tracking-widest rounded-2xl flex items-center justify-center gap-2 hover:bg-white/20 transition-all hover:scale-[1.02] active:scale-95 group"
                                 >
-                                    <LinkIcon className="w-4 h-4" />
-                                    Copiar Enlace Directo
+                                    <LinkIcon className="w-4 h-4 group-hover:rotate-12 transition-transform" />
+                                    Copiar Enlace
                                 </button>
                             </div>
 
@@ -657,6 +666,24 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, profile,
                     </div>
                 </div>
             </main>
+
+            {/* Toast System */}
+            <AnimatePresence>
+                {toast.message && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 50, scale: 0.9 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 20, scale: 0.9 }}
+                        className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-2xl bg-slate-900/90 backdrop-blur-xl border border-white/10 shadow-2xl flex items-center gap-3 min-w-[300px]"
+                    >
+                        <div className={`p-2 rounded-xl ${toast.type === 'error' ? 'bg-red-500/20 text-red-400' : 'bg-[#7f13ec]/20 text-[#7f13ec]'
+                            }`}>
+                            {toast.type === 'error' ? <X className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+                        </div>
+                        <p className="text-xs font-bold text-white uppercase tracking-widest">{toast.message}</p>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             <style>{`
                 @keyframes shimmer {
