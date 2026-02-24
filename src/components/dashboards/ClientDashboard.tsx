@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '../../lib/supabaseClient';
 import {
@@ -28,10 +28,18 @@ import {
     Trash2,
     Edit2,
     Smartphone,
-    ChevronLeft
+    ChevronLeft,
+    Filter,
+    Check,
+    Trophy,
+    TrendingUp,
+    Maximize,
+    Play,
+    Pause
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { PREFERRED_PACK_ORDER, IDENTITIES } from '../../lib/constants';
+import JSZip from 'jszip';
 
 // Interfaces
 interface EventConfig {
@@ -64,6 +72,10 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, profile,
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [recentPhotos, setRecentPhotos] = useState<any[]>([]);
+    const [downloading, setDownloading] = useState(false);
+    const [deletingId, setDeletingId] = useState<string | null>(null);
+    const [isSlideshowOpen, setIsSlideshowOpen] = useState(false);
+    const [slideshowIndex, setSlideshowIndex] = useState(0);
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | null }>({
         message: '',
         type: null
@@ -79,6 +91,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, profile,
     const [partnerBranding, setPartnerBranding] = useState<any>(null);
     const [eventName, setEventName] = useState('');
     const [eventDate, setEventDate] = useState('');
+    const [selectedStyles, setSelectedStyles] = useState<string[]>([]);
 
     useEffect(() => {
         fetchEventForClient();
@@ -102,6 +115,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, profile,
                 setEvent(data);
                 setEventName(data.event_name);
                 setEventDate(data.start_date ? data.start_date.split('T')[0] : '');
+                setSelectedStyles(data.selected_styles || []);
 
                 // Prioritize event config, then partner config
                 const finalConfig = {
@@ -137,6 +151,65 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, profile,
         }
     };
 
+    const downloadAllPhotos = async () => {
+        if (recentPhotos.length === 0) return;
+        try {
+            setDownloading(true);
+            const zip = new JSZip();
+            const folder = zip.folder(`fotos-${event?.event_slug}`);
+
+            const photoPromises = recentPhotos.map(async (photo, index) => {
+                try {
+                    const response = await fetch(photo.image_url);
+                    const blob = await response.blob();
+                    folder?.file(`generacion-${index + 1}.jpg`, blob);
+                } catch (err) {
+                    console.error('Error downloading photo:', err);
+                }
+            });
+
+            await Promise.all(photoPromises);
+            const content = await zip.generateAsync({ type: "blob" });
+            const url = window.URL.createObjectURL(content);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `event-photos-${event?.event_slug}.zip`;
+            link.click();
+            showToast('¡Descarga iniciada con éxito! 📦');
+        } catch (error) {
+            console.error('Error generating ZIP:', error);
+            showToast('Error al generar el archivo ZIP', 'error');
+        } finally {
+            setDownloading(false);
+        }
+    };
+
+    const handleDeletePhoto = async (photoId: string) => {
+        if (!confirm('¿Estás seguro de eliminar esta foto? Esta acción no se puede deshacer.')) return;
+        try {
+            setDeletingId(photoId);
+            const { error } = await supabase.from('generations').delete().eq('id', photoId);
+            if (error) throw error;
+            setRecentPhotos(recentPhotos.filter(p => p.id !== photoId));
+            showToast('Foto eliminada correctamente');
+        } catch (error: any) {
+            showToast('Error al eliminar: ' + error.message, 'error');
+        } finally {
+            setDeletingId(null);
+        }
+    };
+
+    // Slideshow Auto-play logic
+    useEffect(() => {
+        let interval: NodeJS.Timeout;
+        if (isSlideshowOpen && recentPhotos.length > 0) {
+            interval = setInterval(() => {
+                setSlideshowIndex(prev => (prev + 1) % recentPhotos.length);
+            }, 5000);
+        }
+        return () => clearInterval(interval);
+    }, [isSlideshowOpen, recentPhotos.length]);
+
     const handleSave = async () => {
         if (!event) return;
         try {
@@ -146,15 +219,16 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, profile,
                 .update({
                     event_name: eventName,
                     start_date: eventDate,
-                    config: config
+                    config: config,
+                    selected_styles: selectedStyles
                 })
                 .eq('id', event.id);
 
             if (error) throw error;
-            alert('¡Configuración guardada con éxito!');
-        } catch (error) {
+            showToast('¡Configuración guardada con éxito! ✨');
+        } catch (error: any) {
             console.error('Error saving:', error);
-            alert('Error al guardar los cambios.');
+            showToast(error.message || 'Error al guardar los cambios.', 'error');
         } finally {
             setSaving(false);
         }
@@ -252,6 +326,48 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, profile,
     const creditsTotal = event.credits_allocated || 500;
     const percentageUsed = Math.min(100, Math.round((creditsUsed / creditsTotal) * 100));
     const dashOffset = 552.92 - (552.92 * percentageUsed) / 100; // For the gauge
+
+    // Group identities by style pack
+    const stylePacks = useMemo(() => {
+        const uniquePacks = Array.from(new Set(IDENTITIES.map(i => i.subCategory)));
+        return uniquePacks.map(pack => {
+            const firstIdentity = IDENTITIES.find(i => i.subCategory === pack);
+            return {
+                id: pack,
+                name: pack,
+                thumbnail: firstIdentity?.url || '',
+                category: firstIdentity?.category || 'General'
+            };
+        });
+    }, []);
+
+    const toggleStyle = (styleId: string) => {
+        if (selectedStyles.includes(styleId)) {
+            setSelectedStyles(selectedStyles.filter(s => s !== styleId));
+        } else {
+            setSelectedStyles([...selectedStyles, styleId]);
+        }
+    };
+
+    // Calculate real stats
+    const stats = useMemo(() => {
+        const totalPhotos = recentPhotos.length;
+        const uniqueUsers = new Set(recentPhotos.map(p => p.user_id)).size;
+
+        const styleCounts: Record<string, number> = {};
+        recentPhotos.forEach(p => {
+            styleCounts[p.style_id] = (styleCounts[p.style_id] || 0) + 1;
+        });
+
+        const topStyleEntry = Object.entries(styleCounts).sort((a, b) => b[1] - a[1])[0];
+        const topStyle = topStyleEntry ? topStyleEntry[0] : 'Ninguno';
+
+        return {
+            totalPhotos,
+            uniqueUsers: uniqueUsers || '--',
+            topStyle
+        };
+    }, [recentPhotos]);
 
     return (
         <div className="bg-[#0f172a] text-slate-100 min-h-screen font-sans selection:bg-[#7f13ec]/30 overflow-x-hidden">
@@ -491,13 +607,25 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, profile,
                                         <p className="text-xs text-slate-500 font-medium uppercase tracking-widest mt-0.5">Fotos Generadas</p>
                                     </div>
                                 </div>
-                                <motion.button
-                                    whileHover={{ x: 5 }}
-                                    onClick={() => window.open(eventLink, '_blank')}
-                                    className="text-xs font-bold text-[#7f13ec]/80 hover:text-[#7f13ec] uppercase tracking-widest flex items-center gap-2 transition-colors"
-                                >
-                                    Abrir Galería <ExternalLink className="w-4 h-4" />
-                                </motion.button>
+                                <div className="flex items-center gap-3">
+                                    <motion.button
+                                        whileHover={{ scale: 1.05 }}
+                                        whileTap={{ scale: 0.95 }}
+                                        onClick={downloadAllPhotos}
+                                        disabled={downloading || recentPhotos.length === 0}
+                                        className="text-xs font-bold text-[#7f13ec] hover:text-[#7f13ec]/80 uppercase tracking-widest flex items-center gap-2 transition-colors disabled:opacity-50"
+                                    >
+                                        {downloading ? 'Generando ZIP...' : 'Descargar Todo'} <Download className="w-4 h-4" />
+                                    </motion.button>
+                                    <div className="w-px h-4 bg-white/10 mx-1"></div>
+                                    <motion.button
+                                        whileHover={{ x: 5 }}
+                                        onClick={() => window.open(eventLink.replace('kiosk', 'photobooth'), '_blank')}
+                                        className="text-xs font-bold text-slate-400 hover:text-white uppercase tracking-widest flex items-center gap-2 transition-colors"
+                                    >
+                                        Abrir Galería <ExternalLink className="w-4 h-4" />
+                                    </motion.button>
+                                </div>
                             </div>
 
                             <div className="flex gap-5 overflow-x-auto pb-6 scroll-smooth custom-scrollbar snap-x">
@@ -508,15 +636,30 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, profile,
                                             initial={{ opacity: 0, scale: 0.9 }}
                                             animate={{ opacity: 1, scale: 1 }}
                                             transition={{ delay: idx * 0.05 }}
-                                            className="min-w-[180px] group/photo relative aspect-[3/4] rounded-2xl overflow-hidden snap-start border border-white/5 shadow-2xl"
+                                            className="min-w-[180px] group/photo relative aspect-[3/4] rounded-2xl overflow-hidden snap-start border border-white/5 shadow-2xl bg-slate-900"
                                         >
                                             <img src={photo.image_url} alt="Generation" className="w-full h-full object-cover transition-transform duration-700 group-hover/photo:scale-110" />
-                                            <div className="absolute inset-0 bg-gradient-to-t from-[#0f172a] via-transparent to-transparent opacity-0 group-hover/photo:opacity-100 transition-opacity duration-300 flex items-end p-4">
-                                                <div className="flex items-center gap-2">
-                                                    <Clock className="w-3 h-3 text-[#7f13ec]" />
-                                                    <p className="text-[10px] text-white font-bold opacity-80">
-                                                        {new Date(photo.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                                    </p>
+
+                                            {/* Moderation Overlay */}
+                                            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-slate-950/40 opacity-0 group-hover/photo:opacity-100 transition-opacity duration-300">
+                                                <div className="absolute top-3 right-3 flex flex-col gap-2">
+                                                    <motion.button
+                                                        whileHover={{ scale: 1.1 }}
+                                                        whileTap={{ scale: 0.9 }}
+                                                        onClick={() => handleDeletePhoto(photo.id)}
+                                                        className="p-2 bg-red-500/20 hover:bg-red-500 text-red-500 hover:text-white rounded-xl backdrop-blur-md transition-all border border-red-500/20"
+                                                    >
+                                                        {deletingId === photo.id ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                                                    </motion.button>
+                                                </div>
+
+                                                <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        <Clock className="w-3 h-3 text-[#7f13ec]" />
+                                                        <p className="text-[10px] text-white font-bold opacity-80 uppercase tracking-tighter">
+                                                            {new Date(photo.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                        </p>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </motion.div>
@@ -529,6 +672,68 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, profile,
                                         <p className="text-sm text-slate-600 font-medium italic">Las fotos de tu fiesta aparecerán aquí conforme se generen...</p>
                                     </div>
                                 )}
+                            </div>
+                        </section>
+
+                        {/* 3. Curaduría de Experiencias (Estilos) */}
+                        <section className="bg-white/[0.03] border border-white/10 rounded-3xl p-8 backdrop-blur-sm group hover:border-[#7f13ec]/30 transition-all duration-500">
+                            <div className="flex items-center justify-between mb-8">
+                                <div className="flex items-center gap-4">
+                                    <div className="p-3 bg-[#7f13ec]/10 rounded-2xl border border-[#7f13ec]/20 group-hover:scale-110 transition-transform">
+                                        <Sparkles className="w-6 h-6 text-[#7f13ec]" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-xl font-bold text-white tracking-tight">Curaduría de Experiencias</h3>
+                                        <p className="text-xs text-slate-500 font-medium uppercase tracking-widest mt-0.5">Paso 03 — Pack de Estilos IA</p>
+                                    </div>
+                                </div>
+                                <div className="px-3 py-1 bg-[#7f13ec]/10 rounded-full border border-[#7f13ec]/20 text-[10px] font-black text-[#7f13ec] uppercase tracking-widest">
+                                    {selectedStyles.length} Packs Activos
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                                {stylePacks.map((pack) => {
+                                    const isActive = selectedStyles.includes(pack.id);
+                                    return (
+                                        <motion.div
+                                            key={pack.id}
+                                            whileHover={{ y: -4 }}
+                                            whileTap={{ scale: 0.98 }}
+                                            onClick={() => toggleStyle(pack.id)}
+                                            className={`relative aspect-[3/4] rounded-2xl overflow-hidden cursor-pointer border-2 transition-all duration-300 ${isActive ? 'border-[#7f13ec] shadow-[0_0_20px_rgba(127,19,236,0.2)]' : 'border-white/5 hover:border-white/20'
+                                                }`}
+                                        >
+                                            <img
+                                                src={pack.thumbnail}
+                                                alt={pack.name}
+                                                className={`w-full h-full object-cover transition-transform duration-700 ${isActive ? 'scale-110' : 'grayscale group-hover:grayscale-0'}`}
+                                            />
+                                            <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent"></div>
+
+                                            {isActive && (
+                                                <div className="absolute top-3 right-3 w-6 h-6 bg-[#7f13ec] rounded-full flex items-center justify-center shadow-lg border border-white/20 z-10 animate-in zoom-in duration-300">
+                                                    <Check className="w-4 h-4 text-white" />
+                                                </div>
+                                            )}
+
+                                            <div className="absolute bottom-4 left-4 right-4">
+                                                <p className="text-[10px] font-black text-[#7f13ec] uppercase tracking-widest mb-1">{pack.category}</p>
+                                                <h4 className="text-xs font-bold text-white leading-tight">{pack.name}</h4>
+                                            </div>
+                                        </motion.div>
+                                    );
+                                })}
+                            </div>
+
+                            <div className="mt-8 p-4 bg-emerald-500/5 border border-emerald-500/10 rounded-2xl flex items-start gap-4">
+                                <div className="p-2 bg-emerald-500/10 rounded-lg">
+                                    <Shield className="w-4 h-4 text-emerald-500" />
+                                </div>
+                                <div>
+                                    <p className="text-[11px] font-bold text-emerald-400/80 uppercase tracking-widest">Control de Calidad</p>
+                                    <p className="text-[10px] text-slate-500 mt-1">Solo los packs seleccionados aquí aparecerán en la pantalla de invitados. Recomendamos elegir entre 3 y 5 para una experiencia óptima.</p>
+                                </div>
                             </div>
                         </section>
                     </div>
@@ -654,18 +859,135 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, profile,
                         <div className="grid grid-cols-2 gap-4">
                             <div className="bg-white/[0.03] border border-white/10 rounded-3xl p-6 text-center group hover:bg-[#7f13ec]/5 transition-colors">
                                 <Users className="w-5 h-5 text-slate-600 mx-auto mb-3 group-hover:text-[#7f13ec]" />
-                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Invitados</p>
-                                <p className="text-3xl font-black text-white tracking-tighter">--</p>
+                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Participantes</p>
+                                <p className="text-3xl font-black text-white tracking-tighter">{stats.uniqueUsers}</p>
                             </div>
-                            <div className="bg-white/[0.03] border border-white/10 rounded-3xl p-6 text-center group hover:bg-[#7f13ec]/5 transition-colors">
-                                <Zap className="w-5 h-5 text-slate-600 mx-auto mb-3 group-hover:text-[#ec4899]" />
-                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Tiempo IA</p>
-                                <p className="text-3xl font-black text-white tracking-tighter">~15s</p>
+                            <div className="bg-white/[0.03] border border-white/10 rounded-3xl p-6 text-center group hover:bg-[#7f13ec]/5 transition-colors overflow-hidden">
+                                <Trophy className="w-5 h-5 text-slate-600 mx-auto mb-3 group-hover:text-[#ec4899]" />
+                                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1">Estilo Favorito</p>
+                                <p className="text-xl font-black text-white tracking-tighter truncate">{stats.topStyle || '--'}</p>
                             </div>
+                        </div>
+
+                        <div className="bg-white/[0.03] border border-white/10 rounded-3xl p-6 group hover:border-[#7f13ec]/30 transition-all">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-lg bg-[#7f13ec]/10 flex items-center justify-center">
+                                        <TrendingUp className="w-4 h-4 text-[#7f13ec]" />
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest leading-none">Crecimiento</p>
+                                        <p className="text-sm font-bold text-white mt-1">Nivel de Engagement</p>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-xs font-black text-[#7f13ec] uppercase">Alto</p>
+                                    <p className="text-[10px] text-slate-500 font-medium">Basado en {stats.totalPhotos} fotos</p>
+                                </div>
+                            </div>
+                        </div>
+                        {/* 7. Live Slideshow Trigger */}
+                        <motion.button
+                            whileHover={{ scale: 1.02, y: -2 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => setIsSlideshowOpen(true)}
+                            className="w-full py-6 rounded-3xl bg-gradient-to-r from-[#7f13ec] to-[#ec4899] text-white font-black uppercase tracking-[0.2em] shadow-[0_0_30px_rgba(127,19,236,0.4)] flex items-center justify-center gap-3 group relative overflow-hidden mt-8"
+                        >
+                            <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-500"></div>
+                            <Monitor className="w-5 h-5 relative z-10" />
+                            <span className="relative z-10">Inaugurar Slideshow</span>
+                            <div className="p-1 bg-white/20 rounded-lg relative z-10">
+                                <Maximize className="w-3 h-3" />
+                            </div>
+                        </motion.button>
+
+                        <div className="p-4 bg-white/5 border border-white/10 rounded-2xl mt-4">
+                            <p className="text-[10px] text-slate-500 font-medium leading-relaxed italic text-center">
+                                Abre esta vista en una pantalla secundaria o proyector para mostrar las creaciones en tiempo real.
+                            </p>
                         </div>
                     </div>
                 </div>
             </main>
+
+            {/* Live Slideshow Overlay */}
+            <AnimatePresence>
+                {isSlideshowOpen && recentPhotos.length > 0 && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[200] bg-slate-950 flex flex-col items-center justify-center overflow-hidden"
+                    >
+                        <motion.button
+                            whileHover={{ scale: 1.1 }}
+                            whileTap={{ scale: 0.9 }}
+                            onClick={() => setIsSlideshowOpen(false)}
+                            className="absolute top-10 right-10 p-4 bg-white/10 hover:bg-white/20 text-white rounded-full backdrop-blur-xl border border-white/20 z-[210] transition-all"
+                        >
+                            <X className="w-8 h-8" />
+                        </motion.button>
+
+                        <div className="absolute top-10 left-10 flex items-center gap-4 z-[210]">
+                            <div className="p-3 bg-[#7f13ec] rounded-2xl shadow-2xl">
+                                <Sparkles className="w-6 h-6 text-white" />
+                            </div>
+                            <div>
+                                <h2 className="text-2xl font-black text-white tracking-widest uppercase italic">{eventName}</h2>
+                                <p className="text-[#7f13ec] font-bold tracking-widest uppercase text-xs">Live Slideshow Mode</p>
+                            </div>
+                        </div>
+
+                        <AnimatePresence mode="wait">
+                            <motion.div
+                                key={recentPhotos[slideshowIndex].id}
+                                initial={{ opacity: 0, scale: 1.1, rotateY: 10 }}
+                                animate={{ opacity: 1, scale: 1, rotateY: 0 }}
+                                exit={{ opacity: 0, scale: 0.9, rotateY: -10 }}
+                                transition={{ duration: 1.2, ease: "easeOut" }}
+                                className="relative w-full h-full flex items-center justify-center p-20"
+                            >
+                                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-slate-950/80 z-10"></div>
+                                <img
+                                    src={recentPhotos[slideshowIndex].image_url}
+                                    alt="Slideshow"
+                                    className="max-w-full max-h-full object-contain rounded-[40px] shadow-[0_0_100px_rgba(127,19,236,0.3)] border-4 border-white/10"
+                                />
+
+                                <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-20 text-center">
+                                    <motion.div
+                                        initial={{ y: 20, opacity: 0 }}
+                                        animate={{ y: 0, opacity: 1 }}
+                                        transition={{ delay: 0.5 }}
+                                        className="inline-block px-8 py-4 bg-white/10 backdrop-blur-3xl rounded-full border border-white/20 shadow-2xl"
+                                    >
+                                        <p className="text-lg font-black text-white uppercase tracking-[0.3em]">
+                                            Escanea y crea la tuya
+                                        </p>
+                                    </motion.div>
+
+                                    <div className="mt-8 flex items-center justify-center gap-10">
+                                        <div className="p-4 bg-white rounded-[32px] shadow-2xl">
+                                            <QRCodeSVG value={eventLink} size={150} level="M" />
+                                        </div>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        </AnimatePresence>
+
+                        {/* Progress Bar */}
+                        <div className="absolute bottom-0 left-0 right-0 h-2 bg-white/5">
+                            <motion.div
+                                key={slideshowIndex}
+                                initial={{ width: "0%" }}
+                                animate={{ width: "100%" }}
+                                transition={{ duration: 5, ease: "linear" }}
+                                className="h-full bg-[#7f13ec]"
+                            />
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
 
             {/* Toast System */}
             <AnimatePresence>
