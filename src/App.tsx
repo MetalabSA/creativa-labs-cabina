@@ -95,6 +95,7 @@ const App: React.FC = () => {
     const params = new URLSearchParams(window.location.search);
     return !!params.get('event'); // true si hay ?event= en la URL → evita flash de login
   });
+  const [isPreEvent, setIsPreEvent] = useState(false);
 
   const PREMIUM_PACK_PRICE = 3000;
 
@@ -300,10 +301,16 @@ const App: React.FC = () => {
             // --- VALIDACIÓN DE FECHAS ---
             const now = new Date();
             if (data.start_date && new Date(data.start_date) > now) {
-              const startFormatted = new Date(data.start_date).toLocaleDateString('es-AR', {
-                day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
-              });
-              setEventError(`🗓️ Este evento aún no comenzó. Arranca el ${startFormatted}`);
+              if (data.config?.show_welcome_screen) {
+                console.log("Evento en espera (Pre-Evento)");
+                setIsPreEvent(true);
+                setEventConfig(data);
+              } else {
+                const startFormatted = new Date(data.start_date).toLocaleDateString('es-AR', {
+                  day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                });
+                setEventError(`🗓️ Este evento aún no comenzó. Arranca el ${startFormatted}`);
+              }
               return;
             }
             if (data.end_date && new Date(data.end_date) < now) {
@@ -1084,6 +1091,48 @@ const App: React.FC = () => {
   }
 
   if (eventConfig && !isStaff) {
+    if (isPreEvent) {
+      return (
+        <div className="relative w-full min-h-screen font-sans text-white bg-primary overflow-x-hidden flex flex-col items-center justify-center p-6 text-center">
+          <Background3D />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="z-10 max-w-lg w-full bg-black/40 backdrop-blur-3xl border border-white/10 p-12 rounded-[40px] shadow-2xl space-y-8"
+          >
+            {eventConfig.config?.logo_url && (
+              <img src={eventConfig.config.logo_url} alt="Logo" className="h-24 mx-auto object-contain mb-8 filter drop-shadow-2xl" />
+            )}
+
+            <div className="space-y-4">
+              <span className="text-accent text-[10px] font-black tracking-[5px] uppercase block animate-pulse">
+                Próximamente
+              </span>
+              <h1 className="text-4xl font-black italic uppercase tracking-tighter text-white">
+                {eventConfig.event_name}
+              </h1>
+              <div className="h-1 w-12 bg-accent mx-auto" />
+            </div>
+
+            <p className="text-white/70 text-lg font-medium leading-relaxed">
+              {eventConfig.config?.welcome_text || '¡Bienvenidos! Estamos preparando todo para una experiencia mágica.'}
+            </p>
+
+            <div className="pt-4 space-y-4">
+              <div className="inline-flex items-center gap-3 px-6 py-3 bg-white/5 border border-white/10 rounded-2xl text-[10px] font-bold uppercase tracking-[2px] text-white/40">
+                <Clock className="w-4 h-4 text-accent" />
+                <span>Comienza el {new Date(eventConfig.start_date).toLocaleDateString('es-AR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}hs</span>
+              </div>
+              <p className="text-[10px] text-white/20 uppercase tracking-[3px]">Escaneá el código cuando comience el evento</p>
+            </div>
+          </motion.div>
+
+          <div className="fixed bottom-12 z-10 text-[10px] font-black tracking-[4px] uppercase text-white/20">
+            Powered by MetaLab IA
+          </div>
+        </div>
+      );
+    }
     return <GuestExperience eventConfig={eventConfig} supabase={supabase} />;
   }
 

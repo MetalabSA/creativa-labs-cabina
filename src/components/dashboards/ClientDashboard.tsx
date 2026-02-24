@@ -35,7 +35,8 @@ import {
     TrendingUp,
     Maximize,
     Play,
-    Pause
+    Pause,
+    LogOut
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { PREFERRED_PACK_ORDER, IDENTITIES } from '../../lib/constants';
@@ -47,6 +48,7 @@ interface EventConfig {
     primary_color?: string;
     welcome_text?: string;
     radius?: string;
+    show_welcome_screen?: boolean;
 }
 
 interface EventData {
@@ -85,12 +87,14 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, profile,
     const [config, setConfig] = useState<EventConfig>({
         primary_color: '#7f13ec',
         welcome_text: '¡Bienvenidos a la celebración!',
-        radius: '12px'
+        radius: '12px',
+        show_welcome_screen: true
     });
 
     const [partnerBranding, setPartnerBranding] = useState<any>(null);
     const [eventName, setEventName] = useState('');
     const [eventDate, setEventDate] = useState('');
+    const [eventTime, setEventTime] = useState('00:00');
     const [selectedStyles, setSelectedStyles] = useState<string[]>([]);
 
     useEffect(() => {
@@ -115,6 +119,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, profile,
                 setEvent(data);
                 setEventName(data.event_name);
                 setEventDate(data.start_date ? data.start_date.split('T')[0] : '');
+                setEventTime(data.start_date && data.start_date.includes('T') ? data.start_date.split('T')[1].substring(0, 5) : '00:00');
                 setSelectedStyles(data.selected_styles || []);
 
                 // Prioritize event config, then partner config
@@ -127,7 +132,8 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, profile,
                     primary_color: finalConfig.primary_color || '#7f13ec',
                     welcome_text: finalConfig.welcome_text || '¡Bienvenidos!',
                     radius: finalConfig.radius || '12px',
-                    logo_url: finalConfig.logo_url || ''
+                    logo_url: finalConfig.logo_url || '',
+                    show_welcome_screen: finalConfig.show_welcome_screen ?? true
                 });
 
                 if (data.partner?.config) {
@@ -149,6 +155,12 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, profile,
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleLogout = async () => {
+        const { error } = await supabase.auth.signOut();
+        if (error) console.error('Error signing out:', error);
+        window.location.reload();
     };
 
     const downloadAllPhotos = async () => {
@@ -199,26 +211,17 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, profile,
         }
     };
 
-    // Slideshow Auto-play logic
-    useEffect(() => {
-        let interval: NodeJS.Timeout;
-        if (isSlideshowOpen && recentPhotos.length > 0) {
-            interval = setInterval(() => {
-                setSlideshowIndex(prev => (prev + 1) % recentPhotos.length);
-            }, 5000);
-        }
-        return () => clearInterval(interval);
-    }, [isSlideshowOpen, recentPhotos.length]);
-
     const handleSave = async () => {
         if (!event) return;
         try {
             setSaving(true);
+            const fullStartDate = (eventDate && eventTime) ? `${eventDate}T${eventTime}:00` : eventDate;
+
             const { error } = await supabase
                 .from('events')
                 .update({
                     event_name: eventName,
-                    start_date: eventDate,
+                    start_date: fullStartDate,
                     config: config,
                     selected_styles: selectedStyles
                 })
@@ -293,6 +296,61 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, profile,
         }
     };
 
+    // Group identities by style pack
+    const stylePacks = useMemo(() => {
+        // Filter IDENTITIES by partner style_presets if they exist
+        const partnerConfig = (event as any)?.partner?.config;
+        const allowedStyles = partnerConfig?.style_presets;
+
+        let filteredIdentities = IDENTITIES;
+        if (allowedStyles && Array.isArray(allowedStyles) && allowedStyles.length > 0) {
+            filteredIdentities = IDENTITIES.filter(i => allowedStyles.includes(i.id));
+        }
+
+        const uniquePacks = Array.from(new Set(filteredIdentities.map(i => i.subCategory)));
+        return uniquePacks.map(pack => {
+            const firstIdentity = filteredIdentities.find(i => i.subCategory === pack);
+            return {
+                id: pack,
+                name: pack,
+                thumbnail: firstIdentity?.url || '',
+                category: firstIdentity?.category || 'General'
+            };
+        });
+    }, [event]);
+
+    // Calculate real stats
+    const stats = useMemo(() => {
+        const totalPhotos = recentPhotos.length;
+        const uniqueUsers = new Set(recentPhotos.map(p => p.user_id)).size;
+
+        const styleCounts: Record<string, number> = {};
+        recentPhotos.forEach(p => {
+            const styleId = p.style_id || p.model_id || 'unknown';
+            styleCounts[styleId] = (styleCounts[styleId] || 0) + 1;
+        });
+
+        const topStyleEntry = Object.entries(styleCounts).sort((a, b) => b[1] - a[1])[0];
+        const topStyle = topStyleEntry ? topStyleEntry[0] : 'Ninguno';
+
+        return {
+            totalPhotos,
+            uniqueUsers: uniqueUsers || '--',
+            topStyle
+        };
+    }, [recentPhotos]);
+
+    // Slideshow Auto-play logic
+    useEffect(() => {
+        let interval: NodeJS.Timeout;
+        if (isSlideshowOpen && recentPhotos.length > 0) {
+            interval = setInterval(() => {
+                setSlideshowIndex(prev => (prev + 1) % recentPhotos.length);
+            }, 5000);
+        }
+        return () => clearInterval(interval);
+    }, [isSlideshowOpen, recentPhotos.length]);
+
     if (loading) return <div className="text-white p-10 flex justify-center items-center h-screen bg-[#0a0a0a]"><div className="animate-spin rounded-full h-8 w-8 border-t-2 border-[#7f13ec]"></div></div>;
 
     if (!event) return (
@@ -327,20 +385,6 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, profile,
     const percentageUsed = Math.min(100, Math.round((creditsUsed / creditsTotal) * 100));
     const dashOffset = 552.92 - (552.92 * percentageUsed) / 100; // For the gauge
 
-    // Group identities by style pack
-    const stylePacks = useMemo(() => {
-        const uniquePacks = Array.from(new Set(IDENTITIES.map(i => i.subCategory)));
-        return uniquePacks.map(pack => {
-            const firstIdentity = IDENTITIES.find(i => i.subCategory === pack);
-            return {
-                id: pack,
-                name: pack,
-                thumbnail: firstIdentity?.url || '',
-                category: firstIdentity?.category || 'General'
-            };
-        });
-    }, []);
-
     const toggleStyle = (styleId: string) => {
         if (selectedStyles.includes(styleId)) {
             setSelectedStyles(selectedStyles.filter(s => s !== styleId));
@@ -349,25 +393,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, profile,
         }
     };
 
-    // Calculate real stats
-    const stats = useMemo(() => {
-        const totalPhotos = recentPhotos.length;
-        const uniqueUsers = new Set(recentPhotos.map(p => p.user_id)).size;
 
-        const styleCounts: Record<string, number> = {};
-        recentPhotos.forEach(p => {
-            styleCounts[p.style_id] = (styleCounts[p.style_id] || 0) + 1;
-        });
-
-        const topStyleEntry = Object.entries(styleCounts).sort((a, b) => b[1] - a[1])[0];
-        const topStyle = topStyleEntry ? topStyleEntry[0] : 'Ninguno';
-
-        return {
-            totalPhotos,
-            uniqueUsers: uniqueUsers || '--',
-            topStyle
-        };
-    }, [recentPhotos]);
 
     return (
         <div className="bg-[#0f172a] text-slate-100 min-h-screen font-sans selection:bg-[#7f13ec]/30 overflow-x-hidden">
@@ -421,6 +447,18 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, profile,
                         <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-[#1e293b] to-[#0f172a] border border-white/10 flex items-center justify-center shadow-lg group hover:border-[#7f13ec]/50 transition-all cursor-pointer">
                             <Users className="w-5 h-5 text-slate-400 group-hover:text-white transition-colors" />
                         </div>
+
+                        {!onBack && (
+                            <motion.button
+                                whileHover={{ scale: 1.05 }}
+                                whileTap={{ scale: 0.95 }}
+                                onClick={handleLogout}
+                                className="px-4 py-2 bg-rose-500/10 hover:bg-rose-500/20 text-rose-500 border border-rose-500/20 rounded-xl flex items-center gap-2 transition-all font-bold text-[10px] uppercase tracking-wider"
+                            >
+                                <LogOut className="size-3.5" />
+                                <span className="hidden sm:inline">Cerrar Sesión</span>
+                            </motion.button>
+                        )}
                     </div>
                 </div>
             </header>
@@ -495,28 +533,58 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, profile,
                                     </div>
                                 </div>
                                 <div className="space-y-3">
-                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Fecha del Evento</label>
-                                    <div className="relative">
-                                        <input
-                                            className="w-full bg-[#0f172a] border border-white/10 rounded-2xl px-5 py-4 focus:ring-1 focus:ring-[#7f13ec] focus:border-[#7f13ec]/50 text-white outline-none transition-all"
-                                            type="date"
-                                            value={eventDate}
-                                            onChange={(e) => setEventDate(e.target.value)}
-                                        />
+                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Fecha de Inicio</label>
+                                    <div className="flex gap-4">
+                                        <div className="flex-1">
+                                            <input
+                                                className="w-full bg-[#0f172a] border border-white/10 rounded-2xl px-5 py-4 focus:ring-1 focus:ring-[#7f13ec] focus:border-[#7f13ec]/50 text-white outline-none transition-all"
+                                                type="date"
+                                                value={eventDate}
+                                                onChange={(e) => setEventDate(e.target.value)}
+                                            />
+                                        </div>
+                                        <div className="w-32">
+                                            <input
+                                                className="w-full bg-[#0f172a] border border-white/10 rounded-2xl px-5 py-4 focus:ring-1 focus:ring-[#7f13ec] focus:border-[#7f13ec]/50 text-white outline-none transition-all"
+                                                type="time"
+                                                value={eventTime}
+                                                onChange={(e) => setEventTime(e.target.value)}
+                                            />
+                                        </div>
                                     </div>
                                 </div>
-                                <div className="col-span-full space-y-3">
-                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest flex justify-between">
-                                        Mensaje de Bienvenida
-                                        <span className="text-[#7f13ec]/60 font-medium normal-case">Se muestra al iniciar la cámara</span>
-                                    </label>
-                                    <textarea
-                                        className="w-full bg-[#0f172a] border border-white/10 rounded-2xl px-5 py-4 focus:ring-1 focus:ring-[#7f13ec] focus:border-[#7f13ec]/50 text-white outline-none transition-all"
-                                        rows={3}
-                                        placeholder="¡Bienvenidos a nuestra fiesta! Hazte una foto mágica..."
-                                        value={config.welcome_text}
-                                        onChange={(e) => setConfig({ ...config, welcome_text: e.target.value })}
-                                    />
+                                <div className="col-span-full space-y-4">
+                                    <div className="flex items-center justify-between p-4 bg-[#7f13ec]/5 border border-[#7f13ec]/20 rounded-2xl">
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-2 bg-[#7f13ec]/10 rounded-xl">
+                                                <Smartphone className="w-4 h-4 text-[#7f13ec]" />
+                                            </div>
+                                            <div>
+                                                <p className="text-sm font-bold text-white">Pantalla de Bienvenida</p>
+                                                <p className="text-[10px] text-slate-500 uppercase font-medium">Mostrar antes de que inicie el evento</p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={() => setConfig({ ...config, show_welcome_screen: !config.show_welcome_screen })}
+                                            className={`relative w-12 h-6 rounded-full transition-colors duration-300 ${config.show_welcome_screen ? 'bg-[#7f13ec]' : 'bg-slate-700'}`}
+                                        >
+                                            <div className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white transition-transform duration-300 ${config.show_welcome_screen ? 'translate-x-6' : ''}`} />
+                                        </button>
+                                    </div>
+
+                                    <div className="space-y-3">
+                                        <label className="text-xs font-bold text-slate-400 uppercase tracking-widest flex justify-between">
+                                            Mensaje de Bienvenida
+                                            <span className="text-[#7f13ec]/60 font-medium normal-case">Se muestra al iniciar la cámara</span>
+                                        </label>
+                                        <textarea
+                                            className="w-full bg-[#0f172a] border border-white/10 rounded-2xl px-5 py-4 focus:ring-1 focus:ring-[#7f13ec] focus:border-[#7f13ec]/50 text-white outline-none transition-all"
+                                            rows={2}
+                                            placeholder="¡Bienvenidos a nuestra fiesta! Hazte una foto mágica..."
+                                            value={config.welcome_text}
+                                            onChange={(e) => setConfig({ ...config, welcome_text: e.target.value })}
+                                        />
+                                    </div>
                                 </div>
                             </div>
                         </section>

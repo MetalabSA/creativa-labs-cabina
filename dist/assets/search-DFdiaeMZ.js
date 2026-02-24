@@ -1,4 +1,4 @@
-import{c}from"./DashboardApp-pSbKRTBw.js";/**
+import{c}from"./DashboardApp-Bg0AiS_c.js";/**
  * @license lucide-react v0.554.0 - ISC
  *
  * This source code is licensed under the ISC license.
