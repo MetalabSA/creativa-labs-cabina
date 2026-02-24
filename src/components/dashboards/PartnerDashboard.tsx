@@ -38,6 +38,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { IDENTITIES, PREFERRED_PACK_ORDER } from '../../lib/constants';
+import JSZip from 'jszip';
 
 interface Partner {
     id: string;
@@ -75,7 +76,7 @@ interface PartnerDashboardProps {
 }
 
 export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profile, onBack, initialView = 'overview', onProxyClient }) => {
-    const [view, setView] = useState<'overview' | 'events' | 'branding' | 'wallet'>(initialView);
+    const [view, setView] = useState<'overview' | 'events' | 'branding' | 'wallet' | 'moderation'>(initialView);
     const [loading, setLoading] = useState(false);
     const [partner, setPartner] = useState<Partner | null>(null);
     const [events, setEvents] = useState<any[]>([]);
@@ -91,6 +92,11 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
         message: '',
         type: null
     });
+    const [eventToModerate, setEventToModerate] = useState<any | null>(null);
+    const [eventPhotos, setEventPhotos] = useState<any[]>([]);
+    const [moderationLoading, setModerationLoading] = useState(false);
+    const [moderationSearchTerm, setModerationSearchTerm] = useState('');
+    const [moderationDateFilter, setModerationDateFilter] = useState('');
 
     const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
         setToast({ message, type });
@@ -229,6 +235,42 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
             showToast('Configuración de marca guardada');
         } catch (error) {
             console.error('Error updating branding:', error);
+        }
+    };
+
+    const fetchEventPhotos = async (eventId: string) => {
+        try {
+            setModerationLoading(true);
+            const { data, error } = await supabase
+                .from('generations')
+                .select('*, profiles(email)')
+                .eq('event_id', eventId)
+                .order('created_at', { ascending: false });
+
+            if (error) throw error;
+            setEventPhotos(data || []);
+        } catch (err) {
+            console.error('Error fetching photos:', err);
+            showToast('No se pudieron cargar las fotos', 'error');
+        } finally {
+            setModerationLoading(false);
+        }
+    };
+
+    const handleDeletePhoto = async (photoId: string) => {
+        if (!window.confirm('¿Estás seguro de que deseas eliminar esta foto de la galería?')) return;
+        try {
+            const { error } = await supabase
+                .from('generations')
+                .delete()
+                .eq('id', photoId);
+
+            if (error) throw error;
+            setEventPhotos(prev => prev.filter(p => p.id !== photoId));
+            showToast('Foto eliminada correctamente');
+        } catch (err) {
+            console.error('Error deleting photo:', err);
+            showToast('Error al eliminar la foto', 'error');
         }
     };
 
@@ -396,11 +438,27 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
     };
 
     const toggleStylePreset = (style: string) => {
-        const newPresets = brandingConfig.style_presets.includes(style)
-            ? brandingConfig.style_presets.filter(s => s !== style)
-            : [...brandingConfig.style_presets, style];
-        setBrandingConfig({ ...brandingConfig, style_presets: newPresets });
+        setBrandingConfig(prev => ({
+            ...prev,
+            style_presets: prev.style_presets.includes(style)
+                ? prev.style_presets.filter(s => s !== style)
+                : [...prev.style_presets, style]
+        }));
     };
+
+    const filteredPhotos = useMemo(() => {
+        return eventPhotos.filter(photo => {
+            const email = photo.profiles?.email || 'Anónimo';
+            const matchesSearch = !moderationSearchTerm ||
+                photo.id.toLowerCase().includes(moderationSearchTerm.toLowerCase()) ||
+                email.toLowerCase().includes(moderationSearchTerm.toLowerCase());
+
+            const matchesDate = !moderationDateFilter ||
+                (photo.created_at && photo.created_at.startsWith(moderationDateFilter));
+
+            return matchesSearch && matchesDate;
+        });
+    }, [eventPhotos, moderationSearchTerm, moderationDateFilter]);
 
     const filteredEvents = useMemo(() => {
         return events.filter(e =>
@@ -724,6 +782,17 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
                                                             <ShoppingCart className="w-4 h-4 group-hover/action:scale-110 transition-transform" />
                                                         </button>
                                                         <button
+                                                            onClick={() => {
+                                                                setEventToModerate(event);
+                                                                fetchEventPhotos(event.id);
+                                                                setView('moderation');
+                                                            }}
+                                                            className="p-2.5 bg-indigo-500/10 hover:bg-indigo-500 border border-indigo-500/20 rounded-xl text-indigo-500 hover:text-white transition-all group/action"
+                                                            title="Moderación de Galería"
+                                                        >
+                                                            <LayoutIcon className="w-4 h-4 group-hover/action:scale-110 transition-transform" />
+                                                        </button>
+                                                        <button
                                                             onClick={() => setEditingEvent(event)}
                                                             className="p-2.5 bg-slate-800/50 hover:bg-slate-800 border border-white/5 rounded-xl text-slate-400 hover:text-white transition-all group/action"
                                                             title="Editar Evento"
@@ -772,6 +841,176 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
                                 </tbody>
                             </table>
                         </div>
+                    </motion.div>
+                )}
+
+                {view === 'moderation' && (
+                    <motion.div
+                        key="moderation"
+                        initial={{ opacity: 0, scale: 0.95 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 1.05 }}
+                        className="space-y-6"
+                    >
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                                <button
+                                    onClick={() => setView('events')}
+                                    className="p-2.5 bg-slate-800 hover:bg-slate-700 rounded-xl text-white transition-all border border-white/5"
+                                >
+                                    <ArrowDownRight className="w-5 h-5 rotate-180" />
+                                </button>
+                                <div>
+                                    <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Galería: {eventToModerate?.event_name}</h2>
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <span className={`size-2 rounded-full ${filteredPhotos.length > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-slate-700'}`}></span>
+                                        <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">
+                                            {filteredPhotos.length} de {eventPhotos.length} Fotos
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <div className="flex items-center gap-3 bg-slate-900/80 p-1.5 rounded-2xl border border-white/5 shadow-inner">
+                                    <div className="relative">
+                                        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-3.5 text-slate-600" />
+                                        <input
+                                            type="text"
+                                            placeholder="Buscar email o ID..."
+                                            className="bg-slate-950/50 border border-white/5 rounded-xl py-2.5 pl-10 pr-4 text-[10px] text-white focus:border-[#135bec] outline-none transition-all w-52 placeholder:text-slate-700 font-bold uppercase tracking-widest"
+                                            value={moderationSearchTerm}
+                                            onChange={(e) => setModerationSearchTerm(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="relative">
+                                        <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 size-3.5 text-slate-600" />
+                                        <input
+                                            type="date"
+                                            className="bg-slate-950/50 border border-white/5 rounded-xl py-2.5 pl-10 pr-4 text-[10px] text-white focus:border-[#135bec] outline-none transition-all w-40 font-bold"
+                                            value={moderationDateFilter}
+                                            onChange={(e) => setModerationDateFilter(e.target.value)}
+                                        />
+                                    </div>
+                                    {(moderationSearchTerm || moderationDateFilter) && (
+                                        <button
+                                            onClick={() => { setModerationSearchTerm(''); setModerationDateFilter(''); }}
+                                            className="p-2.5 hover:bg-white/5 text-slate-500 hover:text-white transition-all rounded-xl"
+                                        >
+                                            <X className="size-4" />
+                                        </button>
+                                    )}
+                                </div>
+                                <div className="w-px h-8 bg-white/5 mx-1" />
+                                <div className="flex items-center gap-3">
+                                    <button
+                                        onClick={() => {
+                                            const urls = filteredPhotos.map(p => p.image_url).join('\n');
+                                            if (urls.length === 0) return showToast('No hay links para exportar', 'error');
+                                            const blob = new Blob([urls], { type: 'text/plain' });
+                                            const url = window.URL.createObjectURL(blob);
+                                            const a = document.createElement('a');
+                                            a.href = url;
+                                            a.download = `links-${eventToModerate?.event_slug}-filtrados.txt`;
+                                            a.click();
+                                            window.URL.revokeObjectURL(url);
+                                            showToast('Links filtrados exportados');
+                                        }}
+                                        className="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-black rounded-xl border border-white/5 transition-all uppercase tracking-[2px] flex items-center gap-2"
+                                    >
+                                        <Download className="size-4" />
+                                        Exportar Links
+                                    </button>
+                                    <button
+                                        onClick={async () => {
+                                            if (filteredPhotos.length === 0) return showToast('No hay fotos para descargar', 'error');
+
+                                            try {
+                                                showToast('Preparando descarga ZIP (Filtrada)...', 'info');
+                                                const zip = new JSZip();
+                                                const folder = zip.folder(`${eventToModerate?.event_slug}-photos-filtered`);
+
+                                                if (!folder) throw new Error('No se pudo crear la carpeta en el ZIP');
+
+                                                // Fetch filtered images
+                                                const photoPromises = filteredPhotos.map(async (photo, index) => {
+                                                    try {
+                                                        const response = await fetch(photo.image_url);
+                                                        const blob = await response.blob();
+                                                        const extension = photo.image_url.split('.').pop()?.split('?')[0] || 'jpg';
+                                                        folder.file(`photo-${index + 1}.${extension}`, blob);
+                                                    } catch (err) {
+                                                        console.error('Error al descargar foto para el ZIP:', err);
+                                                    }
+                                                });
+
+                                                await Promise.all(photoPromises);
+
+                                                const content = await zip.generateAsync({ type: "blob" });
+                                                const url = window.URL.createObjectURL(content);
+                                                const a = document.createElement('a');
+                                                a.href = url;
+                                                a.download = `galeria-${eventToModerate?.event_slug}.zip`;
+                                                a.click();
+                                                window.URL.revokeObjectURL(url);
+                                                showToast('Galería completa descargada');
+                                            } catch (err) {
+                                                console.error('Error al generar ZIP:', err);
+                                                showToast('Error al generar el archivo ZIP', 'error');
+                                            }
+                                        }}
+                                        className="px-6 py-2.5 bg-[#135bec] hover:bg-[#135bec]/90 text-white text-[10px] font-black rounded-xl shadow-lg border border-white/10 transition-all uppercase tracking-[2px] flex items-center gap-2"
+                                    >
+                                        <Layers className="size-4" />
+                                        Descargar Todo (ZIP)
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {moderationLoading ? (
+                            <div className="h-96 flex flex-col items-center justify-center gap-4">
+                                <div className="size-12 border-4 border-[#135bec]/30 border-t-[#135bec] rounded-full animate-spin" />
+                                <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Sincronizando Galería...</p>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                                {filteredPhotos.map((photo) => (
+                                    <div key={photo.id} className="group relative aspect-[3/4] rounded-2xl overflow-hidden border border-white/5 bg-slate-900 shadow-xl">
+                                        <img
+                                            src={photo.image_url}
+                                            alt="Generation"
+                                            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                                        />
+                                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-4">
+                                            <p className="text-[8px] font-mono text-white/50 mb-1 truncate">{photo.id}</p>
+                                            <p className="text-[10px] font-black text-white mb-4 truncate uppercase tracking-widest">{photo.profiles?.email || 'Anónimo'}</p>
+                                            <div className="flex gap-2">
+                                                <button
+                                                    onClick={() => handleDeletePhoto(photo.id)}
+                                                    className="p-2.5 bg-rose-500/20 hover:bg-rose-500 border border-rose-500/30 rounded-xl text-rose-500 hover:text-white transition-all group/del"
+                                                    title="Eliminar de la galería"
+                                                >
+                                                    <Trash2 className="size-4 group-hover/del:scale-110 transition-transform" />
+                                                </button>
+                                                <button
+                                                    onClick={() => window.open(photo.image_url, '_blank')}
+                                                    className="flex-1 py-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-xl text-white text-[9px] font-black uppercase tracking-widest hover:bg-white/20 transition-all flex items-center justify-center gap-2"
+                                                >
+                                                    <ExternalLink className="size-3" />
+                                                    Ver Original
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                                {filteredPhotos.length === 0 && (
+                                    <div className="col-span-full h-64 flex flex-col items-center justify-center bg-slate-900/50 rounded-[32px] border border-dashed border-white/5">
+                                        <AlertTriangle className="size-8 text-slate-800 mb-4" />
+                                        <p className="text-slate-500 text-xs font-black uppercase tracking-widest">No hay fotos en este evento</p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </motion.div>
                 )}
 
@@ -892,170 +1131,221 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: -20 }}
-                        className="grid grid-cols-1 lg:grid-cols-2 gap-8"
+                        className="grid grid-cols-1 xl:grid-cols-12 gap-8"
                     >
-                        {/* Partner Branding Column */}
-                        <div className="space-y-6">
-                            <section className="glass-card rounded-2xl p-8 border border-white/5 bg-slate-900/50 backdrop-blur-xl shadow-2xl">
-                                <div className="flex items-center gap-3 mb-8">
-                                    <div className="p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-indigo-500">
-                                        <Shield className="w-6 h-6" />
-                                    </div>
-                                    <div>
-                                        <h2 className="text-xl font-black text-white uppercase tracking-tighter">Identidad Visual</h2>
-                                        <p className="text-slate-500 text-xs">Personaliza cómo tus clientes ven el panel de control.</p>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-8">
-                                    <div>
-                                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-[2px] block mb-4">Logo Corporativo</label>
-                                        <div
-                                            className="w-full border-2 border-dashed border-slate-800 rounded-2xl p-10 flex flex-col items-center justify-center bg-slate-950/50 hover:bg-slate-950 transition-all cursor-pointer group hover:border-[#135bec]/50 shadow-inner"
-                                            onClick={() => document.getElementById('brandingLogoInput')?.click()}
-                                        >
-                                            <input
-                                                type="file"
-                                                id="brandingLogoInput"
-                                                className="hidden"
-                                                accept="image/*"
-                                                onChange={handleLogoUpload}
-                                            />
-                                            {brandingConfig.logo_url ? (
-                                                <div className="relative group/logo">
-                                                    <img src={brandingConfig.logo_url} className="h-16 object-contain mb-2 group-hover:opacity-50 transition-opacity" alt="Logo" />
-                                                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/logo:opacity-100 transition-opacity">
-                                                        <Edit2 className="size-6 text-white" />
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                <div className="flex flex-col items-center">
-                                                    <Upload className="w-10 h-10 text-slate-700 group-hover:text-[#135bec] mb-3 transition-colors" />
-                                                    <p className="text-[11px] text-slate-500 font-bold uppercase tracking-widest text-center">Subir Identidad (PNG/SVG)</p>
-                                                </div>
-                                            )}
+                        {/* Left Column: Configuration */}
+                        <div className="xl:col-span-8 space-y-8">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                {/* Partner Branding Column */}
+                                <section className="glass-card rounded-[32px] p-8 border border-white/5 bg-slate-900/50 backdrop-blur-xl shadow-2xl h-fit">
+                                    <div className="flex items-center gap-3 mb-8">
+                                        <div className="p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-indigo-500">
+                                            <Shield className="w-6 h-6" />
+                                        </div>
+                                        <div>
+                                            <h2 className="text-xl font-black text-white uppercase tracking-tighter">Identidad Visual</h2>
+                                            <p className="text-slate-500 text-xs">Personaliza tu panel de control.</p>
                                         </div>
                                     </div>
 
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    <div className="space-y-8">
                                         <div>
-                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-[2px] block mb-4">Color de Acento</label>
-                                            <div className="flex items-center gap-3">
-                                                <div
-                                                    className="size-12 rounded-xl border-2 border-white/10 shadow-2xl cursor-pointer hover:scale-105 transition-all"
-                                                    style={{ backgroundColor: brandingConfig.primary_color }}
-                                                    onClick={() => document.getElementById('brandingColorPicker')?.click()}
-                                                ></div>
+                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-[2px] block mb-4">Logo Corporativo</label>
+                                            <div
+                                                className="w-full border-2 border-dashed border-slate-800 rounded-2xl p-6 flex flex-col items-center justify-center bg-slate-950/50 hover:bg-slate-950 transition-all cursor-pointer group hover:border-[#135bec]/50 shadow-inner"
+                                                onClick={() => document.getElementById('brandingLogoInput')?.click()}
+                                            >
                                                 <input
-                                                    id="brandingColorPicker"
-                                                    type="color"
-                                                    className="sr-only"
-                                                    value={brandingConfig.primary_color}
-                                                    onChange={(e) => setBrandingConfig({ ...brandingConfig, primary_color: e.target.value })}
+                                                    type="file"
+                                                    id="brandingLogoInput"
+                                                    className="hidden"
+                                                    accept="image/*"
+                                                    onChange={handleLogoUpload}
                                                 />
-                                                <div className="flex-1 bg-slate-950 border border-slate-800 rounded-xl py-3 px-4 text-xs text-white font-mono flex items-center justify-between">
-                                                    <span>{brandingConfig.primary_color.toUpperCase()}</span>
-                                                    <Edit2 className="size-3 text-slate-600" />
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-[2px] block mb-4">Radio de Bordes</label>
-                                            <div className="relative">
-                                                <select
-                                                    className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 px-4 text-xs text-white focus:ring-1 focus:ring-[#135bec] outline-none appearance-none cursor-pointer pr-10"
-                                                    value={brandingConfig.radius}
-                                                    onChange={(e) => setBrandingConfig({ ...brandingConfig, radius: e.target.value })}
-                                                >
-                                                    <option value="4px">4px (Recto)</option>
-                                                    <option value="8px">8px (Suave)</option>
-                                                    <option value="12px">12px (Premium)</option>
-                                                    <option value="20px">20px (Redondeado)</option>
-                                                </select>
-                                                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                                                    <ArrowDownRight className="size-3 text-slate-600" />
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <button
-                                        onClick={handleUpdateBranding}
-                                        className="w-full py-4 bg-white text-slate-900 text-xs font-black rounded-2xl transition-all shadow-xl hover:shadow-2xl active:scale-[0.98] uppercase tracking-[3px] flex items-center justify-center gap-2 group"
-                                    >
-                                        <CheckCircle2 className="size-4 group-hover:scale-110 transition-transform" />
-                                        Sincronizar Panel de Clientes
-                                    </button>
-                                </div>
-                            </section>
-                        </div>
-
-                        {/* Design Pack Column */}
-                        <div className="space-y-6">
-                            <div className="glass-card rounded-2xl p-8 border border-white/5 bg-slate-900/50 backdrop-blur-xl h-full shadow-2xl relative overflow-hidden">
-                                <div className="absolute -bottom-24 -right-24 size-64 bg-[#135bec]/5 rounded-full blur-3xl"></div>
-                                <div className="flex items-center justify-between mb-8 relative z-10">
-                                    <div className="flex items-center gap-3">
-                                        <div className="p-3 bg-[#135bec]/10 border border-[#135bec]/20 rounded-xl text-[#135bec]">
-                                            <Zap className="w-6 h-6" />
-                                        </div>
-                                        <div>
-                                            <h2 className="text-xl font-black text-white uppercase tracking-tighter">Packs de Diseño IA</h2>
-                                            <p className="text-slate-500 text-xs">Selecciona los estilos disponibles para tus clientes.</p>
-                                        </div>
-                                    </div>
-                                    <span className="text-[10px] font-black px-3 py-1.5 bg-[#135bec]/10 text-[#135bec] rounded-full border border-[#135bec]/20">{brandingConfig.style_presets.length} ACTIVOS</span>
-                                </div>
-
-                                <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 relative z-10">
-                                    {PREFERRED_PACK_ORDER.map(style => {
-                                        // Map style names to identities for real images
-                                        const sample = IDENTITIES.find(id => id.subCategory === style) || IDENTITIES[0];
-                                        return (
-                                            <label key={style} className="relative block cursor-pointer group">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={brandingConfig.style_presets.includes(style)}
-                                                    onChange={() => toggleStylePreset(style)}
-                                                    className="peer sr-only"
-                                                />
-                                                <div className={`aspect-[4/5] rounded-2xl overflow-hidden relative border-2 transition-all duration-500 ${brandingConfig.style_presets.includes(style) ? 'border-[#135bec] scale-[1.02] shadow-2xl shadow-[#135bec]/40' : 'border-white/5 opacity-40 hover:border-white/20 hover:opacity-80'}`}>
-                                                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent z-10"></div>
-                                                    <img
-                                                        alt={style}
-                                                        className="w-full h-full object-cover group-hover:scale-125 transition-transform duration-1000"
-                                                        src={sample.url}
-                                                    />
-                                                    <div className="absolute bottom-4 left-4 z-20">
-                                                        <p className="text-[10px] font-black uppercase text-white tracking-[1px] leading-tight">{style}</p>
-                                                        {brandingConfig.style_presets.includes(style) && (
-                                                            <motion.p
-                                                                initial={{ opacity: 0, x: -5 }}
-                                                                animate={{ opacity: 1, x: 0 }}
-                                                                className="text-[#135bec] text-[8px] font-black uppercase mt-1 flex items-center gap-1"
-                                                            >
-                                                                <CheckCircle2 className="size-2" /> Activo
-                                                            </motion.p>
-                                                        )}
-                                                    </div>
-                                                    <div className="absolute top-3 right-3 z-20 opacity-0 peer-checked:opacity-100 transition-all transform scale-50 peer-checked:scale-100">
-                                                        <div className="bg-[#135bec] rounded-full p-1.5 shadow-xl border border-white/20">
-                                                            <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+                                                {brandingConfig.logo_url ? (
+                                                    <div className="relative group/logo">
+                                                        <img src={brandingConfig.logo_url} className="h-12 object-contain mb-2 group-hover:opacity-50 transition-opacity" alt="Logo" />
+                                                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/logo:opacity-100 transition-opacity">
+                                                            <Edit2 className="size-5 text-white" />
                                                         </div>
                                                     </div>
+                                                ) : (
+                                                    <div className="flex flex-col items-center">
+                                                        <Upload className="w-8 h-8 text-slate-700 group-hover:text-[#135bec] mb-3 transition-colors" />
+                                                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest text-center">Subir Identidad</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-6">
+                                            <div>
+                                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-[2px] block mb-4">Color de Acento</label>
+                                                <div className="flex items-center gap-3">
+                                                    <div
+                                                        className="size-12 rounded-xl border-2 border-white/10 shadow-2xl cursor-pointer hover:scale-105 transition-all"
+                                                        style={{ backgroundColor: brandingConfig.primary_color }}
+                                                        onClick={() => document.getElementById('brandingColorPicker')?.click()}
+                                                    ></div>
+                                                    <input
+                                                        id="brandingColorPicker"
+                                                        type="color"
+                                                        className="sr-only"
+                                                        value={brandingConfig.primary_color}
+                                                        onChange={(e) => setBrandingConfig({ ...brandingConfig, primary_color: e.target.value })}
+                                                    />
+                                                    <div className="flex-1 bg-slate-950 border border-slate-800 rounded-xl py-3 px-4 text-xs text-white font-mono flex items-center justify-between">
+                                                        <span>{brandingConfig.primary_color.toUpperCase()}</span>
+                                                        <Edit2 className="size-3 text-slate-600" />
+                                                    </div>
                                                 </div>
-                                            </label>
-                                        );
-                                    })}
+                                            </div>
+                                            <div>
+                                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-[2px] block mb-4">Radio de Bordes</label>
+                                                <div className="relative">
+                                                    <select
+                                                        className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 px-4 text-xs text-white focus:ring-1 focus:ring-[#135bec] outline-none appearance-none cursor-pointer pr-10"
+                                                        value={brandingConfig.radius}
+                                                        onChange={(e) => setBrandingConfig({ ...brandingConfig, radius: e.target.value })}
+                                                    >
+                                                        <option value="4px">4px (Recto)</option>
+                                                        <option value="8px">8px (Suave)</option>
+                                                        <option value="12px">12px (Premium)</option>
+                                                        <option value="20px">20px (Redondeado)</option>
+                                                    </select>
+                                                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
+                                                        <ArrowDownRight className="size-3 text-slate-600" />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <button
+                                            onClick={handleUpdateBranding}
+                                            className="w-full py-4 bg-white text-slate-900 text-[10px] font-black rounded-2xl transition-all shadow-xl hover:shadow-2xl active:scale-[0.98] uppercase tracking-[3px] flex items-center justify-center gap-2 group"
+                                        >
+                                            <CheckCircle2 className="size-4 group-hover:scale-110 transition-transform" />
+                                            Sincronizar Panel
+                                        </button>
+                                    </div>
+                                </section>
+
+                                {/* Design Pack Column */}
+                                <div className="glass-card rounded-[32px] p-8 border border-white/5 bg-slate-900/50 backdrop-blur-xl shadow-2xl relative overflow-hidden h-fit">
+                                    <div className="flex items-center justify-between mb-8 relative z-10">
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-3 bg-[#135bec]/10 border border-[#135bec]/20 rounded-xl text-[#135bec]">
+                                                <Zap className="w-6 h-6" />
+                                            </div>
+                                            <div>
+                                                <h2 className="text-xl font-black text-white uppercase tracking-tighter">Estilos IA</h2>
+                                                <p className="text-slate-500 text-xs">Packs activos para clientes.</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4 relative z-10">
+                                        {PREFERRED_PACK_ORDER.map(style => {
+                                            const sample = IDENTITIES.find(id => id.subCategory === style) || IDENTITIES[0];
+                                            return (
+                                                <label key={style} className="relative block cursor-pointer group">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={brandingConfig.style_presets.includes(style)}
+                                                        onChange={() => toggleStylePreset(style)}
+                                                        className="peer sr-only"
+                                                    />
+                                                    <div className={`aspect-square rounded-2xl overflow-hidden relative border-2 transition-all duration-300 ${brandingConfig.style_presets.includes(style) ? 'border-[#135bec] scale-[1.02] shadow-xl shadow-[#135bec]/20' : 'border-white/5 opacity-40 hover:border-white/20 hover:opacity-80'}`}>
+                                                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent z-10"></div>
+                                                        <img
+                                                            alt={style}
+                                                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
+                                                            src={sample.url}
+                                                        />
+                                                        <div className="absolute bottom-2 left-3 z-20">
+                                                            <p className="text-[8px] font-black uppercase text-white tracking-[1px] leading-tight">{style}</p>
+                                                        </div>
+                                                        {brandingConfig.style_presets.includes(style) && (
+                                                            <div className="absolute top-2 right-2 z-20">
+                                                                <div className="bg-[#135bec] rounded-full p-1 shadow-xl border border-white/20">
+                                                                    <CheckCircle2 className="w-2.5 h-2.5 text-white" />
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </label>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Right Column: Live Mockup */}
+                        <div className="xl:col-span-4 sticky top-8">
+                            <div className="flex flex-col items-center">
+                                <div className="mb-6 flex items-center gap-3">
+                                    <div className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-[4px]">Live Preview (Kiosk)</span>
                                 </div>
 
-                                <div className="mt-8 p-5 bg-[#135bec]/5 border border-[#135bec]/20 rounded-2xl relative z-10">
-                                    <div className="flex gap-4">
-                                        <Bolt className="size-5 text-[#135bec] shrink-0" />
-                                        <p className="text-[11px] text-slate-400 leading-relaxed">
-                                            <span className="font-black text-[#135bec] uppercase mr-1">Pro Tip:</span>
-                                            Los estilos seleccionados son los que el cliente final podrá elegir en su panel individual de configuración de eventos.
-                                        </p>
+                                <div className="relative w-[280px] h-[580px] bg-slate-800 rounded-[50px] p-3 border-[6px] border-slate-700 shadow-2xl overflow-hidden shadow-black/60">
+                                    {/* Notch */}
+                                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-6 bg-slate-700 rounded-b-2xl z-50"></div>
+
+                                    {/* Content Screen */}
+                                    <div className="w-full h-full bg-[#071121] rounded-[40px] overflow-hidden flex flex-col relative">
+                                        {/* BG pattern */}
+                                        <div className="absolute inset-0 opacity-20" style={{ background: `radial-gradient(circle at 50% 50%, ${brandingConfig.primary_color}33 0%, transparent 70%)` }} />
+
+                                        {/* Mockup Top Nav */}
+                                        <div className="p-6 flex flex-col items-center justify-center pt-10">
+                                            {brandingConfig.logo_url ? (
+                                                <img src={brandingConfig.logo_url} className="h-10 object-contain mb-4" alt="Mockup Logo" />
+                                            ) : (
+                                                <div className="h-10 w-32 bg-white/5 rounded-xl border border-white/10 flex items-center justify-center text-[8px] text-slate-600 font-black uppercase tracking-[2px]">Your Logo Here</div>
+                                            )}
+                                            <div className="w-12 h-0.5" style={{ background: `linear-gradient(90deg, transparent, ${brandingConfig.primary_color}, transparent)` }}></div>
+                                        </div>
+
+                                        {/* Mockup Title */}
+                                        <div className="px-6 py-2 text-center">
+                                            <h3 className="text-[14px] font-black text-white uppercase tracking-tighter italic">Descubre tu Identidad</h3>
+                                            <p className="text-[8px] text-slate-500 uppercase font-black tracking-widest mt-1 opacity-60">Selecciona un estandar de estilo</p>
+                                        </div>
+
+                                        {/* Mockup Grid */}
+                                        <div className="flex-1 overflow-y-auto px-6 py-4 no-scrollbar">
+                                            <div className="grid grid-cols-2 gap-3">
+                                                {brandingConfig.style_presets.slice(0, 4).map((style, i) => {
+                                                    const sample = IDENTITIES.find(id => id.subCategory === style) || IDENTITIES[0];
+                                                    return (
+                                                        <div key={i} className="aspect-[3/4] overflow-hidden relative border shadow-lg" style={{ borderRadius: brandingConfig.radius, borderColor: i === 0 ? brandingConfig.primary_color : 'rgba(255,255,255,0.05)' }}>
+                                                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent z-10"></div>
+                                                            <img src={sample.url} className="w-full h-full object-cover" />
+                                                            <div className="absolute bottom-2 left-2 z-20">
+                                                                <p className="text-[7px] font-black text-white uppercase">{style}</p>
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })}
+                                                {brandingConfig.style_presets.length < 4 && Array.from({ length: 4 - brandingConfig.style_presets.length }).map((_, i) => (
+                                                    <div key={i} className="aspect-[3/4] bg-white/5 border border-dashed border-white/10 flex items-center justify-center text-slate-800" style={{ borderRadius: brandingConfig.radius }}>
+                                                        <span className="material-symbols-outlined !text-sm">add</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Mockup Button */}
+                                        <div className="p-6">
+                                            <div
+                                                className="w-full py-3 text-center text-white text-[9px] font-black uppercase tracking-[2px] shadow-lg shadow-black/20"
+                                                style={{ backgroundColor: brandingConfig.primary_color, borderRadius: brandingConfig.radius }}
+                                            >
+                                                Comenzar Experiencia
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>

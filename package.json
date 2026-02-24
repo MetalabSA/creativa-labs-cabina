@@ -14,6 +14,7 @@
     "@types/canvas-confetti": "^1.9.0",
     "clsx": "^2.1.1",
     "framer-motion": "^12.27.5",
+    "jszip": "^3.10.1",
     "lucide-react": "^0.554.0",
     "qrcode.react": "^4.2.0",
     "react": "^19.2.0",
@@ -22,6 +23,7 @@
     "three": "^0.181.2"
   },
   "devDependencies": {
+    "@types/jszip": "^3.4.0",
     "@types/node": "^22.14.0",
     "@vitejs/plugin-basic-ssl": "^2.1.0",
     "@vitejs/plugin-react": "^5.0.0",

@@ -58,7 +58,8 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
         totalGenerations: 0,
         totalPartners: 0,
         totalCreditsSold: 0,
-        activeEvents: 0
+        activeEvents: 0,
+        allGenerations: [] as any[]
     });
     const [b2cStats, setB2CStats] = useState({
         totalUsers: 0,
@@ -133,7 +134,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                 supabase.from('partners').select('*'),
                 supabase.from('events').select('*'),
                 supabase.from('profiles').select('*'),
-                supabase.from('generations').select('id, created_at, model_id, event_id, user_id, events(event_name), profiles(email)').order('created_at', { ascending: false }),
+                supabase.from('generations').select('id, created_at, model_id, event_id, user_id, image_url, events(event_name), profiles(email)').order('created_at', { ascending: false }).limit(200),
                 supabase.from('styles_metadata').select('*'),
                 supabase.from('identity_prompts').select('*')
             ]);
@@ -251,7 +252,8 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                 totalGenerations: totalGenerationsGlobal,
                 totalPartners: finalPartners.length,
                 totalCreditsSold: totalCredits,
-                activeEvents: activeEventsCount
+                activeEvents: activeEventsCount,
+                allGenerations: generationsData
             });
 
             const totalB2CCredits = b2cUsersData.reduce((acc, curr) => acc + (curr.credits || 0), 0);
@@ -848,6 +850,66 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                 />
                             </div>
 
+                            {/* Global Network Activity Chart */}
+                            <div className="bg-[#121413] border border-[#1f2b24] rounded-[32px] p-8 mb-8 relative overflow-hidden group">
+                                <div className="absolute -right-20 -top-20 w-64 h-64 bg-[#13ec80]/5 blur-[100px] rounded-full pointer-events-none"></div>
+                                <div className="flex items-center justify-between mb-8 relative z-10">
+                                    <div>
+                                        <h4 className="text-sm font-black text-white uppercase tracking-widest italic">Actividad de Red Global</h4>
+                                        <p className="text-[10px] text-slate-500 uppercase font-bold mt-1 tracking-tighter">Fotos creadas por día (Últimos 7 días)</p>
+                                    </div>
+                                    <div className="flex items-center gap-4">
+                                        <div className="flex items-center gap-2">
+                                            <div className="size-2 rounded-full bg-[#13ec80] animate-pulse" />
+                                            <span className="text-[10px] font-bold text-slate-400 uppercase">Live Pulse</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="h-40 flex items-end gap-3 px-2 relative z-10">
+                                    {Array.from({ length: 7 }).map((_, i) => {
+                                        const date = new Date();
+                                        date.setDate(date.getDate() - (6 - i));
+                                        const dateStr = date.toISOString().split('T')[0];
+                                        const count = stats.allGenerations.filter(g => g.created_at.startsWith(dateStr)).length;
+
+                                        const counts = Array.from({ length: 7 }).map((_, j) => {
+                                            const d = new Date();
+                                            d.setDate(d.getDate() - (6 - j));
+                                            const ds = d.toISOString().split('T')[0];
+                                            return stats.allGenerations.filter(g2 => g2.created_at.startsWith(ds)).length;
+                                        });
+                                        const maxCount = Math.max(...counts, 1);
+                                        const height = (count / maxCount) * 100;
+
+                                        return (
+                                            <div key={i} className="flex-1 flex flex-col items-center gap-4 group/bar">
+                                                <div className="w-full relative h-[120px] flex items-end">
+                                                    <motion.div
+                                                        initial={{ height: 0 }}
+                                                        animate={{ height: `${Math.max(height, 5)}%` }}
+                                                        transition={{ duration: 1, delay: i * 0.1, ease: "circOut" }}
+                                                        className={`w-full rounded-t-xl transition-all duration-300 group-hover/bar:brightness-125 relative ${count > 0 ? 'bg-gradient-to-t from-[#0e5233] to-[#13ec80]' : 'bg-white/5'}`}
+                                                    >
+                                                        {count > 0 && (
+                                                            <div className="absolute inset-0 bg-white/20 opacity-0 group-hover/bar:opacity-100 transition-opacity rounded-t-xl" />
+                                                        )}
+                                                    </motion.div>
+                                                    {count > 0 && (
+                                                        <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-[#13ec80] text-[#0a0c0b] text-[9px] font-black px-3 py-1.5 rounded-lg opacity-0 group-hover/bar:opacity-100 transition-all scale-75 group-hover/bar:scale-100 whitespace-nowrap z-20 shadow-[0_5px_15px_rgba(19,236,128,0.4)]">
+                                                            {count} GENS
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <span className="text-[9px] font-black text-slate-600 uppercase tracking-widest group-hover/bar:text-slate-300 transition-colors">
+                                                    {date.toLocaleDateString('es-AR', { weekday: 'short' })}
+                                                </span>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+
                             <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
                                 {/* Left Side: Performance Boxes */}
                                 <div className="xl:col-span-8 space-y-8">
@@ -935,6 +997,38 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                                     </div>
                                                 </div>
                                             ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Partner Performance Ranking */}
+                                    <div className="bg-[#121413] border border-[#1f2b24] rounded-2xl p-6">
+                                        <div className="flex justify-between items-center mb-6 text-[#13ec80]">
+                                            <h3 className="text-white font-black uppercase text-sm tracking-tight">🏢 Ranking Facturación (SaaS)</h3>
+                                            <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Top Partners por Créditos</span>
+                                        </div>
+                                        <div className="space-y-3">
+                                            {partners
+                                                .sort((a, b) => (b.credits_total || 0) - (a.credits_total || 0))
+                                                .slice(0, 5)
+                                                .map((p, idx) => (
+                                                    <div key={idx} className="flex items-center gap-3 p-3 bg-white/5 border border-white/5 rounded-xl group hover:border-[#13ec80]/30 transition-all">
+                                                        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#13ec80]/20 to-transparent flex items-center justify-center text-[10px] font-black text-[#13ec80] border border-[#13ec80]/20 shrink-0">
+                                                            #{idx + 1}
+                                                        </div>
+                                                        <div className="flex-1 min-w-0">
+                                                            <div className="flex justify-between items-center mb-1">
+                                                                <h4 className="text-[11px] font-black text-white uppercase truncate tracking-tight">{p.company_name || p.name}</h4>
+                                                                <span className="text-[10px] font-bold text-slate-400 font-mono">{(p.credits_total || 0).toLocaleString()}</span>
+                                                            </div>
+                                                            <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
+                                                                <div
+                                                                    className="h-full bg-gradient-to-r from-[#13ec80] to-[#13ec80]/50"
+                                                                    style={{ width: `${Math.min(100, ((p.credits_used || 0) / (Math.max(1, p.credits_total || 1))) * 100)}%` }}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
                                         </div>
                                     </div>
                                 </div>
@@ -2201,17 +2295,109 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                         </label>
                                     </div>
 
-                                    <div className="space-y-2">
-                                        <div className="flex justify-between">
-                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Master Generation Prompt (Cerebro Core)</label>
-                                            <span className="text-[8px] font-bold text-[#13ec80] uppercase">Neural Network Ready</span>
+                                    <div className="space-y-4">
+                                        <div className="flex justify-between items-end">
+                                            <div>
+                                                <label className="text-[10px] font-black text-[#13ec80] uppercase tracking-widest ml-1 block mb-1 underline decoration-2 underline-offset-4">NEURO-CORE PROMPT (MASTER TEMPLATE)</label>
+                                                <p className="text-[8px] text-slate-500 font-bold uppercase tracking-[2px]">Estructura base de la red neuronal</p>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <div className="text-right">
+                                                    <p className="text-[9px] font-black text-white leading-none">{(styleForm as any).prompt?.split(/\s+/).filter(Boolean).length || 0} WORDS</p>
+                                                    <p className="text-[7px] font-bold text-slate-650 uppercase">Neural Load</p>
+                                                </div>
+                                                <div className="w-px h-6 bg-white/10" />
+                                                <div className="text-right">
+                                                    <p className="text-[9px] font-black text-[#13ec80] leading-none">{(styleForm as any).prompt?.length || 0} CHARS</p>
+                                                    <p className="text-[7px] font-bold text-slate-650 uppercase">Capacity</p>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <textarea
-                                            className="w-full bg-[#121413] border border-[#1f2b24] rounded-[32px] px-8 py-6 text-white outline-none focus:border-[#13ec80] text-sm leading-relaxed min-h-[120px] resize-none"
-                                            value={(styleForm as any).prompt}
-                                            onChange={(e) => setStyleForm({ ...styleForm, prompt: e.target.value } as any)}
-                                        />
+
+                                        {/* Prompt Studio Area */}
+                                        <div className="relative group/prompt">
+                                            <textarea
+                                                className="w-full bg-[#0a0c0b] border-2 border-[#1f2b24] group-hover/prompt:border-[#13ec80]/30 rounded-[32px] px-8 py-7 text-white outline-none focus:border-[#13ec80] text-sm leading-relaxed min-h-[160px] resize-none font-mono shadow-inner transition-all placeholder:text-slate-800"
+                                                placeholder="Inject system instructions here..."
+                                                value={(styleForm as any).prompt}
+                                                onChange={(e) => setStyleForm({ ...styleForm, prompt: e.target.value } as any)}
+                                            />
+                                            <div className="absolute right-6 top-6 opacity-20 group-hover/prompt:opacity-100 transition-opacity">
+                                                <div className="size-2 rounded-full bg-[#13ec80] animate-pulse"></div>
+                                            </div>
+                                        </div>
+
+                                        {/* Prompt Helpers: Neural Tokens */}
+                                        <div className="bg-[#121413]/50 border border-[#1f2b24] rounded-2xl p-4">
+                                            <div className="flex items-center gap-2 mb-3">
+                                                <span className="material-symbols-outlined !text-[14px] text-[#13ec80]">bolt</span>
+                                                <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Neural Boosters (Inject Tokens)</span>
+                                            </div>
+                                            <div className="flex flex-wrap gap-2">
+                                                {[
+                                                    { label: 'Photorealistic', token: 'hyper-realistic, photorealistic, 8k resolution, highly detailed' },
+                                                    { label: 'Cinematic', token: 'cinematic lighting, dramatic shadows, professional photography' },
+                                                    { label: 'Sharp Focus', token: 'sharp focus, masterpiece, intricate details' },
+                                                    { label: 'Digital Art', token: 'concept art, matte painting, trending on artstation' },
+                                                    { label: 'Analog Style', token: '35mm film grain, analog photography, retro vintage feel' }
+                                                ].map((booster) => (
+                                                    <button
+                                                        key={booster.label}
+                                                        onClick={() => {
+                                                            const current = (styleForm as any).prompt || '';
+                                                            const separator = current && !current.endsWith(',') && !current.endsWith(', ') ? ', ' : '';
+                                                            setStyleForm({ ...styleForm, prompt: current + separator + booster.token } as any);
+                                                        }}
+                                                        className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-[8px] font-black text-slate-400 uppercase tracking-widest hover:border-[#13ec80] hover:text-[#13ec80] transition-all"
+                                                    >
+                                                        {booster.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
                                     </div>
+
+                                    {/* Real-World Outcomes: Recent Activity for THIS style */}
+                                    {editingStyle !== 'new' && (
+                                        <div className="space-y-4 pt-4 border-t border-[#1f2b24]">
+                                            <div className="flex justify-between items-center">
+                                                <div>
+                                                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Real-World Outcomes (Recent Captures)</label>
+                                                    <p className="text-[8px] text-slate-600 font-bold uppercase tracking-[2px]">Previsualización de ejecuciones reales con esta identidad</p>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-[9px] font-black text-amber-500 uppercase tracking-widest">Live Feed</span>
+                                                    <div className="size-1.5 rounded-full bg-amber-500 animate-pulse"></div>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-4 gap-3">
+                                                {stats.allGenerations
+                                                    .filter(g => g.model_id === (editingStyle as any).id)
+                                                    .slice(0, 4)
+                                                    .map((gen, idx) => (
+                                                        <div key={idx} className="aspect-square rounded-2xl overflow-hidden border border-white/5 bg-slate-900 group/outcome relative">
+                                                            <img
+                                                                src={gen.image_url}
+                                                                className="w-full h-full object-cover grayscale group-hover/outcome:grayscale-0 transition-all duration-700"
+                                                                alt="Outcome"
+                                                            />
+                                                            <div className="absolute inset-0 bg-blue-500/10 opacity-0 group-hover/outcome:opacity-100 transition-opacity"></div>
+                                                            <div className="absolute bottom-1 right-1 opacity-0 group-hover/outcome:opacity-100 transition-opacity">
+                                                                <button onClick={() => window.open(gen.image_url, '_blank')} className="p-1 bg-black/60 rounded-md text-white">
+                                                                    <span className="material-symbols-outlined !text-[12px]">open_in_new</span>
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                {stats.allGenerations.filter(g => g.model_id === (editingStyle as any).id).length === 0 && (
+                                                    <div className="col-span-4 h-24 rounded-2xl border border-dashed border-[#1f2b24] flex items-center justify-center">
+                                                        <p className="text-[9px] font-black text-slate-700 uppercase tracking-[2px]">No hay ejecuciones recientes detectadas</p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
 
                                     <div className="space-y-4">
                                         <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Tactical Tags</label>
