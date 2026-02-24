@@ -36,7 +36,8 @@ import {
     Maximize,
     Play,
     Pause,
-    LogOut
+    LogOut,
+    ChevronDown
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { PREFERRED_PACK_ORDER, IDENTITIES } from '../../lib/constants';
@@ -62,6 +63,179 @@ interface EventData {
     credits_used: number;
     start_date?: string;
 }
+
+// Custom Premium DatePicker
+const AlquimiaDatePicker = ({ value, onChange, primaryColor }: { value: string, onChange: (v: string) => void, primaryColor: string }) => {
+    const months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    const days = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
+
+    const [isOpen, setIsOpen] = useState(false);
+    const date = value ? new Date(value + 'T00:00:00') : new Date();
+    const [viewDate, setViewDate] = useState(new Date(date));
+
+    const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
+    const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
+
+    const currentYear = viewDate.getFullYear();
+    const currentMonth = viewDate.getMonth();
+
+    const daysInMonth = getDaysInMonth(currentYear, currentMonth);
+    const firstDay = getFirstDayOfMonth(currentYear, currentMonth);
+
+    const handlePrevMonth = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setViewDate(new Date(currentYear, currentMonth - 1, 1));
+    };
+
+    const handleNextMonth = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        setViewDate(new Date(currentYear, currentMonth + 1, 1));
+    };
+
+    const handleSelectDate = (day: number) => {
+        const newDate = new Date(currentYear, currentMonth, day);
+        const y = newDate.getFullYear();
+        const m = (newDate.getMonth() + 1).toString().padStart(2, '0');
+        const d = newDate.getDate().toString().padStart(2, '0');
+        onChange(`${y}-${m}-${d}`);
+        setIsOpen(false);
+    };
+
+    return (
+        <div className="relative">
+            <button
+                type="button"
+                onClick={() => setIsOpen(!isOpen)}
+                className="w-full bg-[#0f172a] border border-white/10 rounded-2xl px-5 py-4 flex items-center justify-between hover:border-white/20 transition-all text-white text-sm"
+            >
+                <div className="flex items-center gap-3">
+                    <Calendar className="size-4 text-slate-500" style={{ color: isOpen ? primaryColor : undefined }} />
+                    <span className="font-medium">{value ? new Date(value + 'T00:00:00').toLocaleDateString('es-AR', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Seleccionar fecha'}</span>
+                </div>
+                <ChevronDown className={`size-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            <AnimatePresence>
+                {isOpen && (
+                    <>
+                        <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
+                        <motion.div
+                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                            className="absolute top-full left-0 right-0 mt-3 p-6 bg-[#0f172a]/95 backdrop-blur-3xl border border-white/10 rounded-[32px] shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-50 w-[320px] md:w-[350px]"
+                        >
+                            <div className="flex items-center justify-between mb-6">
+                                <button onClick={handlePrevMonth} className="p-2 hover:bg-white/5 rounded-xl transition-colors"><ChevronLeft className="size-4 text-white" /></button>
+                                <div className="text-center">
+                                    <h4 className="text-sm font-black text-white uppercase tracking-widest">{months[currentMonth]}</h4>
+                                    <p className="text-[10px] text-slate-500 font-bold">{currentYear}</p>
+                                </div>
+                                <button onClick={handleNextMonth} className="p-2 hover:bg-white/5 rounded-xl transition-colors"><ChevronRight className="size-4 text-white" /></button>
+                            </div>
+
+                            <div className="grid grid-cols-7 gap-1 mb-2">
+                                {days.map(d => <div key={d} className="text-[10px] font-black text-slate-600 text-center uppercase tracking-widest py-2">{d}</div>)}
+                            </div>
+
+                            <div className="grid grid-cols-7 gap-1">
+                                {Array.from({ length: firstDay }).map((_, i) => <div key={`empty-${i}`} />)}
+                                {Array.from({ length: daysInMonth }).map((_, i) => {
+                                    const day = i + 1;
+                                    const isSelected = value === `${currentYear}-${(currentMonth + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+                                    const isToday = new Date().toDateString() === new Date(currentYear, currentMonth, day).toDateString();
+
+                                    return (
+                                        <button
+                                            key={day}
+                                            onClick={() => handleSelectDate(day)}
+                                            className={`aspect-square rounded-xl text-xs font-bold transition-all relative flex items-center justify-center
+                                                ${isSelected ? 'bg-white text-black scale-110 shadow-lg' : 'text-slate-400 hover:bg-white/5 hover:text-white'}
+                                            `}
+                                            style={isSelected ? { backgroundColor: primaryColor, color: 'white' } : {}}
+                                        >
+                                            {day}
+                                            {isToday && !isSelected && <div className="absolute bottom-1 w-1 h-1 rounded-full bg-slate-500" />}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
+        </div>
+    );
+};
+
+// Custom Premium TimePicker
+const AlquimiaTimePicker = ({ value, onChange, primaryColor }: { value: string, onChange: (v: string) => void, primaryColor: string }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const [h, m] = value.split(':');
+
+    const hours = Array.from({ length: 24 }, (_, i) => i.toString().padStart(2, '0'));
+    const minutes = Array.from({ length: 12 }, (_, i) => (i * 5).toString().padStart(2, '0'));
+
+    return (
+        <div className="relative">
+            <button
+                type="button"
+                onClick={() => setIsOpen(!isOpen)}
+                className="w-full bg-[#0f172a] border border-white/10 rounded-2xl px-5 py-4 flex items-center justify-between hover:border-white/20 transition-all text-white text-sm font-mono"
+            >
+                <div className="flex items-center gap-3">
+                    <Clock className="size-4 text-slate-500" style={{ color: isOpen ? primaryColor : undefined }} />
+                    <span className="font-bold tracking-widest">{h}:{m} <span className="text-[10px] text-slate-500 font-sans ml-1 uppercase">HS</span></span>
+                </div>
+                <ChevronDown className={`size-4 text-slate-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            <AnimatePresence>
+                {isOpen && (
+                    <>
+                        <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
+                        <motion.div
+                            initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                            exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                            className="absolute top-full left-0 right-0 mt-3 p-4 bg-[#0f172a]/95 backdrop-blur-3xl border border-white/10 rounded-[32px] shadow-[0_20px_50px_rgba(0,0,0,0.5)] z-50 overflow-hidden"
+                        >
+                            <div className="flex gap-2 h-48">
+                                <div className="flex-1 overflow-y-auto custom-scrollbar pr-1">
+                                    <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest text-center mb-2 sticky top-0 bg-primary/80 py-1">Hora</p>
+                                    {hours.map(hr => (
+                                        <button
+                                            key={hr}
+                                            onClick={() => onChange(`${hr}:${m}`)}
+                                            className={`w-full py-2 rounded-lg text-sm font-mono transition-all ${h === hr ? 'bg-white/10 font-black' : 'text-slate-500 hover:text-white'}`}
+                                            style={h === hr ? { color: primaryColor } : {}}
+                                        >
+                                            {hr}
+                                        </button>
+                                    ))}
+                                </div>
+                                <div className="w-px bg-white/5 my-4" />
+                                <div className="flex-1 overflow-y-auto custom-scrollbar pr-1">
+                                    <p className="text-[9px] font-black text-slate-600 uppercase tracking-widest text-center mb-2 sticky top-0 bg-primary/80 py-1">Min</p>
+                                    {minutes.map(min => (
+                                        <button
+                                            key={min}
+                                            onClick={() => onChange(`${h}:${min}`)}
+                                            className={`w-full py-2 rounded-lg text-sm font-mono transition-all ${m === min ? 'bg-white/10 font-black' : 'text-slate-500 hover:text-white'}`}
+                                            style={m === min ? { color: primaryColor } : {}}
+                                        >
+                                            {min}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
+        </div>
+    );
+};
 
 interface ClientDashboardProps {
     user: any;
@@ -533,24 +707,18 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, profile,
                                     </div>
                                 </div>
                                 <div className="space-y-3">
-                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Fecha de Inicio</label>
-                                    <div className="flex gap-4">
-                                        <div className="flex-1">
-                                            <input
-                                                className="w-full bg-[#0f172a] border border-white/10 rounded-2xl px-5 py-4 focus:ring-1 focus:ring-[#7f13ec] focus:border-[#7f13ec]/50 text-white outline-none transition-all"
-                                                type="date"
-                                                value={eventDate}
-                                                onChange={(e) => setEventDate(e.target.value)}
-                                            />
-                                        </div>
-                                        <div className="w-32">
-                                            <input
-                                                className="w-full bg-[#0f172a] border border-white/10 rounded-2xl px-5 py-4 focus:ring-1 focus:ring-[#7f13ec] focus:border-[#7f13ec]/50 text-white outline-none transition-all"
-                                                type="time"
-                                                value={eventTime}
-                                                onChange={(e) => setEventTime(e.target.value)}
-                                            />
-                                        </div>
+                                    <label className="text-xs font-bold text-slate-400 uppercase tracking-widest">Fecha y Hora de Inicio</label>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <AlquimiaDatePicker
+                                            value={eventDate}
+                                            onChange={setEventDate}
+                                            primaryColor={config.primary_color || '#7f13ec'}
+                                        />
+                                        <AlquimiaTimePicker
+                                            value={eventTime}
+                                            onChange={setEventTime}
+                                            primaryColor={config.primary_color || '#7f13ec'}
+                                        />
                                     </div>
                                 </div>
                                 <div className="col-span-full space-y-4">
