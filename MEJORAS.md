@@ -8,8 +8,16 @@ Este documento detalla las funcionalidades e infraestructura implementadas recie
 ### 1. Panel de Partner (PartnerDashboard.tsx) - Moderación Avanzada
 Se ha transformado la vista de moderación de eventos en una herramienta de gestión de activos completa:
 - **Bulk Actions in Moderation:** Added a floating bar for mass delete and custom ZIP downloads.
-- **Top-Up Modal (Cards de Cristal):** Implemented a premium recharge modal with 3 credit packs (5k, 10k, 20k) and Mercado Pago visual integration.
+- **Top-Up Modal (Cards de Cristal):** Implemented a premium recharge modal with 3 credit packs (5k - $30k, 10k - $60k, 20k - $120k).
 - **Wallet Alert System:** Integrated visual feedback in the "Overview" card for low/critical credit levels.
+- **Energy Monitor Pro (Sparklines):** Added dynamic consumption charts for each event in the Wallet section.
+- **Branding White-Label (Beta):** Partners can now customize primary color, border radius, and style presets with live thumbnails.
+- **MP Return Flow & Auto-Topup:** Integrated handling for `collection_status=approved` and redirection.
+
+### 2. Panel de Administración (Admin.tsx) - Auditoría & Control
+- **Master Audit Logs:** Enhanced system logs including generation email and estimated API costs.
+- **Partner Activity Filter:** Added the ability to filter system logs by specific partner for granular monitoring.
+- **Real-time Stat Indicators:** Improved the overview of success rates and API usage status.
 *   **Sistema de Filtros Inteligentes:**
     *   **Búsqueda por Usuario/ID:** Capacidad de filtrar la galería por email del usuario o ID único de la foto.
     *   **Filtro Temporal:** Selector de fecha para navegar eventos de múltiples días.

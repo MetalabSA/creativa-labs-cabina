@@ -114,6 +114,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
     const [stylesMetadata, setStylesMetadata] = useState<any[]>([]);
     const [styleSearchQuery, setStyleSearchQuery] = useState('');
     const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('all');
+    const [logFilterPartner, setLogFilterPartner] = useState('all');
 
     // New Partner Form
     const [newPartner, setNewPartner] = useState({
@@ -134,7 +135,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                 supabase.from('partners').select('*'),
                 supabase.from('events').select('*'),
                 supabase.from('profiles').select('*'),
-                supabase.from('generations').select('id, created_at, model_id, event_id, user_id, image_url, events(event_name), profiles(email)').order('created_at', { ascending: false }).limit(200),
+                supabase.from('generations').select('id, created_at, model_id, event_id, user_id, image_url, events(event_name, partner_id), profiles(email)').order('created_at', { ascending: false }).limit(200),
                 supabase.from('styles_metadata').select('*'),
                 supabase.from('identity_prompts').select('*')
             ]);
@@ -296,6 +297,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                 text: g.event_id ? `Evento: ${g.events?.event_name || 'Desconocido'}` : 'Uso Directo B2C',
                 time: new Date(g.created_at).toLocaleString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
                 event_id: g.event_id,
+                partner_id: g.events?.partner_id, // Atribuido al partner del evento
                 email: g.profiles?.email || 'Guest @ Event',
                 cost: 0.12 // Costo estimado por generación
             })));
@@ -1790,13 +1792,25 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
 
                     {view === 'logs' && (
                         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-                            <div className="flex justify-between items-end mb-8">
+                            <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
                                 <div>
                                     <h2 className="text-2xl font-black text-white tracking-tight uppercase">Visor de Registros Maestro</h2>
                                     <p className="text-slate-500 text-sm">Monitor de actividad y salud del motor en tiempo real</p>
                                 </div>
-                                <div className="flex gap-2">
-                                    <button onClick={() => fetchData()} className="p-3 bg-white/5 border border-white/10 rounded-lg text-slate-400 hover:text-[#13ec80] transition-colors">
+                                <div className="flex gap-3 w-full md:w-auto">
+                                    <div className="relative flex-1 md:w-64">
+                                        <select
+                                            value={logFilterPartner}
+                                            onChange={(e) => setLogFilterPartner(e.target.value)}
+                                            className="w-full bg-[#121413] border border-[#1f2b24] rounded-lg px-4 py-2.5 text-xs text-white appearance-none outline-none focus:ring-1 focus:ring-[#13ec80]"
+                                        >
+                                            <option value="all">Todos los Partners</option>
+                                            {partners.map(p => (
+                                                <option key={p.id} value={p.id}>{p.name || p.company_name || p.contact_email}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <button onClick={() => fetchData()} className="p-2.5 bg-white/5 border border-white/10 rounded-lg text-slate-400 hover:text-[#13ec80] transition-colors flex items-center gap-2">
                                         <span className="material-symbols-outlined !text-xl">refresh</span>
                                     </button>
                                 </div>
@@ -1849,53 +1863,55 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                                     </div>
                                 </div>
                                 <div className="divide-y divide-[#1f2b24]/50 max-h-[600px] overflow-y-auto custom-scrollbar">
-                                    {recentLogs.map((log) => (
-                                        <div
-                                            key={log.id}
-                                            onClick={() => {
-                                                if (log.event_id) {
-                                                    // Aquí podrías redirigir a una vista de evento si existiera
-                                                    showToast(`Viendo detalles de: ${log.title}`, 'info');
-                                                }
-                                            }}
-                                            className="p-4 hover:bg-white/[0.02] transition-all flex items-center justify-between group cursor-pointer"
-                                        >
-                                            <div className="flex items-center gap-4">
-                                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${log.type === 'success' ? 'bg-[#13ec80]/10 text-[#13ec80]' : 'bg-amber-400/10 text-amber-400'
-                                                    }`}>
-                                                    <span className="material-symbols-outlined !text-lg">
-                                                        {log.type === 'success' ? 'check_circle' : 'warning'}
-                                                    </span>
-                                                </div>
-                                                <div>
-                                                    <div className="flex items-center gap-2">
-                                                        <p className="font-bold text-white group-hover:text-[#13ec80] transition-colors">{log.title}</p>
-                                                        <span className={`text-[9px] px-1.5 py-0.5 rounded font-black uppercase tracking-tighter border ${log.text.includes('B2C')
-                                                            ? 'bg-blue-500/10 border-blue-500/20 text-blue-400'
-                                                            : 'bg-[#13ec80]/10 border-[#13ec80]/20 text-[#13ec80]'
-                                                            }`}>
-                                                            {log.type === 'success' ? 'SUCCESS' : 'LOG'}
+                                    {recentLogs
+                                        .filter(log => logFilterPartner === 'all' || log.partner_id === logFilterPartner)
+                                        .map((log) => (
+                                            <div
+                                                key={log.id}
+                                                onClick={() => {
+                                                    if (log.event_id) {
+                                                        // Aquí podrías redirigir a una vista de evento si existiera
+                                                        showToast(`Viendo detalles de: ${log.title}`, 'info');
+                                                    }
+                                                }}
+                                                className="p-4 hover:bg-white/[0.02] transition-all flex items-center justify-between group cursor-pointer"
+                                            >
+                                                <div className="flex items-center gap-4">
+                                                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${log.type === 'success' ? 'bg-[#13ec80]/10 text-[#13ec80]' : 'bg-amber-400/10 text-amber-400'
+                                                        }`}>
+                                                        <span className="material-symbols-outlined !text-lg">
+                                                            {log.type === 'success' ? 'check_circle' : 'warning'}
                                                         </span>
                                                     </div>
-                                                    <p className="text-[11px] text-slate-500">{log.text}</p>
-                                                    <div className="flex items-center gap-2 mt-1">
-                                                        <span className="text-[9px] font-bold text-slate-600 bg-white/5 px-1.5 py-0.5 rounded flex items-center gap-1">
-                                                            <span className="material-symbols-outlined !text-[10px]">alternate_email</span>
-                                                            {log.email}
-                                                        </span>
-                                                        <span className="text-[9px] font-bold text-amber-500/80 bg-amber-500/5 px-1.5 py-0.5 rounded flex items-center gap-1">
-                                                            <span className="material-symbols-outlined !text-[10px]">payments</span>
-                                                            Cost: ${log.cost.toFixed(2)}
-                                                        </span>
+                                                    <div>
+                                                        <div className="flex items-center gap-2">
+                                                            <p className="font-bold text-white group-hover:text-[#13ec80] transition-colors">{log.title}</p>
+                                                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-black uppercase tracking-tighter border ${log.text.includes('B2C')
+                                                                ? 'bg-blue-500/10 border-blue-500/20 text-blue-400'
+                                                                : 'bg-[#13ec80]/10 border-[#13ec80]/20 text-[#13ec80]'
+                                                                }`}>
+                                                                {log.type === 'success' ? 'SUCCESS' : 'LOG'}
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-[11px] text-slate-500">{log.text}</p>
+                                                        <div className="flex items-center gap-2 mt-1">
+                                                            <span className="text-[9px] font-bold text-slate-600 bg-white/5 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                                                <span className="material-symbols-outlined !text-[10px]">alternate_email</span>
+                                                                {log.email}
+                                                            </span>
+                                                            <span className="text-[9px] font-bold text-amber-500/80 bg-amber-500/5 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                                                <span className="material-symbols-outlined !text-[10px]">payments</span>
+                                                                Cost: ${log.cost.toFixed(2)}
+                                                            </span>
+                                                        </div>
                                                     </div>
                                                 </div>
+                                                <div className="text-right">
+                                                    <p className="text-xs font-mono text-white/50">{log.time}</p>
+                                                    <p className="text-[9px] text-slate-700 font-bold uppercase tracking-widest group-hover:text-slate-500 transition-colors">ID: {log.id.substring(0, 8)}</p>
+                                                </div>
                                             </div>
-                                            <div className="text-right">
-                                                <p className="text-xs font-mono text-white/50">{log.time}</p>
-                                                <p className="text-[9px] text-slate-700 font-bold uppercase tracking-widest group-hover:text-slate-500 transition-colors">ID: {log.id.substring(0, 8)}</p>
-                                            </div>
-                                        </div>
-                                    ))}
+                                        ))}
                                     {recentLogs.length === 0 && (
                                         <div className="py-20 text-center">
                                             <span className="material-symbols-outlined !text-4xl text-white/5 mb-2">history</span>

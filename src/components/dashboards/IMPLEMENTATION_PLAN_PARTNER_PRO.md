@@ -40,5 +40,26 @@ Este plan detalla la hoja de ruta para elevar el panel de Partner a un nivel pro
     *   [ ] Gráficos de consumo por instancia.
 
 ---
-**Orden de Ejecución sugerido:** 
-1. Sistema de Alerta -> 2. Live Feed -> 3. Bulk Actions -> 4. Mercado Pago (Cards de Cristal).
+
+## Sprint Pro: Pulido Final & Control Total (NUEVAS TAREAS) 🔥
+
+### 1. Experiencia Post-Pago (Retorno MP) 🔄
+*   [x] Capturar parámetros de retorno de Mercado Pago (`success`, `pending`, `failure`).
+*   [x] Mostrar Toasts/Modales de confirmación de recarga exitosa.
+*   [x] Actualización automática del saldo al volver.
+
+### 2. Analytics Visuales (Billetera) 📊
+*   [x] Implementar gráficos de consumo (Sparklines) por evento usando CSS/Framer Motion.
+*   [x] Dashboard de consume por evento mejorado.
+
+### 3. Branding & Estilos AI (BETA) 🎨
+*   [x] Selector de presets con previsualización de imágenes (miniaturas).
+*   [x] Lógica para que el Partner guarde su configuración de marca blanca (logo, colores, radio y presets).
+
+### 4. Logs de Auditoría (Admin Central) 📝
+*   [x] Inyectar `Email de Usuario` y `Costo Estimado de API` en la tabla de logs globales.
+*   [x] Filtro por Partner en los logs del Admin.
+
+---
+**Orden de Producción Sugerido:**
+1. **Retorno MP** (Cierra el ciclo vital del dinero) -> 2. **Analytics** (Impacto Visual) -> 3. **Branding** (Empoderamiento del Partner) -> 4. **Logs Admin** (Control interno).

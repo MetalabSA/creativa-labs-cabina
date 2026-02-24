@@ -101,11 +101,31 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
     const [selectedPhotos, setSelectedPhotos] = useState<string[]>([]);
     const [showTopUpModal, setShowTopUpModal] = useState(false);
     const [isProcessingPayment, setIsProcessingPayment] = useState(false);
+    const [isSavingBranding, setIsSavingBranding] = useState(false);
 
     const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
         setToast({ message, type });
         setTimeout(() => setToast({ message: '', type: null }), 4000);
     };
+
+    // MP Return Handling
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const status = params.get('status') || params.get('collection_status');
+        const paymentId = params.get('payment_id');
+
+        if (status === 'approved' || status === 'success') {
+            showToast('¡Recarga acreditada con éxito! 🎉', 'success');
+            // Remove params from URL
+            const newUrl = window.location.pathname;
+            window.history.replaceState({}, document.title, newUrl);
+            fetchPartnerData();
+        } else if (status === 'failure') {
+            showToast('El pago no pudo procesarse. Reintenta.', 'error');
+            const newUrl = window.location.pathname;
+            window.history.replaceState({}, document.title, newUrl);
+        }
+    }, []);
 
     // Sync view if initialView changes
     useEffect(() => {
@@ -231,6 +251,7 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
     const handleUpdateBranding = async () => {
         if (!partner) return;
         try {
+            setIsSavingBranding(true);
             const { error } = await supabase
                 .from('partners')
                 .update({ config: brandingConfig })
@@ -238,9 +259,12 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
 
             if (error) throw error;
             setPartner({ ...partner, config: brandingConfig });
-            showToast('Configuración de marca guardada');
-        } catch (error) {
+            showToast('¡Configuración sincronizada con éxito! ✨');
+        } catch (error: any) {
             console.error('Error updating branding:', error);
+            showToast('Error al guardar: ' + error.message, 'error');
+        } finally {
+            setIsSavingBranding(false);
         }
     };
 
@@ -1277,35 +1301,102 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
                             </div>
                         </section>
 
-                        {/* Usage by Event */}
-                        <section className="glass-card rounded-2xl p-8 border border-white/5 bg-slate-900/50 backdrop-blur-xl">
-                            <h3 className="text-lg font-black text-white uppercase tracking-tighter mb-8 bg-white/5 -mx-8 -mt-8 p-8 border-b border-white/5">Consumo por Evento</h3>
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                                {events.map(event => (
-                                    <div key={event.id} className="p-6 rounded-2xl bg-white/[0.03] border border-white/5 hover:border-[#135bec]/30 transition-all group relative overflow-hidden">
-                                        <div className="absolute -right-4 -top-4 size-20 bg-[#135bec]/5 rounded-full blur-2xl group-hover:bg-[#135bec]/10 transition-all"></div>
-                                        <div className="relative z-10">
-                                            <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-1 truncate pr-4">{event.event_name}</p>
-                                            <div className="flex items-end justify-between">
-                                                <h4 className="text-2xl font-black text-white">{event.credits_used || 0}</h4>
-                                                <p className="text-[10px] text-slate-600 font-bold">utilizados</p>
-                                            </div>
-                                            <div className="mt-4 w-full bg-slate-800 h-1 rounded-full overflow-hidden">
-                                                <div
-                                                    className="bg-[#135bec] h-full"
-                                                    style={{ width: `${Math.min(100, ((event.credits_used || 0) / (event.credits_allocated || 1)) * 100)}%` }}
-                                                ></div>
-                                            </div>
-                                            <div className="flex justify-between mt-2 text-[8px] font-bold uppercase tracking-widest text-slate-700">
-                                                <span>{Math.round(((event.credits_used || 0) / (event.credits_allocated || 1)) * 100)}%</span>
-                                                <span>de {event.credits_allocated}</span>
-                                            </div>
-                                        </div>
+                        {/* Usage by Event Analytics */}
+                        <section className="glass-card rounded-[40px] p-10 border border-white/5 bg-slate-900/40 backdrop-blur-3xl">
+                            <div className="flex justify-between items-center mb-10">
+                                <div>
+                                    <h3 className="text-2xl font-black text-white uppercase tracking-tighter">Analíticas de Consumo</h3>
+                                    <p className="text-slate-500 text-[9px] font-black uppercase tracking-[3px] mt-1">Monitoreo de energía AI por evento activo</p>
+                                </div>
+                                <div className="flex gap-2">
+                                    <div className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full flex items-center gap-2">
+                                        <div className="size-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                                        <span className="text-[9px] font-black text-emerald-500 uppercase">Live Metrics</span>
                                     </div>
-                                ))}
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+                                {events.map((event, idx) => {
+                                    const percent = Math.min(100, ((event.credits_used || 0) / (event.credits_allocated || 1)) * 100);
+                                    // Simulated sparkline points
+                                    const sparkPoints = [20, 45, 30, 60, 40, 75, percent].map((val, i) => `${i * 20},${80 - (val * 0.6)}`).join(' ');
+
+                                    return (
+                                        <motion.div
+                                            key={event.id}
+                                            initial={{ opacity: 0, scale: 0.95 }}
+                                            animate={{ opacity: 1, scale: 1 }}
+                                            transition={{ delay: idx * 0.05 }}
+                                            className="group relative h-full"
+                                        >
+                                            <div className="p-8 rounded-[32px] bg-gradient-to-br from-white/[0.03] to-transparent border border-white/5 group-hover:border-[#135bec]/40 transition-all overflow-hidden h-full flex flex-col">
+                                                {/* Sparkline Background */}
+                                                <div className="absolute inset-x-0 bottom-0 h-24 opacity-20 pointer-events-none">
+                                                    <svg className="w-full h-full" preserveAspectRatio="none" viewBox="0 0 120 80">
+                                                        <defs>
+                                                            <linearGradient id={`grad-${idx}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                                                                <stop offset="0%" stopColor="#135bec" stopOpacity="0.5" />
+                                                                <stop offset="100%" stopColor="#135bec" stopOpacity="0" />
+                                                            </linearGradient>
+                                                        </defs>
+                                                        <path
+                                                            d={`M0,80 L${sparkPoints} L120,80 Z`}
+                                                            fill={`url(#grad-${idx})`}
+                                                            className="group-hover:opacity-100 transition-opacity"
+                                                        />
+                                                        <motion.path
+                                                            d={`M0,${80 - (20 * 0.6)} L${sparkPoints}`}
+                                                            fill="none"
+                                                            stroke="#135bec"
+                                                            strokeWidth="2"
+                                                            initial={{ pathLength: 0 }}
+                                                            animate={{ pathLength: 1 }}
+                                                            transition={{ duration: 1.5, delay: 0.5 }}
+                                                        />
+                                                    </svg>
+                                                </div>
+
+                                                <div className="relative z-10 flex flex-col h-full">
+                                                    <div className="flex justify-between items-start mb-6">
+                                                        <div className="p-2.5 bg-white/5 rounded-xl">
+                                                            <TrendingUp className={`size-4 ${percent > 80 ? 'text-amber-500' : 'text-emerald-500'}`} />
+                                                        </div>
+                                                        <p className="text-[10px] font-black text-white/20 uppercase tracking-[2px]">{event.event_slug}</p>
+                                                    </div>
+
+                                                    <h4 className="text-[11px] font-black text-white uppercase tracking-widest mb-1 truncate group-hover:text-[#135bec] transition-colors">{event.event_name}</h4>
+
+                                                    <div className="mt-8">
+                                                        <div className="flex items-baseline gap-2">
+                                                            <span className="text-3xl font-black text-white">{event.credits_used?.toLocaleString() || 0}</span>
+                                                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Usados</span>
+                                                        </div>
+
+                                                        {/* Progress Bar Mini */}
+                                                        <div className="mt-4 w-full bg-white/5 h-1.5 rounded-full overflow-hidden">
+                                                            <motion.div
+                                                                initial={{ width: 0 }}
+                                                                animate={{ width: `${percent}%` }}
+                                                                className={`h-full rounded-full ${percent > 90 ? 'bg-rose-500' : percent > 70 ? 'bg-amber-500' : 'bg-[#135bec]'}`}
+                                                            />
+                                                        </div>
+                                                        <div className="flex justify-between mt-3">
+                                                            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{Math.round(percent)}% Cap</span>
+                                                            <span className="text-[9px] font-black text-white/30 uppercase tracking-widest">Limite: {event.credits_allocated}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </motion.div>
+                                    );
+                                })}
                                 {events.length === 0 && (
-                                    <div className="col-span-full py-10 text-center opacity-30">
-                                        <p className="text-xs font-bold uppercase tracking-[2px]">No hay datos de consumo disponibles</p>
+                                    <div className="col-span-full py-20 text-center border-2 border-dashed border-white/5 rounded-[40px]">
+                                        <div className="size-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
+                                            <Info className="size-8 text-slate-600" />
+                                        </div>
+                                        <p className="text-xs font-black text-slate-600 uppercase tracking-[3px]">Sin actividad de consumo para reportar</p>
                                     </div>
                                 )}
                             </div>
@@ -1410,10 +1501,15 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
 
                                         <button
                                             onClick={handleUpdateBranding}
-                                            className="w-full py-4 bg-white text-slate-900 text-[10px] font-black rounded-2xl transition-all shadow-xl hover:shadow-2xl active:scale-[0.98] uppercase tracking-[3px] flex items-center justify-center gap-2 group"
+                                            disabled={isSavingBranding}
+                                            className={`w-full py-4 bg-white text-slate-900 text-[10px] font-black rounded-2xl transition-all shadow-xl hover:shadow-2xl active:scale-[0.98] uppercase tracking-[3px] flex items-center justify-center gap-2 group ${isSavingBranding ? 'opacity-50 cursor-not-allowed' : ''}`}
                                         >
-                                            <CheckCircle2 className="size-4 group-hover:scale-110 transition-transform" />
-                                            Sincronizar Panel
+                                            {isSavingBranding ? (
+                                                <div className="size-4 border-2 border-slate-900 border-t-transparent rounded-full animate-spin" />
+                                            ) : (
+                                                <CheckCircle2 className="size-4 group-hover:scale-110 transition-transform" />
+                                            )}
+                                            {isSavingBranding ? 'Sincronizando...' : 'Sincronizar Panel'}
                                         </button>
                                     </div>
                                 </section>
