@@ -2027,7 +2027,7 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
                                     <img src="https://logodownload.org/wp-content/uploads/2019/06/mercado-pago-logo.png" className="h-5" alt="Mercado Pago" />
                                     <div className="w-px h-6 bg-white/10" />
                                     <div className="flex gap-4">
-                                        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/5/5e/Visa_Inc._logo.svg/2560px-Visa_Inc._logo.svg.png" className="h-3.5" alt="Visa" />
+                                        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/d/d6/Visa_2021.svg/512px-Visa_2021.svg.png" className="h-3.5" alt="Visa" />
                                         <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Mastercard-logo.svg/1280px-Mastercard-logo.svg.png" className="h-5" alt="Mastercard" />
                                     </div>
                                 </div>
