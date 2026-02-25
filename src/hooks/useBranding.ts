@@ -9,17 +9,24 @@ interface UseBrandingProps {
 }
 
 export const useBranding = ({ partner, initialConfig, showToast }: UseBrandingProps) => {
-    const [brandingConfig, setBrandingConfig] = useState(initialConfig || {
-        primary_color: '#135bec',
-        logo_url: '',
-        radius: '12px',
-        style_presets: ['Superhéroes', 'John Wick', 'Urbano']
+    const [brandingConfig, setBrandingConfig] = useState(() => {
+        const config = initialConfig || {
+            primary_color: '#135bec',
+            logo_url: '',
+            radius: '12px',
+            style_presets: ['Superhéroes', 'John Wick', 'Urbano']
+        };
+        // Ensure style_presets exists for mapping
+        if (!config.style_presets) config.style_presets = ['Superhéroes', 'John Wick', 'Urbano'];
+        return config;
     });
 
     // Sync with initialConfig when it changes (e.g. after initial load)
     useEffect(() => {
         if (initialConfig) {
-            setBrandingConfig(initialConfig);
+            const config = { ...initialConfig };
+            if (!config.style_presets) config.style_presets = ['Superhéroes', 'John Wick', 'Urbano'];
+            setBrandingConfig(config);
         }
     }, [initialConfig]);
     const [isSaving, setIsSaving] = useState(false);

@@ -6,7 +6,8 @@ import {
     Edit2,
     ArrowDownRight,
     CheckCircle2,
-    Zap
+    Zap,
+    X
 } from 'lucide-react';
 import { PREFERRED_PACK_ORDER, IDENTITIES } from '../../../lib/constants';
 

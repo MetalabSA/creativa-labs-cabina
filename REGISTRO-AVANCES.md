@@ -1,5 +1,29 @@
 # 📔 Registro de Avances - Creativa Labs (Cabina de Fotos)
- 
+
+## [25-02-2026] - Estabilización Post-Modularización y Fixes de UI
+
+### 🛠️ Corrección Crítica: Estado de Autenticación y Carga
+- **Problema**: Error "loading is not defined" impedía que el componente de Autenticación se mostrara correctamente.
+- **Solución**: Se verificó la definición del estado `loading` en `Auth.tsx` y se resolvieron errores silenciosos de importación que bloqueaban el ciclo de renderizado de React.
+- **Importaciones**: Se detectaron y corrigieron múltiples faltas de importación de `motion` y `AnimatePresence` (framer-motion) y el icono `X` (lucide-react) en `Auth.tsx`, `App.tsx` y `BrandingPanel.tsx`.
+
+### 🧩 Fixes de Modularización (Partner Dashboard)
+- **Problema**: Las secciones de "Eventos" e "Identidad" se rompían con errores de `Cannot read properties of undefined (reading 'map')`.
+- **Raíz del Problema**: Al mover el código a componentes separados (`EventsSection`, `ClientsSection`), se perdieron referencias a props esenciales como `filteredEvents` y estados de filtrado.
+- **Solución**: 
+    - Se implementó la lógica de `filteredEvents` en el componente padre (`PartnerDashboard.tsx`) usando `useMemo` para optimizar el rendimiento.
+    - Se agregaron los estados faltantes como `selectedClientId` para permitir el filtrado por cliente.
+    - Se pasaron las funciones y datos correctos a cada subsección, restaurando la funcionalidad de búsqueda y navegación.
+
+### 🛡️ Robustez en Configuración de Marca (Branding)
+- **Mejora**: Se modificó el hook `useBranding.ts` para garantizar que `style_presets` siempre sea un array, incluso si la configuración guardada en la base de datos es parcial o está corrupta. Esto evita que el panel se "congele" o rompa al intentar renderizar la previsualización de estilos IA.
+
+### 🎨 Calidad de Código y UX
+- **React Keys**: Se añadieron `keys` únicas a todos los modales dentro de `AnimatePresence` en `PartnerDashboard.tsx`, eliminando las advertencias de la consola y asegurando que las animaciones de los diálogos sean fluidas y correctas.
+- **Guía de Acceso Local**: Se clarificó la lógica de ruteo para desarrollo local, especificando que en `localhost` se debe acceder vía `/dashboard` o `/kiosk` para cargar el panel administrativo.
+
+---
+
 ## [23-02-2026] - Refinamiento Maestro de Partners y UI
 
 ### 🛠️ Fix: Error de Esquema en Tabla Partners

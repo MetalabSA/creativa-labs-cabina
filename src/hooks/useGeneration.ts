@@ -8,6 +8,7 @@ interface UseGenerationProps {
 export const useGeneration = ({ showToast }: UseGenerationProps) => {
     const [eventPhotos, setEventPhotos] = useState<any[]>([]);
     const [selectedPhotos, setSelectedPhotos] = useState<string[]>([]);
+    const [loading, setLoading] = useState(false);
     const [moderationLoading, setModerationLoading] = useState(false);
 
     const fetchEventPhotos = useCallback(async (eventId: string) => {

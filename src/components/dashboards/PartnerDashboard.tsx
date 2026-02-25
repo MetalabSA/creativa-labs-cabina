@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     CheckCircle2,
@@ -88,7 +88,8 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({
 
     const {
         eventPhotos,
-        loading: moderationLoading,
+        loading: photosLoading,
+        moderationLoading: bulkLoading,
         fetchEventPhotos,
         handleDeletePhoto,
         handleBulkDelete,
@@ -96,9 +97,12 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({
         setSelectedPhotos
     } = useGeneration({ showToast });
 
+    const moderationLoading = photosLoading || bulkLoading;
+
     // Local UI states only
     const [view, setView] = useState<'overview' | 'events' | 'branding' | 'wallet' | 'moderation' | 'clients'>(initialView);
     const [searchTerm, setSearchTerm] = useState('');
+    const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
     const [localLoading, setLocalLoading] = useState(false);
 
     // Modal & Selection States
@@ -132,6 +136,15 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({
     });
 
     const loading = dashboardLoading || localLoading || isSavingBranding || isUploadingLogo || moderationLoading;
+
+    const filteredEvents = useMemo(() => {
+        return events.filter(event => {
+            const matchesSearch = (event.event_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                (event.event_slug || '').toLowerCase().includes(searchTerm.toLowerCase());
+            const matchesClient = !selectedClientId || event.client_email === selectedClientId;
+            return matchesSearch && matchesClient;
+        });
+    }, [events, searchTerm, selectedClientId]);
 
     // MP Return Handling
     useEffect(() => {
@@ -238,27 +251,33 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({
                                 partner={partner}
                                 events={events}
                                 generationsData={generationsData}
+                                setView={setView}
                             />
                         )}
 
                         {view === 'clients' && (
                             <ClientsSection
                                 clients={clients}
-                                searchTerm={searchTerm}
-                                setSearchTerm={setSearchTerm}
+                                events={events}
                                 setShowCreateClientModal={setShowCreateClientModal}
                                 setEditingClient={setEditingClient}
                                 setShowClientTopUpModal={setShowClientTopUpModal}
-                                onProxyClient={onProxyClient}
-                                events={events}
+                                setSelectedClientId={setSelectedClientId}
+                                setView={setView}
+                                exportClientReport={(client) => {
+                                    showToast(`Exportando reporte de ${client.name}...`, 'info');
+                                }}
                             />
                         )}
 
                         {view === 'events' && (
                             <EventsSection
                                 events={events}
+                                filteredEvents={filteredEvents}
                                 searchTerm={searchTerm}
                                 setSearchTerm={setSearchTerm}
+                                selectedClientId={selectedClientId}
+                                setSelectedClientId={setSelectedClientId}
                                 setShowCreateEventModal={setShowCreateEventModal}
                                 setEditingEvent={setEditingEvent}
                                 setEventToTopUp={setEventToTopUp}
@@ -267,6 +286,7 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({
                                     setEventToModerate(ev);
                                     setView('moderation');
                                 }}
+                                setView={setView}
                             />
                         )}
 
@@ -284,12 +304,13 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({
                             <BrandingPanel
                                 brandingConfig={brandingConfig}
                                 setBrandingConfig={setBrandingConfig}
-                                isSaving={isSavingBranding}
-                                isUploading={isUploadingLogo}
-                                toggleStylePreset={toggleStylePreset}
-                                handleUpdateBranding={handleUpdateBranding}
+                                isSavingBranding={isSavingBranding}
                                 handleLogoUpload={handleLogoUpload}
+                                handleUpdateBranding={handleUpdateBranding}
+                                toggleStylePreset={toggleStylePreset}
                                 recentGlobalPhotos={recentGlobalPhotos}
+                                events={events}
+                                setView={setView}
                             />
                         )}
 
@@ -313,6 +334,7 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({
             {/* Modals Container */}
             <AnimatePresence>
                 <CreateEventModal
+                    key="create-event-modal"
                     isOpen={showCreateEventModal}
                     onClose={() => setShowCreateEventModal(false)}
                     newEvent={newEvent}
@@ -326,6 +348,7 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({
                 />
 
                 <EditEventModal
+                    key="edit-event-modal"
                     isOpen={!!editingEvent}
                     onClose={() => setEditingEvent(null)}
                     editingEvent={editingEvent}
@@ -337,6 +360,7 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({
                 />
 
                 <ClientModal
+                    key="client-modal"
                     isOpen={showCreateClientModal || !!editingClient}
                     onClose={() => { setShowCreateClientModal(false); setEditingClient(null); }}
                     editingClient={editingClient}
@@ -349,6 +373,7 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({
                 />
 
                 <ClientTopUpModal
+                    key="client-topup-modal"
                     isOpen={!!showClientTopUpModal}
                     onClose={() => setShowClientTopUpModal(null)}
                     client={showClientTopUpModal}
@@ -360,6 +385,7 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({
                 />
 
                 <EventTopUpModal
+                    key="event-topup-modal"
                     isOpen={!!eventToTopUp}
                     onClose={() => setEventToTopUp(null)}
                     event={eventToTopUp}
@@ -371,6 +397,7 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({
                 />
 
                 <DeleteEventModal
+                    key="delete-event-modal"
                     isOpen={!!eventToDelete}
                     onClose={() => setEventToDelete(null)}
                     eventToDelete={eventToDelete}
@@ -388,8 +415,8 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({
                         className="fixed bottom-8 right-8 z-[100]"
                     >
                         <div className={`flex items-center gap-4 px-6 py-4 rounded-2xl border backdrop-blur-xl shadow-2xl ${toast.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500' :
-                                toast.type === 'error' ? 'bg-rose-500/10 border-rose-500/20 text-rose-500' :
-                                    'bg-[#135bec]/10 border-[#135bec]/20 text-blue-400'
+                            toast.type === 'error' ? 'bg-rose-500/10 border-rose-500/20 text-rose-500' :
+                                'bg-[#135bec]/10 border-[#135bec]/20 text-blue-400'
                             }`}>
                             {toast.type === 'success' ? <CheckCircle2 className="size-5" /> :
                                 toast.type === 'error' ? <AlertTriangle className="size-5" /> :

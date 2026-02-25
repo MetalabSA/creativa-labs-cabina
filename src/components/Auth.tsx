@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { Mail, Lock, Loader2, Sparkles, User, AlertTriangle, Camera, ChevronLeft } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 interface AuthProps {
     onAuthSuccess?: () => void;
@@ -236,8 +237,8 @@ export const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
                                 initial={{ opacity: 0, scale: 0.9 }}
                                 animate={{ opacity: 1, scale: 1 }}
                                 className={`p-6 rounded-[24px] border backdrop-blur-md flex flex-col items-center text-center gap-3 transition-all ${message.type === 'error'
-                                        ? 'bg-rose-500/10 border-rose-500/20 text-rose-400'
-                                        : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 shadow-[0_0_30px_rgba(16,185,129,0.1)]'
+                                    ? 'bg-rose-500/10 border-rose-500/20 text-rose-400'
+                                    : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400 shadow-[0_0_30px_rgba(16,185,129,0.1)]'
                                     }`}
                             >
                                 <div className={`size-12 rounded-full flex items-center justify-center ${message.type === 'error' ? 'bg-rose-500/20' : 'bg-emerald-500/20 animate-pulse'
