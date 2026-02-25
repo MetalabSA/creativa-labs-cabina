@@ -251,7 +251,7 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, profile,
     const [downloading, setDownloading] = useState(false);
     const [deletingId, setDeletingId] = useState<string | null>(null);
     const [isSlideshowOpen, setIsSlideshowOpen] = useState(false);
-    const [slideshowIndex, setSlideshowIndex] = useState(0);
+    const [clientData, setClientData] = useState<any>(null);
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | null }>({
         message: '',
         type: null
@@ -288,6 +288,15 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, profile,
                 .select('*, partner:partners(*)')
                 .ilike('client_email', profile.email.toLowerCase())
                 .maybeSingle();
+
+            // Fetch client data to get contracted_styles
+            const { data: cData } = await supabase
+                .from('clients')
+                .select('*')
+                .ilike('email', profile.email.toLowerCase())
+                .maybeSingle();
+
+            if (cData) setClientData(cData);
 
             if (data) {
                 setEvent(data);
@@ -756,6 +765,41 @@ export const ClientDashboard: React.FC<ClientDashboardProps> = ({ user, profile,
                                 </div>
                             </div>
                         </section>
+
+                        {/* 1.5. Estilos Habilitados (Sólo Lectura para Cliente) */}
+                        {clientData && (
+                            <section className="bg-white/[0.03] border border-white/10 rounded-3xl p-8 backdrop-blur-sm group hover:border-[#7f13ec]/30 transition-all duration-500">
+                                <div className="flex items-center gap-4 mb-8">
+                                    <div className="p-3 bg-[#7f13ec]/10 rounded-2xl border border-[#7f13ec]/20 group-hover:scale-110 transition-transform">
+                                        <Zap className="w-6 h-6 text-[#7f13ec]" />
+                                    </div>
+                                    <div>
+                                        <h3 className="text-xl font-bold text-white tracking-tight">Estilos Habilitados</h3>
+                                        <p className="text-xs text-slate-500 font-medium uppercase tracking-widest mt-0.5">Membresía — Catálogo Disponible</p>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3">
+                                    {clientData.contracted_styles?.length > 0 ? (
+                                        clientData.contracted_styles.map((style: string) => {
+                                            const identity = IDENTITIES.find(id => id.id === style);
+                                            return (
+                                                <div key={style} className="relative aspect-[3/4] rounded-2xl overflow-hidden border border-white/10 group/style ring-2 ring-transparent hover:ring-[#7f13ec]/50 transition-all">
+                                                    <img src={identity?.url} alt={style} className="w-full h-full object-cover opacity-60 group-hover/style:opacity-100 transition-opacity" />
+                                                    <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent"></div>
+                                                    <p className="absolute bottom-3 left-3 right-3 text-[8px] font-black text-white uppercase tracking-wider truncate">{style}</p>
+                                                </div>
+                                            );
+                                        })
+                                    ) : (
+                                        <div className="col-span-full py-10 bg-white/5 rounded-2xl border border-dashed border-white/10 text-center">
+                                            <p className="text-[10px] text-slate-500 uppercase font-black tracking-widest">No hay estilos específicos contratados</p>
+                                            <p className="text-[8px] text-slate-600 mt-1 uppercase">Se usan los estilos predeterminados del partner</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </section>
+                        )}
 
                         {/* 2. Personalización de Marca (Branding) */}
                         <section className="bg-white/[0.03] border border-white/10 rounded-3xl p-8 backdrop-blur-sm group hover:border-[#7f13ec]/30 transition-all duration-500">

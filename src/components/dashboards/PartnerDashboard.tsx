@@ -1,71 +1,35 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { supabase } from '../../lib/supabaseClient';
-import {
-    Calendar,
-    Plus,
-    CreditCard,
-    Settings,
-    Shield,
-    TrendingUp,
-    History,
-    ArrowUpRight,
-    ArrowDownRight,
-    Info,
-    Smartphone,
-    Monitor as MonitorIcon,
-    Layers,
-    LayoutDashboard,
-    Layout as LayoutIcon,
-    ShoppingBag,
-    Wallet,
-    Download,
-    Search,
-    Upload,
-    CheckCircle2,
-    Palette,
-    Zap,
-    ShoppingCart,
-    Bolt,
-    X,
-    Globe,
-    Trash2,
-    Edit2,
-    Users,
-    Mail,
-    ExternalLink,
-    Link as LinkIcon,
-    AlertTriangle
-} from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { IDENTITIES, PREFERRED_PACK_ORDER } from '../../lib/constants';
-import JSZip from 'jszip';
+import {
+    CheckCircle2,
+    AlertTriangle,
+    Info,
+    X,
+    ArrowLeft
+} from 'lucide-react';
+import { Client } from '../../types/index';
 
-interface Partner {
-    id: string;
-    name: string;
-    credits_total: number;
-    credits_used: number;
-    config: {
-        primary_color: string;
-        logo_url: string | null;
-        radius?: string;
-        style_presets?: string[];
-    };
-}
+// Hooks
+import { usePartnerDashboard } from '../../hooks/usePartnerDashboard';
+import { useBranding } from '../../hooks/useBranding';
+import { useGeneration } from '../../hooks/useGeneration';
 
-interface Event {
-    id: string;
-    event_name: string;
-    event_slug: string;
-    client_email?: string;
-    start_date: string;
-    end_date: string;
-    credits_allocated: number;
-    credits_used: number;
-    is_active: boolean;
-    created_at?: string;
-    selected_styles?: string[];
-}
+// Components
+import { DashboardHeader } from './partner/DashboardHeader';
+import { OverviewSection } from './partner/OverviewSection';
+import { ClientsSection } from './partner/ClientsSection';
+import { EventsSection } from './partner/EventsSection';
+import { ModerationSection } from './partner/ModerationSection';
+import { BrandingPanel } from './partner/BrandingPanel';
+import { WalletSection } from './partner/WalletSection';
+
+// Modals
+import { CreateEventModal } from './partner/modals/CreateEventModal';
+import { EditEventModal } from './partner/modals/EditEventModal';
+import { ClientModal } from './partner/modals/ClientModal';
+import { ClientTopUpModal } from './partner/modals/ClientTopUpModal';
+import { EventTopUpModal } from './partner/modals/EventTopUpModal';
+import { DeleteEventModal } from './partner/modals/DeleteEventModal';
 
 interface PartnerDashboardProps {
     user: any;
@@ -75,48 +39,107 @@ interface PartnerDashboardProps {
     onProxyClient?: (email: string) => void;
 }
 
-export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profile, onBack, initialView = 'overview', onProxyClient }) => {
-    const [view, setView] = useState<'overview' | 'events' | 'branding' | 'wallet' | 'moderation'>(initialView);
-    const [loading, setLoading] = useState(false);
-    const [partner, setPartner] = useState<Partner | null>(null);
-    const [events, setEvents] = useState<any[]>([]);
-    const [transactions, setTransactions] = useState<any[]>([]);
+export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({
+    user,
+    profile,
+    onBack,
+    initialView = 'overview',
+    onProxyClient
+}) => {
+    const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' | 'info' | null }>({ message: '', type: null });
+
+    const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {
+        setToast({ message, type });
+        setTimeout(() => setToast({ message: '', type: null }), 4000);
+    }, []);
+
+    const {
+        loading: dashboardLoading,
+        partner,
+        events,
+        transactions,
+        clients,
+        generationsData,
+        recentGlobalPhotos,
+        fetchPartnerData,
+        getClientBalance,
+        handleCreateEvent,
+        handleUpdateEvent,
+        handleDeleteEvent,
+        handleCreateClient,
+        handleUpdateClient,
+        handleClientTopUp,
+        handleTopUpEvent
+    } = usePartnerDashboard({ profile, showToast });
+
+    const {
+        brandingConfig,
+        setBrandingConfig,
+        isSaving: isSavingBranding,
+        isUploading: isUploadingLogo,
+        toggleStylePreset,
+        handleUpdateBranding,
+        handleLogoUpload
+    } = useBranding({
+        partner,
+        initialConfig: partner?.config,
+        showToast
+    });
+
+    const {
+        eventPhotos,
+        loading: moderationLoading,
+        fetchEventPhotos,
+        handleDeletePhoto,
+        handleBulkDelete,
+        selectedPhotos,
+        setSelectedPhotos
+    } = useGeneration({ showToast });
+
+    // Local UI states only
+    const [view, setView] = useState<'overview' | 'events' | 'branding' | 'wallet' | 'moderation' | 'clients'>(initialView);
     const [searchTerm, setSearchTerm] = useState('');
+    const [localLoading, setLocalLoading] = useState(false);
+
+    // Modal & Selection States
     const [showCreateEventModal, setShowCreateEventModal] = useState(false);
     const [editingEvent, setEditingEvent] = useState<any | null>(null);
     const [eventToTopUp, setEventToTopUp] = useState<any | null>(null);
     const [topUpAmount, setTopUpAmount] = useState(100);
-    const [generationsData, setGenerationsData] = useState<any[]>([]);
-    const [eventToDelete, setEventToDelete] = useState<{ id: string, name: string } | null>(null);
-    const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' | null }>({
-        message: '',
-        type: null
-    });
+    const [eventToDelete, setEventToDelete] = useState<any | null>(null);
     const [eventToModerate, setEventToModerate] = useState<any | null>(null);
-    const [eventPhotos, setEventPhotos] = useState<any[]>([]);
-    const [moderationLoading, setModerationLoading] = useState(false);
-    const [moderationSearchTerm, setModerationSearchTerm] = useState('');
-    const [moderationDateFilter, setModerationDateFilter] = useState('');
-    const [recentGlobalPhotos, setRecentGlobalPhotos] = useState<any[]>([]);
-    const [selectedPhotos, setSelectedPhotos] = useState<string[]>([]);
-    const [showTopUpModal, setShowTopUpModal] = useState(false);
-    const [isProcessingPayment, setIsProcessingPayment] = useState(false);
-    const [isSavingBranding, setIsSavingBranding] = useState(false);
+    const [showCreateClientModal, setShowCreateClientModal] = useState(false);
+    const [editingClient, setEditingClient] = useState<Client | null>(null);
+    const [showClientTopUpModal, setShowClientTopUpModal] = useState<Client | null>(null);
+    const [clientTopUpAmount, setClientTopUpAmount] = useState(1000);
 
-    const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
-        setToast({ message, type });
-        setTimeout(() => setToast({ message: '', type: null }), 4000);
-    };
+    const [newEvent, setNewEvent] = useState({
+        name: '',
+        slug: '',
+        client_email: '',
+        credits: 500,
+        start_date: new Date().toISOString().split('T')[0],
+        end_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        selected_styles: [] as string[]
+    });
+
+    const [newClient, setNewClient] = useState({
+        name: '',
+        email: '',
+        contact_person: '',
+        phone: '',
+        contracted_styles: [] as string[]
+    });
+
+    const loading = dashboardLoading || localLoading || isSavingBranding || isUploadingLogo || moderationLoading;
 
     // MP Return Handling
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const status = params.get('status') || params.get('collection_status');
-        const paymentId = params.get('payment_id');
 
         if (status === 'approved' || status === 'success') {
             showToast('¡Recarga acreditada con éxito! 🎉', 'success');
-            // Remove params from URL
             const newUrl = window.location.pathname;
             window.history.replaceState({}, document.title, newUrl);
             fetchPartnerData();
@@ -125,2015 +148,258 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({ user, profil
             const newUrl = window.location.pathname;
             window.history.replaceState({}, document.title, newUrl);
         }
-    }, []);
+    }, [fetchPartnerData, showToast]);
 
     // Sync view if initialView changes
     useEffect(() => {
         setView(initialView);
     }, [initialView]);
 
-    // Branding State
-    const [brandingConfig, setBrandingConfig] = useState({
-        primary_color: '#135bec',
-        logo_url: '',
-        radius: '12px',
-        style_presets: ['Superhéroes', 'John Wick', 'Urbano']
-    });
-
-    // New Event Form
-    const [newEvent, setNewEvent] = useState({
-        name: '',
-        slug: '',
-        client_email: '',
-        credits: 500,
-        start_date: new Date().toISOString().split('T')[0],
-        end_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-    });
+    useEffect(() => {
+        if (eventToModerate) {
+            fetchEventPhotos(eventToModerate.id);
+        }
+    }, [eventToModerate, fetchEventPhotos]);
 
     useEffect(() => {
         fetchPartnerData();
-    }, [profile.partner_id]);
+    }, [profile.partner_id, fetchPartnerData]);
 
-    const fetchPartnerData = async () => {
-        try {
-            setLoading(true);
-
-            // Si no hay partner_id en el profile, intentamos buscarlo por user_id o crear un "Partner Virtual" 
-            // basado en los créditos del perfil (caso de partners migrados o legacy).
-            let targetPartnerId = profile.partner_id;
-            let isVirtual = false;
-
-            if (!targetPartnerId) {
-                // Buscamos si existe un registro en la tabla partners que coincida con el user_id o email
-                const { data: existingPartner } = await supabase
-                    .from('partners')
-                    .select('id')
-                    .or(`user_id.eq.${profile.id},contact_email.eq.${profile.email}`)
-                    .single();
-
-                if (existingPartner) {
-                    targetPartnerId = existingPartner.id;
-                } else {
-                    isVirtual = true;
-                }
-            }
-
-            if (isVirtual) {
-                // MODO VIRTUAL: Usamos la data del profile como si fuera un partner
-                setPartner({
-                    id: profile.id,
-                    name: profile.full_name || profile.email.split('@')[0],
-                    credits_total: profile.credits || 0,
-                    credits_used: profile.total_generations || 0,
-                    is_virtual: true,
-                    config: {
-                        primary_color: '#135bec',
-                        logo_url: null
-                    }
-                } as any);
-
-                // Buscamos eventos y transacciones usando el profile.id
-                const [eRes, tRes] = await Promise.all([
-                    supabase.from('events').select('*').eq('partner_id', profile.id).order('created_at', { ascending: false }),
-                    supabase.from('wallet_transactions').select('*').eq('partner_id', profile.id).order('created_at', { ascending: false })
-                ]);
-
-                setEvents(eRes.data || []);
-                setTransactions(tRes.data || []);
-
-                if (eRes.data && eRes.data.length > 0) {
-                    const eventIds = eRes.data.map(ev => ev.id);
-                    const { data: gens } = await supabase
-                        .from('generations')
-                        .select('created_at, event_id')
-                        .in('event_id', eventIds);
-                    setGenerationsData(gens || []);
-                }
-            } else {
-                // NORMAL MODE: Tenemos un ID de partner válido
-                const [pRes, eRes, tRes] = await Promise.all([
-                    supabase.from('partners').select('*').eq('id', targetPartnerId).single(),
-                    supabase.from('events').select('*').eq('partner_id', targetPartnerId).order('created_at', { ascending: false }),
-                    supabase.from('wallet_transactions').select('*').eq('partner_id', targetPartnerId).order('created_at', { ascending: false })
-                ]);
-
-                if (pRes.error) throw pRes.error;
-                setPartner(pRes.data);
-                setTransactions(tRes.data || []);
-
-                if (pRes.data.config) {
-                    setBrandingConfig({
-                        primary_color: pRes.data.config.primary_color || '#135bec',
-                        logo_url: pRes.data.config.logo_url || '',
-                        radius: pRes.data.config.radius || '12px',
-                        style_presets: pRes.data.config.style_presets || ['Superhéroes', 'John Wick', 'Urbano']
-                    });
-                }
-                if (eRes.data && eRes.data.length > 0) {
-                    const eventIds = eRes.data.map(ev => ev.id);
-                    const { data: gens } = await supabase
-                        .from('generations')
-                        .select('id, created_at, event_id, image_url')
-                        .in('event_id', eventIds)
-                        .order('created_at', { ascending: false });
-                    setGenerationsData(gens || []);
-                    setRecentGlobalPhotos(gens?.slice(0, 10) || []);
-                }
-                setEvents(eRes.data || []);
-            }
-        } catch (error) {
-            console.error('Error fetching partner data:', error);
-        } finally {
-            setLoading(false);
-        }
+    // Actions
+    const onClientCreate = async (data: any) => {
+        const success = await handleCreateClient(data);
+        if (success) setShowCreateClientModal(false);
     };
 
-    const handleUpdateBranding = async () => {
-        if (!partner) return;
-        try {
-            setIsSavingBranding(true);
-            const { error } = await supabase
-                .from('partners')
-                .update({ config: brandingConfig })
-                .eq('id', partner.id);
-
-            if (error) throw error;
-            setPartner({ ...partner, config: brandingConfig });
-            showToast('¡Configuración sincronizada con éxito! ✨');
-        } catch (error: any) {
-            console.error('Error updating branding:', error);
-            showToast('Error al guardar: ' + error.message, 'error');
-        } finally {
-            setIsSavingBranding(false);
-        }
+    const onClientUpdate = async (data: any) => {
+        if (!editingClient) return;
+        const success = await handleUpdateClient(editingClient.id, data);
+        if (success) setEditingClient(null);
     };
 
-    const fetchEventPhotos = async (eventId: string) => {
-        try {
-            setModerationLoading(true);
-            const { data, error } = await supabase
-                .from('generations')
-                .select('*, profiles(email)')
-                .eq('event_id', eventId)
-                .order('created_at', { ascending: false });
-
-            if (error) throw error;
-            setEventPhotos(data || []);
-        } catch (err) {
-            console.error('Error fetching photos:', err);
-            showToast('No se pudieron cargar las fotos', 'error');
-        } finally {
-            setModerationLoading(false);
-        }
-    };
-
-    const handleDeletePhoto = async (photoId: string) => {
-        if (!window.confirm('¿Estás seguro de que deseas eliminar esta foto de la galería?')) return;
-        try {
-            const { error } = await supabase
-                .from('generations')
-                .delete()
-                .eq('id', photoId);
-
-            if (error) throw error;
-            setEventPhotos(prev => prev.filter(p => p.id !== photoId));
-            showToast('Foto eliminada correctamente');
-        } catch (err) {
-            console.error('Error deleting photo:', err);
-            showToast('Error al eliminar la foto', 'error');
-        }
-    };
-
-    const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (!e.target.files || e.target.files.length === 0) return;
-        const file = e.target.files[0];
-        const fileExt = file.name.split('.').pop();
-        const fileName = `${partner?.id}-${Date.now()}.${fileExt}`;
-
-        try {
-            setLoading(true);
-            const { error: uploadError } = await supabase.storage
-                .from('logos')
-                .upload(fileName, file);
-
-            if (uploadError) {
-                // Try 'public' bucket if 'logos' fails or doesn't exist (fallback)
-                const { error: publicError } = await supabase.storage
-                    .from('public')
-                    .upload(`logos/${fileName}`, file);
-
-                if (publicError) throw uploadError; // Throw original error if both fail
-
-                const { data } = supabase.storage.from('public').getPublicUrl(`logos/${fileName}`);
-                setBrandingConfig({ ...brandingConfig, logo_url: data.publicUrl });
-            } else {
-                const { data } = supabase.storage.from('logos').getPublicUrl(fileName);
-                setBrandingConfig({ ...brandingConfig, logo_url: data.publicUrl });
-            }
-        } catch (error) {
-            console.error('Error uploading logo:', error);
-            showToast('Error al subir logo: ' + (error as any).message, 'error');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleCreateEvent = async (e: React.FormEvent) => {
+    const onEventCreate = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!partner) return;
-
-        const creditsNeeded = Number(newEvent.credits);
-        if (creditsNeeded > (partner.credits_total - partner.credits_used)) {
-            showToast('Créditos insuficientes en tu balance mayorista.', 'error');
-            return;
-        }
-
-        try {
-            setLoading(true);
-            // 1. Create Event
-            const { data: eventData, error } = await supabase.from('events').insert([
-                {
-                    partner_id: partner.id,
-                    event_name: newEvent.name,
-                    client_email: newEvent.client_email,
-                    event_slug: newEvent.slug || newEvent.name.toLowerCase().replace(/\s+/g, '-'),
-                    credits_allocated: creditsNeeded,
-                    credits_used: 0,
-                    start_date: new Date(newEvent.start_date).toISOString(),
-                    end_date: new Date(newEvent.end_date).toISOString(),
-                    is_active: true,
-                    selected_styles: brandingConfig.style_presets
-                }
-            ]).select();
-
-            if (error) throw error;
-
-            // 2. Deduct credits
-            if ((partner as any).is_virtual) {
-                // Si es virtual (legacy), descontamos directamente del profile
-                const { error: profError } = await supabase
-                    .from('profiles')
-                    .update({ credits: Math.max(0, partner.credits_total - creditsNeeded) })
-                    .eq('id', profile.id);
-                if (profError) throw profError;
-            } else {
-                // Si es un partner formal, actualizamos su consumo en la tabla partners
-                const { error: pError } = await supabase.from('partners')
-                    .update({ credits_used: (partner.credits_used || 0) + creditsNeeded })
-                    .eq('id', partner.id);
-                if (pError) throw pError;
-            }
-
+        const success = await handleCreateEvent(newEvent);
+        if (success) {
             setShowCreateEventModal(false);
-            setNewEvent({ name: '', slug: '', client_email: '', credits: 500, start_date: '', end_date: '' });
-            showToast('Evento creado con éxito');
-            fetchPartnerData();
-        } catch (error: any) {
-            console.error('Error creating event:', error);
-            showToast('Error al crear el evento. ' + (error.message || 'El slug podría estar duplicado.'), 'error');
-        } finally {
-            setLoading(false);
+            setNewEvent({ name: '', slug: '', client_email: '', credits: 500, start_date: '', end_date: '', selected_styles: [] });
         }
     };
 
-    const handleTopUpEvent = async () => {
-        if (!eventToTopUp || !partner) return;
-
-        const amount = Number(topUpAmount);
-        const available = (partner.credits_total || 0) - (partner.credits_used || 0);
-
-        if (amount > available) {
-            showToast('No tienes créditos suficientes.', 'error');
-            return;
-        }
-
-        try {
-            setLoading(true);
-
-            // 1. Update event
-            const { error: eErr } = await supabase
-                .from('events')
-                .update({ credits_allocated: (eventToTopUp.credits_allocated || 0) + amount })
-                .eq('id', eventToTopUp.id);
-            if (eErr) throw eErr;
-
-            // 2. Update partner balance
-            if ((partner as any).is_virtual) {
-                const { error: pErr } = await supabase
-                    .from('profiles')
-                    .update({ credits: Math.max(0, partner.credits_total - amount) })
-                    .eq('id', profile.id);
-                if (pErr) throw pErr;
-            } else {
-                const { error: pErr } = await supabase
-                    .from('partners')
-                    .update({ credits_used: (partner.credits_used || 0) + amount })
-                    .eq('id', partner.id);
-                if (pErr) throw pErr;
-            }
-
-            // 3. Log transaction
-            await supabase.from('wallet_transactions').insert({
-                partner_id: partner.id,
-                amount: amount,
-                type: 'usage',
-                description: `Transferencia a evento: ${eventToTopUp.event_name}`
-            });
-
-            showToast(`Se han transferido ${amount} créditos.`);
-            setEventToTopUp(null);
-            fetchPartnerData();
-        } catch (err: any) {
-            showToast('Error: ' + err.message, 'error');
-        } finally {
-            setLoading(false);
-        }
+    const onEventUpdate = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingEvent) return;
+        const success = await handleUpdateEvent(editingEvent.id, editingEvent);
+        if (success) setEditingEvent(null);
     };
 
-    const handlePurchase = async (plan: any) => {
-        if (!partner) return;
-        try {
-            setIsProcessingPayment(true);
-            const redirectUrl = window.location.href;
-
-            const response = await fetch('https://elesttjfwfhvzdvldytn.supabase.co/functions/v1/mercadopago-payment', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    user_id: partner.id,
-                    credits: plan.qty,
-                    price: plan.price,
-                    pack_name: plan.label,
-                    redirect_url: redirectUrl
-                })
-            });
-
-            const data = await response.json();
-            if (data.init_point) {
-                window.location.href = data.init_point;
-            } else {
-                throw new Error(data.message || 'Error al iniciar pago');
-            }
-        } catch (err: any) {
-            showToast(err.message, 'error');
-        } finally {
-            setIsProcessingPayment(false);
-        }
+    const onClientTopUp = async () => {
+        if (!showClientTopUpModal) return;
+        const success = await handleClientTopUp(showClientTopUpModal.id, showClientTopUpModal.name, clientTopUpAmount);
+        if (success) setShowClientTopUpModal(null);
     };
 
-    const handleDeleteEvent = async () => {
+    const onEventTopUp = async () => {
+        if (!eventToTopUp) return;
+        const success = await handleTopUpEvent(eventToTopUp, topUpAmount);
+        if (success) setEventToTopUp(null);
+    };
+
+    const onEventDelete = async () => {
         if (!eventToDelete) return;
-        try {
-            setLoading(true);
-            const { error } = await supabase.from('events').delete().eq('id', eventToDelete.id);
-            if (error) throw error;
-            showToast('Evento eliminado permanentemente');
-            setEventToDelete(null);
-            fetchPartnerData();
-        } catch (error: any) {
-            console.error('Error deleting event:', error);
-            showToast('Error al eliminar evento: ' + error.message, 'error');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const toggleStylePreset = (style: string) => {
-        setBrandingConfig(prev => ({
-            ...prev,
-            style_presets: prev.style_presets.includes(style)
-                ? prev.style_presets.filter(s => s !== style)
-                : [...prev.style_presets, style]
-        }));
-    };
-
-    const filteredPhotos = useMemo(() => {
-        return eventPhotos.filter(photo => {
-            const email = photo.profiles?.email || 'Anónimo';
-            const matchesSearch = !moderationSearchTerm ||
-                photo.id.toLowerCase().includes(moderationSearchTerm.toLowerCase()) ||
-                email.toLowerCase().includes(moderationSearchTerm.toLowerCase());
-
-            const matchesDate = !moderationDateFilter ||
-                (photo.created_at && photo.created_at.startsWith(moderationDateFilter));
-
-            return matchesSearch && matchesDate;
-        });
-    }, [eventPhotos, moderationSearchTerm, moderationDateFilter]);
-
-    const filteredEvents = useMemo(() => {
-        return events.filter(e =>
-            (e.event_name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (e.event_slug || '').toLowerCase().includes(searchTerm.toLowerCase())
-        );
-    }, [events, searchTerm]);
-
-    if (loading && !partner) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-[400px] text-white space-y-4">
-                <div className="size-12 border-4 border-[#135bec] border-t-transparent rounded-full animate-spin"></div>
-                <p className="font-bold tracking-widest text-[10px] uppercase opacity-50">Sincronizando con la red...</p>
-            </div>
-        );
-    }
-
-    const availableCredits = (partner?.credits_total || 0) - (partner?.credits_used || 0);
-    const consumptionPercentage = partner?.credits_total ? Math.round((partner.credits_used / partner.credits_total) * 100) : 0;
-
-    const renderTabButton = (id: typeof view, label: string, Icon: any) => {
-        const isActive = view === id;
-        return (
-            <button
-                key={id}
-                onClick={() => setView(id)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all text-sm font-bold border ${isActive
-                    ? 'bg-[#135bec]/10 text-[#135bec] border-[#135bec]/30 shadow-[0_0_15px_rgba(19,91,236,0.1)]'
-                    : 'text-slate-400 border-transparent hover:text-white hover:bg-white/5'
-                    }`}
-            >
-                <Icon className="size-4" />
-                {label}
-            </button>
-        );
+        const success = await handleDeleteEvent(eventToDelete.id);
+        if (success) setEventToDelete(null);
     };
 
     return (
-        <div className="space-y-8 animate-fade-in text-slate-100">
-            {/* Header Section */}
-            <header className="flex flex-wrap items-center justify-between gap-6 pb-6 border-b border-white/5">
-                <motion.div
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
+        <div className="min-h-screen bg-[#071121] text-white font-['Outfit'] selection:bg-[#135bec]/30 p-4 md:p-8">
+            <div className="max-w-7xl mx-auto space-y-8">
+                {/* Back Button */}
+                <button
+                    onClick={onBack}
+                    className="group flex items-center gap-3 text-slate-500 hover:text-white transition-all text-[11px] font-black uppercase tracking-[3px]"
                 >
-                    <h1 className="text-3xl font-black tracking-tight text-white mb-1 flex items-center gap-3">
-                        <div className="size-10 rounded-xl bg-gradient-to-br from-[#135bec] to-[#0a1f4d] flex items-center justify-center shadow-lg shadow-[#135bec]/20">
-                            <LayoutDashboard className="text-white size-6" />
-                        </div>
-                        Panel de Partner <span className="text-[#135bec] opacity-50 text-xl font-medium">/ {partner?.name}</span>
-                    </h1>
-                    <p className="text-slate-400 text-sm">Sistema de gestión de eventos y marca blanca corporativa.</p>
-                </motion.div>
+                    <div className="size-8 rounded-full border border-white/5 flex items-center justify-center group-hover:bg-white/5 transition-all">
+                        <ArrowLeft className="size-4 group-hover:-translate-x-1 transition-transform" />
+                    </div>
+                    Volver al Inicio
+                </button>
 
-                <div className="flex items-center gap-2 bg-slate-900/50 p-1 rounded-xl border border-white/5">
-                    {renderTabButton('overview', 'Vista General', LayoutDashboard)}
-                    {renderTabButton('events', 'Mis Eventos', Calendar)}
-                    {renderTabButton('wallet', 'Billetera', Wallet)}
-                    {renderTabButton('branding', 'Marca Blanca', Palette)}
-                </div>
-            </header>
+                <DashboardHeader
+                    partnerName={partner?.name}
+                    view={view}
+                    setView={setView}
+                />
 
-            <AnimatePresence mode="wait">
-                {view === 'overview' && (
-                    <motion.div
-                        key="overview"
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -20 }}
-                        className="space-y-8"
-                    >
-                        {/* Stats Grid */}
-                        <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            {/* Wholesale Credits Balance Card */}
-                            {(() => {
-                                const isLowCredits = availableCredits > 0 && availableCredits < (partner?.credits_total || 0) * 0.2;
-                                const isCriticalCredits = availableCredits > 0 && availableCredits < (partner?.credits_total || 0) * 0.1;
-
-                                return (
-                                    <div className={`glass-card rounded-2xl p-6 flex flex-col justify-between group overflow-hidden relative border transition-all duration-500 bg-gradient-to-br from-slate-900/80 to-slate-950/80 shadow-2xl ${isCriticalCredits ? 'border-rose-500 shadow-[0_0_30px_rgba(244,63,94,0.2)]' :
-                                        isLowCredits ? 'border-amber-500/50 shadow-[0_0_20px_rgba(245,158,11,0.1)]' :
-                                            'border-white/5'
-                                        }`}>
-                                        {/* Background pulse for critical state */}
-                                        {isCriticalCredits && (
-                                            <div className="absolute inset-0 bg-rose-500/5 animate-pulse pointer-events-none"></div>
-                                        )}
-
-                                        <div className="absolute -right-4 -top-4 opacity-[0.03] group-hover:opacity-[0.1] transition-opacity duration-500">
-                                            <Wallet className="size-40" />
-                                        </div>
-                                        <div className="flex justify-between items-start mb-6 relative z-10">
-                                            <div>
-                                                <div className="flex items-center gap-2 mb-1">
-                                                    <div className={`size-2 rounded-full animate-pulse ${isCriticalCredits ? 'bg-rose-500' :
-                                                        isLowCredits ? 'bg-amber-500' :
-                                                            'bg-[#135bec]'
-                                                        }`}></div>
-                                                    <p className="text-slate-400 text-[10px] font-black uppercase tracking-[2px]">Wallet Mayorista</p>
-                                                </div>
-                                                <h3 className={`text-4xl font-black transition-colors ${isCriticalCredits ? 'text-rose-400' :
-                                                    isLowCredits ? 'text-amber-400' :
-                                                        'text-white'
-                                                    }`}>
-                                                    {availableCredits.toLocaleString()}
-                                                </h3>
-                                                <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Créditos Disponibles</p>
-                                            </div>
-                                            <div className={`p-3 rounded-xl shadow-inner transition-colors ${isCriticalCredits ? 'bg-rose-500/20 border border-rose-500/30 text-rose-500' :
-                                                isLowCredits ? 'bg-amber-500/20 border border-amber-500/30 text-amber-500' :
-                                                    'bg-[#135bec]/10 border border-[#135bec]/20 text-[#135bec]'
-                                                }`}>
-                                                <CreditCard className="w-6 h-6" />
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-3 relative z-10">
-                                            {isLowCredits && (
-                                                <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border mb-2 animate-in slide-in-from-top-2 duration-500 ${isCriticalCredits ? 'bg-rose-500/10 border-rose-500/20 text-rose-400' : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
-                                                    }`}>
-                                                    <span className="material-symbols-outlined !text-sm">warning</span>
-                                                    <span className="text-[9px] font-black uppercase tracking-widest">
-                                                        {isCriticalCredits ? 'Servicio en Riesgo Crítico' : 'Saldo bajo detectado'}
-                                                    </span>
-                                                </div>
-                                            )}
-
-                                            <div className="flex justify-between text-[11px] font-bold">
-                                                <span className="text-slate-500 uppercase tracking-[1px]">Consumo Global</span>
-                                                <span className={isCriticalCredits ? 'text-rose-400' : isLowCredits ? 'text-amber-400' : 'text-[#135bec]'}>
-                                                    {consumptionPercentage}%
-                                                </span>
-                                            </div>
-                                            <div className="w-full bg-slate-800/50 h-2.5 rounded-full overflow-hidden p-0.5 border border-white/5">
-                                                <motion.div
-                                                    initial={{ width: 0 }}
-                                                    animate={{ width: `${consumptionPercentage}%` }}
-                                                    transition={{ duration: 1, ease: 'easeOut' }}
-                                                    className={`h-full rounded-full shadow-lg transition-colors ${isCriticalCredits ? 'bg-gradient-to-r from-rose-600 to-rose-400' :
-                                                        isLowCredits ? 'bg-gradient-to-r from-amber-600 to-amber-400' :
-                                                            'bg-gradient-to-r from-[#135bec] to-[#3b82f6]'
-                                                        }`}
-                                                ></motion.div>
-                                            </div>
-                                            <div className="flex justify-between items-center text-[10px]">
-                                                <div className="flex flex-col">
-                                                    <span className="text-slate-500">Total: {partner?.credits_total?.toLocaleString()}</span>
-                                                    <span className="text-slate-700 text-[8px] font-bold mt-0.5 italic">Aprox. {availableCredits} fotos restantes</span>
-                                                </div>
-                                                <span className="text-slate-400 font-bold">Usados: {partner?.credits_used?.toLocaleString()}</span>
-                                            </div>
-                                            <button
-                                                onClick={() => {
-                                                    setView('wallet');
-                                                    setShowTopUpModal(true);
-                                                }}
-                                                className={`w-full py-2.5 text-white text-[9px] font-black rounded-lg border transition-all uppercase tracking-[2px] mt-2 block text-center ${isCriticalCredits ? 'bg-rose-500/20 border-rose-500/30 hover:bg-rose-500/30' :
-                                                    isLowCredits ? 'bg-amber-500/20 border-amber-500/30 hover:bg-amber-500/30' :
-                                                        'bg-white/5 border-white/5 hover:bg-white/10'
-                                                    }`}
-                                            >
-                                                Gestionar Saldo / Recargar
-                                            </button>
-                                        </div>
-                                    </div>
-                                );
-                            })()}
-
-                            {/* Active Events Summary */}
-                            <div className="glass-card rounded-2xl p-6 flex flex-col justify-between group overflow-hidden relative border border-white/5 bg-gradient-to-br from-slate-900/80 to-slate-950/80">
-                                <div className="absolute -right-4 -top-4 opacity-[0.03] group-hover:opacity-[0.1] transition-opacity duration-500">
-                                    <Layers className="size-40" />
-                                </div>
-                                <div className="flex justify-between items-start mb-6 relative z-10">
-                                    <div>
-                                        <p className="text-slate-400 text-[10px] font-black uppercase tracking-[2px] mb-1">Instancias Activas</p>
-                                        <h3 className="text-4xl font-black text-white">{events.filter(e => e.is_active).length}</h3>
-                                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Eventos en curso</p>
-                                    </div>
-                                    <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-500">
-                                        <Zap className="w-6 h-6" />
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={() => setView('events')}
-                                    className="w-full py-3 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-500 text-[10px] font-black rounded-xl border border-emerald-500/20 transition-all uppercase tracking-[2px] flex items-center justify-center gap-2 group/btn"
-                                >
-                                    <Calendar className="size-4" />
-                                    Gestionar Instancias
-                                </button>
-                            </div>
-
-                            {/* Branding Summary */}
-                            <div className="glass-card rounded-2xl p-6 flex flex-col justify-between group overflow-hidden relative border border-white/5 bg-gradient-to-br from-slate-900/80 to-slate-950/80">
-                                <div className="absolute -right-4 -top-4 opacity-[0.03] group-hover:opacity-[0.1] transition-opacity duration-500">
-                                    <Palette className="size-40" />
-                                </div>
-                                <div className="flex justify-between items-start mb-6 relative z-10">
-                                    <div>
-                                        <p className="text-slate-400 text-[10px] font-black uppercase tracking-[2px] mb-1">Identidad Visual</p>
-                                        <div className="mt-2 flex items-center gap-3">
-                                            {brandingConfig.logo_url ? (
-                                                <img src={brandingConfig.logo_url} className="h-8 object-contain" alt="Logo" />
-                                            ) : (
-                                                <div className="size-8 rounded-lg bg-slate-800 flex items-center justify-center border border-white/5">
-                                                    <Shield className="size-4 text-slate-600" />
-                                                </div>
-                                            )}
-                                            <div className="size-6 rounded-full border border-white/20 shadow-lg" style={{ backgroundColor: brandingConfig.primary_color }}></div>
-                                        </div>
-                                    </div>
-                                    <div className="p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-indigo-500">
-                                        <Shield className="w-6 h-6" />
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={() => setView('branding')}
-                                    className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-black rounded-xl border border-white/10 transition-all uppercase tracking-[2px]"
-                                >
-                                    Editar Identidad Visual
-                                </button>
-                            </div>
-                        </section>
-
-                        {/* Metrics Chart */}
-                        <div className="bg-slate-900/50 border border-white/5 rounded-[32px] p-8 glass-card">
-                            <div className="flex items-center justify-between mb-8">
-                                <div>
-                                    <h4 className="text-sm font-black text-white uppercase tracking-widest">Actividad de Generación</h4>
-                                    <p className="text-[10px] text-slate-500 uppercase font-bold mt-1">Fotos creadas por día (Últimos 7 días)</p>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <div className="size-2 rounded-full bg-[#135bec] animate-pulse" />
-                                    <span className="text-[10px] font-bold text-slate-400 uppercase">Tiempo Real</span>
-                                </div>
-                            </div>
-
-                            <div className="h-48 flex items-end gap-2 px-2">
-                                {Array.from({ length: 7 }).map((_, i) => {
-                                    const date = new Date();
-                                    date.setDate(date.getDate() - (6 - i));
-                                    const dateStr = date.toISOString().split('T')[0];
-                                    const count = generationsData.filter(g => g.created_at.startsWith(dateStr)).length;
-
-                                    // Calculate max for normalization
-                                    const counts = Array.from({ length: 7 }).map((_, j) => {
-                                        const d = new Date();
-                                        d.setDate(d.getDate() - (6 - j));
-                                        const ds = d.toISOString().split('T')[0];
-                                        return generationsData.filter(g2 => g2.created_at.startsWith(ds)).length;
-                                    });
-                                    const maxCount = Math.max(...counts, 1);
-                                    const height = (count / maxCount) * 100;
-
-                                    return (
-                                        <div key={i} className="flex-1 flex flex-col items-center gap-3 group">
-                                            <div className="w-full relative h-[140px] flex items-end">
-                                                <motion.div
-                                                    initial={{ height: 0 }}
-                                                    animate={{ height: `${Math.max(height, 5)}%` }}
-                                                    className={`w-full rounded-t-xl transition-all duration-500 hover:brightness-125 ${count > 0 ? 'bg-gradient-to-t from-[#135bec] to-[#7f13ec]' : 'bg-white/5'}`}
-                                                />
-                                                {count > 0 && (
-                                                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-white text-[#0f172a] text-[9px] font-black px-2 py-1 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-20">
-                                                        {count} fotos
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <span className="text-[8px] font-black text-slate-600 uppercase">
-                                                {date.toLocaleDateString('es-AR', { weekday: 'short' })}
-                                            </span>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    </motion.div>
-                )}
-
-                {view === 'events' && (
-                    <motion.div
-                        key="events"
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -20 }}
-                        className="space-y-6"
-                    >
-                        <div className="flex items-center justify-between px-2">
-                            <div>
-                                <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Mis Eventos</h2>
-                                <p className="text-slate-500 text-xs mt-1">Gestiona las instancias activas y el consumo de créditos.</p>
-                            </div>
-                            <div className="flex items-center gap-4">
-                                <div className="relative group">
-                                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-[#135bec] transition-colors" />
-                                    <input
-                                        type="text"
-                                        placeholder="Buscar por nombre o slug..."
-                                        value={searchTerm}
-                                        onChange={(e) => setSearchTerm(e.target.value)}
-                                        className="bg-slate-900 border border-slate-800 rounded-xl pl-9 pr-4 py-2.5 text-xs text-white focus:ring-1 focus:ring-[#135bec] focus:border-[#135bec] w-64 transition-all outline-none"
-                                    />
-                                </div>
-                                <button
-                                    onClick={() => setShowCreateEventModal(true)}
-                                    className="px-6 py-2.5 bg-[#135bec] hover:bg-[#135bec]/90 text-white text-[10px] font-black rounded-xl shadow-lg shadow-[#135bec]/20 transition-all uppercase tracking-[2px] flex items-center gap-2"
-                                >
-                                    <Plus className="size-4" />
-                                    Nuevo Evento
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="glass-card rounded-2xl overflow-hidden border border-white/5 bg-slate-900/50 backdrop-blur-xl">
-                            <table className="w-full text-left border-collapse">
-                                <thead className="bg-white/[0.03] border-b border-white/5">
-                                    <tr>
-                                        <th className="px-6 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Identificación</th>
-                                        <th className="px-6 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Consumo de Créditos</th>
-                                        <th className="px-6 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest">Estado</th>
-                                        <th className="px-6 py-5 text-[10px] font-black text-slate-500 uppercase tracking-widest text-right">Panel de Control</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-white/5">
-                                    {filteredEvents.map(event => {
-                                        const percent = event.credits_allocated ? Math.min(100, Math.round((event.credits_used / event.credits_allocated) * 100)) : 0;
-                                        return (
-                                            <tr key={event.id} className="hover:bg-white/[0.02] transition-colors group">
-                                                <td className="px-6 py-5">
-                                                    <div className="flex items-center gap-4">
-                                                        <div className="size-12 rounded-xl bg-gradient-to-br from-[#135bec]/20 to-[#0a1f4d]/20 border border-[#135bec]/20 flex items-center justify-center text-[#135bec] font-black text-sm group-hover:scale-110 transition-transform">
-                                                            {(event?.event_name || 'E').substring(0, 2).toUpperCase()}
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-sm font-bold text-white group-hover:text-[#135bec] transition-colors">{event.event_name}</p>
-                                                            <div className="flex items-center gap-2 mt-0.5">
-                                                                <Globe className="size-3 text-slate-600" />
-                                                                <p className="text-[10px] text-slate-500 font-mono">/{event.event_slug}</p>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-5">
-                                                    <div className="w-48">
-                                                        <div className="flex justify-between text-[10px] mb-1.5 font-bold">
-                                                            <span className="text-slate-400">{event.credits_used.toLocaleString()} / {event.credits_allocated.toLocaleString()}</span>
-                                                            <span className={`${percent > 90 ? 'text-rose-500' : 'text-emerald-500'}`}>{percent}%</span>
-                                                        </div>
-                                                        <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden p-[1px]">
-                                                            <motion.div
-                                                                initial={{ width: 0 }}
-                                                                animate={{ width: `${percent}%` }}
-                                                                transition={{ duration: 1, ease: 'easeOut' }}
-                                                                className={`h-full ${percent > 90 ? 'bg-rose-500' : 'bg-[#135bec]'} rounded-full shadow-[0_0_8px_rgba(19,91,236,0.5)]`}
-                                                            ></motion.div>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-5">
-                                                    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-wider ${event.is_active ? 'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20' : 'bg-rose-500/10 text-rose-500 border border-rose-500/20'}`}>
-                                                        <span className={`size-2 rounded-full ${event.is_active ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></span>
-                                                        {event.is_active ? 'En Línea' : 'Pausado'}
-                                                    </span>
-                                                </td>
-                                                <td className="px-6 py-5 text-right">
-                                                    <div className="flex items-center justify-end gap-3">
-                                                        <button
-                                                            onClick={() => setEventToTopUp(event)}
-                                                            className="p-2.5 bg-emerald-500/10 hover:bg-emerald-500 border border-emerald-500/20 rounded-xl text-emerald-500 hover:text-white transition-all group/action"
-                                                            title="Cargar Créditos"
-                                                        >
-                                                            <ShoppingCart className="w-4 h-4 group-hover/action:scale-110 transition-transform" />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => {
-                                                                setEventToModerate(event);
-                                                                fetchEventPhotos(event.id);
-                                                                setView('moderation');
-                                                            }}
-                                                            className="p-2.5 bg-indigo-500/10 hover:bg-indigo-500 border border-indigo-500/20 rounded-xl text-indigo-500 hover:text-white transition-all group/action"
-                                                            title="Moderación de Galería"
-                                                        >
-                                                            <LayoutIcon className="w-4 h-4 group-hover/action:scale-110 transition-transform" />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => setEditingEvent(event)}
-                                                            className="p-2.5 bg-slate-800/50 hover:bg-slate-800 border border-white/5 rounded-xl text-slate-400 hover:text-white transition-all group/action"
-                                                            title="Editar Evento"
-                                                        >
-                                                            <Edit2 className="w-4 h-4 group-hover/action:rotate-12 transition-transform" />
-                                                        </button>
-                                                        <button
-                                                            onClick={() => window.open(`https://photobooth.creativa-labs.com/?event=${event.event_slug}`, '_blank')}
-                                                            className="p-2.5 bg-slate-800/50 hover:bg-slate-800 border border-white/5 rounded-xl text-slate-400 hover:text-white transition-all group/action"
-                                                            title="Ver Kiosco (Público)"
-                                                        >
-                                                            <ExternalLink className="w-4 h-4 group-hover/action:scale-110 transition-transform" />
-                                                        </button>
-                                                        {onProxyClient && event.client_email && (
-                                                            <button
-                                                                onClick={() => onProxyClient(event.client_email!)}
-                                                                className="p-2.5 bg-[#135bec]/10 hover:bg-[#135bec] border border-[#135bec]/20 rounded-xl text-[#135bec] hover:text-white transition-all group/action"
-                                                                title="Gestionar Branding como Cliente"
-                                                            >
-                                                                <MonitorIcon className="w-4 h-4 group-hover/action:scale-110 transition-transform" />
-                                                            </button>
-                                                        )}
-                                                        <button
-                                                            onClick={() => setEventToDelete({ id: event.id, name: event.event_name })}
-                                                            className="p-2.5 bg-rose-500/10 hover:bg-rose-500 border border-rose-500/20 rounded-xl text-rose-500 hover:text-white transition-all group/action"
-                                                            title="Eliminar Instancia"
-                                                        >
-                                                            <Trash2 className="w-4 h-4 group-hover/action:scale-110 transition-transform" />
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                    {filteredEvents.length === 0 && (
-                                        <tr><td colSpan={4} className="p-20 text-center">
-                                            <div className="flex flex-col items-center">
-                                                <div className="size-16 rounded-2xl bg-slate-800/50 flex items-center justify-center mb-4">
-                                                    <Calendar className="size-8 text-slate-600 opacity-20" />
-                                                </div>
-                                                <p className="text-slate-400 text-sm font-bold uppercase tracking-widest">No hay eventos para mostrar</p>
-                                                <p className="text-slate-600 text-[10px] mt-1">Crea tu primera instancia para comenzar.</p>
-                                            </div>
-                                        </td></tr>
-                                    )}
-                                </tbody>
-                            </table>
-                        </div>
-                    </motion.div>
-                )}
-
-                {view === 'moderation' && (
-                    <motion.div
-                        key="moderation"
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 1.05 }}
-                        className="space-y-6"
-                    >
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-4">
-                                <button
-                                    onClick={() => setView('events')}
-                                    className="p-2.5 bg-slate-800 hover:bg-slate-700 rounded-xl text-white transition-all border border-white/5"
-                                >
-                                    <ArrowDownRight className="w-5 h-5 rotate-180" />
-                                </button>
-                                <div>
-                                    <h2 className="text-2xl font-black text-white uppercase tracking-tighter">Galería: {eventToModerate?.event_name}</h2>
-                                    <div className="flex items-center gap-2 mt-1">
-                                        <span className={`size-2 rounded-full ${filteredPhotos.length > 0 ? 'bg-emerald-500 animate-pulse' : 'bg-slate-700'}`}></span>
-                                        <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">
-                                            {filteredPhotos.length} de {eventPhotos.length} Fotos
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-4">
-                                <div className="flex items-center gap-3 bg-slate-900/80 p-1.5 rounded-2xl border border-white/5 shadow-inner">
-                                    <div className="relative">
-                                        <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 size-3.5 text-slate-600" />
-                                        <input
-                                            type="text"
-                                            placeholder="Buscar email o ID..."
-                                            className="bg-slate-950/50 border border-white/5 rounded-xl py-2.5 pl-10 pr-4 text-[10px] text-white focus:border-[#135bec] outline-none transition-all w-52 placeholder:text-slate-700 font-bold uppercase tracking-widest"
-                                            value={moderationSearchTerm}
-                                            onChange={(e) => setModerationSearchTerm(e.target.value)}
-                                        />
-                                    </div>
-                                    <div className="relative">
-                                        <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 size-3.5 text-slate-600" />
-                                        <input
-                                            type="date"
-                                            className="bg-slate-950/50 border border-white/5 rounded-xl py-2.5 pl-10 pr-4 text-[10px] text-white focus:border-[#135bec] outline-none transition-all w-40 font-bold"
-                                            value={moderationDateFilter}
-                                            onChange={(e) => setModerationDateFilter(e.target.value)}
-                                        />
-                                    </div>
-                                    {(moderationSearchTerm || moderationDateFilter) && (
-                                        <button
-                                            onClick={() => { setModerationSearchTerm(''); setModerationDateFilter(''); }}
-                                            className="p-2.5 hover:bg-white/5 text-slate-500 hover:text-white transition-all rounded-xl"
-                                        >
-                                            <X className="size-4" />
-                                        </button>
-                                    )}
-                                </div>
-                                <div className="w-px h-8 bg-white/5 mx-1" />
-                                <div className="flex items-center gap-3">
-                                    <button
-                                        onClick={() => {
-                                            const urls = filteredPhotos.map(p => p.image_url).join('\n');
-                                            if (urls.length === 0) return showToast('No hay links para exportar', 'error');
-                                            const blob = new Blob([urls], { type: 'text/plain' });
-                                            const url = window.URL.createObjectURL(blob);
-                                            const a = document.createElement('a');
-                                            a.href = url;
-                                            a.download = `links-${eventToModerate?.event_slug}-filtrados.txt`;
-                                            a.click();
-                                            window.URL.revokeObjectURL(url);
-                                            showToast('Links filtrados exportados');
-                                        }}
-                                        className="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 text-white text-[10px] font-black rounded-xl border border-white/5 transition-all uppercase tracking-[2px] flex items-center gap-2"
-                                    >
-                                        <Download className="size-4" />
-                                        Exportar Links
-                                    </button>
-                                    <button
-                                        onClick={async () => {
-                                            if (filteredPhotos.length === 0) return showToast('No hay fotos para descargar', 'error');
-
-                                            try {
-                                                showToast('Preparando descarga ZIP (Filtrada)...', 'info');
-                                                const zip = new JSZip();
-                                                const folder = zip.folder(`${eventToModerate?.event_slug}-photos-filtered`);
-
-                                                if (!folder) throw new Error('No se pudo crear la carpeta en el ZIP');
-
-                                                // Fetch filtered images
-                                                const photoPromises = filteredPhotos.map(async (photo, index) => {
-                                                    try {
-                                                        const response = await fetch(photo.image_url);
-                                                        const blob = await response.blob();
-                                                        const extension = photo.image_url.split('.').pop()?.split('?')[0] || 'jpg';
-                                                        folder.file(`photo-${index + 1}.${extension}`, blob);
-                                                    } catch (err) {
-                                                        console.error('Error al descargar foto para el ZIP:', err);
-                                                    }
-                                                });
-
-                                                await Promise.all(photoPromises);
-
-                                                const content = await zip.generateAsync({ type: "blob" });
-                                                const url = window.URL.createObjectURL(content);
-                                                const a = document.createElement('a');
-                                                a.href = url;
-                                                a.download = `galeria-${eventToModerate?.event_slug}.zip`;
-                                                a.click();
-                                                window.URL.revokeObjectURL(url);
-                                                showToast('Galería completa descargada');
-                                            } catch (err) {
-                                                console.error('Error al generar ZIP:', err);
-                                                showToast('Error al generar el archivo ZIP', 'error');
-                                            }
-                                        }}
-                                        className="px-6 py-2.5 bg-[#135bec] hover:bg-[#135bec]/90 text-white text-[10px] font-black rounded-xl shadow-lg border border-white/10 transition-all uppercase tracking-[2px] flex items-center gap-2"
-                                    >
-                                        <Layers className="size-4" />
-                                        Descargar Todo (ZIP)
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Floating Bulk Action Bar */}
-                        <AnimatePresence>
-                            {selectedPhotos.length > 0 && (
-                                <motion.div
-                                    initial={{ y: 100, opacity: 0 }}
-                                    animate={{ y: 0, opacity: 1 }}
-                                    exit={{ y: 100, opacity: 0 }}
-                                    className="fixed bottom-10 left-1/2 -translate-x-1/2 z-[60] bg-slate-900/90 backdrop-blur-2xl border border-[#135bec]/30 rounded-2xl px-8 py-4 flex items-center gap-8 shadow-[0_20px_50px_rgba(0,0,0,0.5)]"
-                                >
-                                    <div className="flex flex-col">
-                                        <span className="text-[10px] font-black text-[#135bec] uppercase tracking-widest">Selección Activa</span>
-                                        <span className="text-xl font-black text-white">{selectedPhotos.length} <span className="text-xs text-slate-500 font-medium">Fotos</span></span>
-                                    </div>
-
-                                    <div className="w-px h-10 bg-white/10" />
-
-                                    <div className="flex items-center gap-3">
-                                        <button
-                                            onClick={() => setSelectedPhotos([])}
-                                            className="px-4 py-2 text-[10px] font-black text-slate-400 uppercase tracking-widest hover:text-white transition-colors"
-                                        >
-                                            Cancelar
-                                        </button>
-                                        <button
-                                            onClick={async () => {
-                                                const zip = new JSZip();
-                                                showToast(`Preparando ZIP de ${selectedPhotos.length} fotos...`, 'info');
-                                                const folder = zip.folder(`seleccion-personalizada`);
-                                                const selectedFullPhotos = eventPhotos.filter(p => selectedPhotos.includes(p.id));
-
-                                                const promises = selectedFullPhotos.map(async (photo, i) => {
-                                                    const res = await fetch(photo.image_url);
-                                                    const blob = await res.blob();
-                                                    folder?.file(`photo-${i + 1}.jpg`, blob);
-                                                });
-                                                await Promise.all(promises);
-                                                const content = await zip.generateAsync({ type: 'blob' });
-                                                const url = window.URL.createObjectURL(content);
-                                                const a = document.createElement('a');
-                                                a.href = url;
-                                                a.download = `seleccion-fotos.zip`;
-                                                a.click();
-                                                showToast('ZIP de selección descargado');
-                                                setSelectedPhotos([]);
-                                            }}
-                                            className="px-6 py-2.5 bg-white text-black text-[10px] font-black rounded-xl hover:bg-slate-200 transition-all uppercase tracking-[2px] flex items-center gap-2"
-                                        >
-                                            <Download className="size-4" />
-                                            Descargar ZIP
-                                        </button>
-                                        <button
-                                            onClick={async () => {
-                                                if (confirm(`🚨 ACCIÓN MASIVA: ¿Estás seguro de eliminar ${selectedPhotos.length} fotos definitivamente?`)) {
-                                                    try {
-                                                        setModerationLoading(true);
-                                                        const { error } = await supabase
-                                                            .from('generations')
-                                                            .delete()
-                                                            .in('id', selectedPhotos);
-                                                        if (error) throw error;
-                                                        showToast(`${selectedPhotos.length} fotos eliminadas`);
-                                                        setSelectedPhotos([]);
-                                                        fetchEventPhotos(eventToModerate.id);
-                                                    } catch (err: any) {
-                                                        showToast(err.message, 'error');
-                                                    } finally {
-                                                        setModerationLoading(false);
-                                                    }
-                                                }
-                                            }}
-                                            className="px-6 py-2.5 bg-rose-500 text-white text-[10px] font-black rounded-xl hover:bg-rose-600 transition-all uppercase tracking-[2px] flex items-center gap-2"
-                                        >
-                                            <Trash2 className="size-4" />
-                                            Eliminar Seleccionadas
-                                        </button>
-                                    </div>
-                                </motion.div>
-                            )}
-                        </AnimatePresence>
-
-                        {moderationLoading ? (
-                            <div className="h-96 flex flex-col items-center justify-center gap-4">
-                                <div className="size-12 border-4 border-[#135bec]/30 border-t-[#135bec] rounded-full animate-spin" />
-                                <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Sincronizando Galería...</p>
-                            </div>
-                        ) : (
-                            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                                {filteredPhotos.map((photo) => (
-                                    <div
-                                        key={photo.id}
-                                        onClick={() => {
-                                            if (selectedPhotos.includes(photo.id)) {
-                                                setSelectedPhotos(prev => prev.filter(id => id !== photo.id));
-                                            } else {
-                                                setSelectedPhotos(prev => [...prev, photo.id]);
-                                            }
-                                        }}
-                                        className={`group relative aspect-[3/4] rounded-2xl overflow-hidden border transition-all duration-300 cursor-pointer shadow-xl ${selectedPhotos.includes(photo.id) ? 'border-[#135bec] scale-[0.98] ring-4 ring-[#135bec]/20' : 'border-white/5 bg-slate-900'
-                                            }`}
-                                    >
-                                        {/* Selection Checkbox (Visual Only, parent handles click) */}
-                                        <div className={`absolute top-4 left-4 z-20 size-5 rounded-md border flex items-center justify-center transition-all ${selectedPhotos.includes(photo.id) ? 'bg-[#135bec] border-[#135bec] text-white' : 'bg-black/20 border-white/20 text-transparent opacity-0 group-hover:opacity-100'
-                                            }`}>
-                                            <span className="material-symbols-outlined !text-[14px] font-black">check</span>
-                                        </div>
-
-                                        <img
-                                            src={photo.image_url}
-                                            alt="Generation"
-                                            className={`w-full h-full object-cover transition-transform duration-700 group-hover:scale-110 ${selectedPhotos.includes(photo.id) ? 'opacity-50' : ''}`}
-                                        />
-                                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/90 via-black/50 to-transparent p-4 translate-y-2 group-hover:translate-y-0 transition-transform">
-                                            <p className="text-[8px] font-mono text-white/50 mb-0.5 truncate">{photo.id}</p>
-                                            <p className="text-[10px] font-black text-white mb-3 truncate uppercase tracking-widest">{photo.profiles?.email || 'Anónimo'}</p>
-                                            <div className="flex gap-2">
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); handleDeletePhoto(photo.id); }}
-                                                    className="p-2.5 bg-rose-500/20 hover:bg-rose-500 border border-rose-500/30 rounded-xl text-rose-500 hover:text-white transition-all group/del"
-                                                    title="Eliminar de la galería"
-                                                >
-                                                    <Trash2 className="size-4 group-hover/del:scale-110 transition-transform" />
-                                                </button>
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); window.open(photo.image_url, '_blank'); }}
-                                                    className="flex-1 py-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-xl text-white text-[9px] font-black uppercase tracking-widest hover:bg-white/20 transition-all flex items-center justify-center gap-2"
-                                                >
-                                                    <ExternalLink className="size-3" />
-                                                    Ver Original
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                                {filteredPhotos.length === 0 && (
-                                    <div className="col-span-full h-64 flex flex-col items-center justify-center bg-slate-900/50 rounded-[32px] border border-dashed border-white/5">
-                                        <AlertTriangle className="size-8 text-slate-800 mb-4" />
-                                        <p className="text-slate-500 text-xs font-black uppercase tracking-widest">No hay fotos en este evento</p>
-                                    </div>
-                                )}
-                            </div>
+                <main>
+                    <AnimatePresence mode="wait">
+                        {view === 'overview' && (
+                            <OverviewSection
+                                partner={partner}
+                                events={events}
+                                generationsData={generationsData}
+                            />
                         )}
-                    </motion.div>
-                )}
 
-                {view === 'wallet' && (
-                    <motion.div
-                        key="wallet"
-                        initial={{ opacity: 0, scale: 0.95 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 1.05 }}
-                        className="space-y-8"
-                    >
-                        {/* Huge Balance Sheet */}
-                        <section className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                            <div className="lg:col-span-2 glass-card rounded-3xl p-10 bg-gradient-to-br from-[#135bec] to-[#0a1f4d] border-none shadow-2xl shadow-[#135bec]/20 relative overflow-hidden">
-                                <div className="absolute top-0 right-0 p-10 opacity-10">
-                                    <ShoppingBag className="size-64" />
-                                </div>
-                                <div className="relative z-10 flex flex-col h-full justify-between">
-                                    <div>
-                                        <p className="text-white/60 text-[11px] font-black uppercase tracking-[3px] mb-2">Créditos Totales Disponibles</p>
-                                        <h2 className="text-7xl font-black text-white tracking-tighter">
-                                            {availableCredits.toLocaleString()}
-                                            <span className="text-2xl text-white/40 ml-4 font-medium uppercase tracking-widest">unidades</span>
-                                        </h2>
-                                    </div>
-                                    <div className="mt-12 flex flex-wrap gap-8 items-end">
-                                        <div className="space-y-1">
-                                            <p className="text-white/40 text-[10px] font-bold uppercase">Consumo Total</p>
-                                            <div className="flex items-center gap-2 text-white">
-                                                <TrendingUp className="size-5 text-emerald-400" />
-                                                <span className="text-2xl font-black">{partner?.credits_used?.toLocaleString() || 0}</span>
-                                            </div>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <p className="text-white/40 text-[10px] font-bold uppercase">Eventos Activos</p>
-                                            <div className="flex items-center gap-2 text-white/80">
-                                                <Zap className="size-5 text-yellow-400" />
-                                                <span className="text-2xl font-black">{events.filter(e => e.is_active).length}</span>
-                                            </div>
-                                        </div>
-                                        <button
-                                            onClick={() => setShowTopUpModal(true)}
-                                            className="ml-auto px-8 py-4 bg-white text-[#135bec] font-black rounded-2xl hover:scale-105 transition-all text-xs uppercase tracking-[2px] shadow-xl"
-                                        >
-                                            Recargar Créditos
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
+                        {view === 'clients' && (
+                            <ClientsSection
+                                clients={clients}
+                                searchTerm={searchTerm}
+                                setSearchTerm={setSearchTerm}
+                                setShowCreateClientModal={setShowCreateClientModal}
+                                setEditingClient={setEditingClient}
+                                setShowClientTopUpModal={setShowClientTopUpModal}
+                                onProxyClient={onProxyClient}
+                                events={events}
+                            />
+                        )}
 
-                            <div className="glass-card rounded-3xl p-8 border border-white/5 bg-slate-900/50 backdrop-blur-xl flex flex-col justify-between">
-                                <div>
-                                    <h3 className="text-lg font-black text-white uppercase tracking-tighter mb-6 flex items-center gap-2">
-                                        <History className="size-5 text-[#135bec]" />
-                                        Últimas Recargas
-                                    </h3>
-                                    <div className="space-y-6 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
-                                        {transactions.length > 0 ? transactions.map((item, idx) => (
-                                            <div key={item.id} className="flex justify-between items-center bg-white/[0.02] p-4 rounded-2xl border border-white/5 group hover:border-[#135bec]/30 transition-all">
-                                                <div>
-                                                    <p className="text-xs font-bold text-white">+{item.amount.toLocaleString()} Créditos</p>
-                                                    <p className="text-[10px] text-slate-500 mt-1">{new Date(item.created_at).toLocaleDateString()}</p>
-                                                </div>
-                                                <span className={`text-[9px] font-black uppercase px-2 py-1 rounded-lg ${item.type === 'top-up' ? 'text-emerald-500 bg-emerald-500/10' : 'text-blue-500 bg-blue-500/10'}`}>
-                                                    {item.type === 'top-up' ? 'Carga' : 'Ajuste'}
-                                                </span>
-                                            </div>
-                                        )) : (
-                                            <div className="text-center py-10 opacity-40">
-                                                <p className="text-[10px] font-bold uppercase tracking-widest">Sin movimientos</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                                <p className="text-[10px] text-slate-600 text-center mt-6">
-                                    <Info className="size-3 inline mr-1" />
-                                    Los créditos no poseen fecha de vencimiento.
-                                </p>
-                            </div>
-                        </section>
+                        {view === 'events' && (
+                            <EventsSection
+                                events={events}
+                                searchTerm={searchTerm}
+                                setSearchTerm={setSearchTerm}
+                                setShowCreateEventModal={setShowCreateEventModal}
+                                setEditingEvent={setEditingEvent}
+                                setEventToTopUp={setEventToTopUp}
+                                setEventToDelete={setEventToDelete}
+                                setEventToModerate={(ev) => {
+                                    setEventToModerate(ev);
+                                    setView('moderation');
+                                }}
+                            />
+                        )}
 
-                        {/* Usage by Event Analytics */}
-                        <section className="glass-card rounded-[40px] p-10 border border-white/5 bg-slate-900/40 backdrop-blur-3xl">
-                            <div className="flex justify-between items-center mb-10">
-                                <div>
-                                    <h3 className="text-2xl font-black text-white uppercase tracking-tighter">Analíticas de Consumo</h3>
-                                    <p className="text-slate-500 text-[9px] font-black uppercase tracking-[3px] mt-1">Monitoreo de energía AI por evento activo</p>
-                                </div>
-                                <div className="flex gap-2">
-                                    <div className="px-3 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full flex items-center gap-2">
-                                        <div className="size-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                                        <span className="text-[9px] font-black text-emerald-500 uppercase">Live Metrics</span>
-                                    </div>
-                                </div>
-                            </div>
+                        {view === 'wallet' && (
+                            <WalletSection
+                                availableCredits={(partner?.credits_total || 0) - (partner?.credits_used || 0)}
+                                partner={partner}
+                                events={events}
+                                transactions={transactions}
+                                setShowTopUpModal={() => setView('wallet')} // Example back-ref
+                            />
+                        )}
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
-                                {events.map((event, idx) => {
-                                    const percent = Math.min(100, ((event.credits_used || 0) / (event.credits_allocated || 1)) * 100);
-                                    // Simulated sparkline points
-                                    const sparkPoints = [20, 45, 30, 60, 40, 75, percent].map((val, i) => `${i * 20},${80 - (val * 0.6)}`).join(' ');
+                        {view === 'branding' && (
+                            <BrandingPanel
+                                brandingConfig={brandingConfig}
+                                setBrandingConfig={setBrandingConfig}
+                                isSaving={isSavingBranding}
+                                isUploading={isUploadingLogo}
+                                toggleStylePreset={toggleStylePreset}
+                                handleUpdateBranding={handleUpdateBranding}
+                                handleLogoUpload={handleLogoUpload}
+                                recentGlobalPhotos={recentGlobalPhotos}
+                            />
+                        )}
 
-                                    return (
-                                        <motion.div
-                                            key={event.id}
-                                            initial={{ opacity: 0, scale: 0.95 }}
-                                            animate={{ opacity: 1, scale: 1 }}
-                                            transition={{ delay: idx * 0.05 }}
-                                            className="group relative h-full"
-                                        >
-                                            <div className="p-8 rounded-[32px] bg-gradient-to-br from-white/[0.03] to-transparent border border-white/5 group-hover:border-[#135bec]/40 transition-all overflow-hidden h-full flex flex-col">
-                                                {/* Sparkline Background */}
-                                                <div className="absolute inset-x-0 bottom-0 h-24 opacity-20 pointer-events-none">
-                                                    <svg className="w-full h-full" preserveAspectRatio="none" viewBox="0 0 120 80">
-                                                        <defs>
-                                                            <linearGradient id={`grad-${idx}`} x1="0%" y1="0%" x2="0%" y2="100%">
-                                                                <stop offset="0%" stopColor="#135bec" stopOpacity="0.5" />
-                                                                <stop offset="100%" stopColor="#135bec" stopOpacity="0" />
-                                                            </linearGradient>
-                                                        </defs>
-                                                        <path
-                                                            d={`M0,80 L${sparkPoints} L120,80 Z`}
-                                                            fill={`url(#grad-${idx})`}
-                                                            className="group-hover:opacity-100 transition-opacity"
-                                                        />
-                                                        <motion.path
-                                                            d={`M0,${80 - (20 * 0.6)} L${sparkPoints}`}
-                                                            fill="none"
-                                                            stroke="#135bec"
-                                                            strokeWidth="2"
-                                                            initial={{ pathLength: 0 }}
-                                                            animate={{ pathLength: 1 }}
-                                                            transition={{ duration: 1.5, delay: 0.5 }}
-                                                        />
-                                                    </svg>
-                                                </div>
+                        {view === 'moderation' && eventToModerate && (
+                            <ModerationSection
+                                event={eventToModerate}
+                                photos={eventPhotos}
+                                setPhotos={setEventPhotos}
+                                onBack={() => setView('events')}
+                                onDeletePhoto={handleDeletePhoto}
+                                onBulkDelete={handleBulkDelete}
+                                loading={moderationLoading}
+                                selectedPhotos={selectedPhotos}
+                                setSelectedPhotos={setSelectedPhotos}
+                            />
+                        )}
+                    </AnimatePresence>
+                </main>
+            </div>
 
-                                                <div className="relative z-10 flex flex-col h-full">
-                                                    <div className="flex justify-between items-start mb-6">
-                                                        <div className="p-2.5 bg-white/5 rounded-xl">
-                                                            <TrendingUp className={`size-4 ${percent > 80 ? 'text-amber-500' : 'text-emerald-500'}`} />
-                                                        </div>
-                                                        <p className="text-[10px] font-black text-white/20 uppercase tracking-[2px]">{event.event_slug}</p>
-                                                    </div>
-
-                                                    <h4 className="text-[11px] font-black text-white uppercase tracking-widest mb-1 truncate group-hover:text-[#135bec] transition-colors">{event.event_name}</h4>
-
-                                                    <div className="mt-8">
-                                                        <div className="flex items-baseline gap-2">
-                                                            <span className="text-3xl font-black text-white">{event.credits_used?.toLocaleString() || 0}</span>
-                                                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Usados</span>
-                                                        </div>
-
-                                                        {/* Progress Bar Mini */}
-                                                        <div className="mt-4 w-full bg-white/5 h-1.5 rounded-full overflow-hidden">
-                                                            <motion.div
-                                                                initial={{ width: 0 }}
-                                                                animate={{ width: `${percent}%` }}
-                                                                className={`h-full rounded-full ${percent > 90 ? 'bg-rose-500' : percent > 70 ? 'bg-amber-500' : 'bg-[#135bec]'}`}
-                                                            />
-                                                        </div>
-                                                        <div className="flex justify-between mt-3">
-                                                            <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">{Math.round(percent)}% Cap</span>
-                                                            <span className="text-[9px] font-black text-white/30 uppercase tracking-widest">Limite: {event.credits_allocated}</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </motion.div>
-                                    );
-                                })}
-                                {events.length === 0 && (
-                                    <div className="col-span-full py-20 text-center border-2 border-dashed border-white/5 rounded-[40px]">
-                                        <div className="size-16 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
-                                            <Info className="size-8 text-slate-600" />
-                                        </div>
-                                        <p className="text-xs font-black text-slate-600 uppercase tracking-[3px]">Sin actividad de consumo para reportar</p>
-                                    </div>
-                                )}
-                            </div>
-                        </section>
-                    </motion.div>
-                )}
-
-                {view === 'branding' && (
-                    <motion.div
-                        key="branding"
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -20 }}
-                        className="grid grid-cols-1 xl:grid-cols-12 gap-8"
-                    >
-                        {/* Left Column: Configuration */}
-                        <div className="xl:col-span-8 space-y-8">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                                {/* Partner Branding Column */}
-                                <section className="glass-card rounded-[32px] p-8 border border-white/5 bg-slate-900/50 backdrop-blur-xl shadow-2xl h-fit">
-                                    <div className="flex items-center gap-3 mb-8">
-                                        <div className="p-3 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-indigo-500">
-                                            <Shield className="w-6 h-6" />
-                                        </div>
-                                        <div>
-                                            <h2 className="text-xl font-black text-white uppercase tracking-tighter">Identidad Visual</h2>
-                                            <p className="text-slate-500 text-xs">Personaliza tu panel de control.</p>
-                                        </div>
-                                    </div>
-
-                                    <div className="space-y-8">
-                                        <div>
-                                            <label className="text-[10px] font-black text-slate-500 uppercase tracking-[2px] block mb-4">Logo Corporativo</label>
-                                            <div
-                                                className="w-full border-2 border-dashed border-slate-800 rounded-2xl p-6 flex flex-col items-center justify-center bg-slate-950/50 hover:bg-slate-950 transition-all cursor-pointer group hover:border-[#135bec]/50 shadow-inner"
-                                                onClick={() => document.getElementById('brandingLogoInput')?.click()}
-                                            >
-                                                <input
-                                                    type="file"
-                                                    id="brandingLogoInput"
-                                                    className="hidden"
-                                                    accept="image/*"
-                                                    onChange={handleLogoUpload}
-                                                />
-                                                {brandingConfig.logo_url ? (
-                                                    <div className="relative group/logo">
-                                                        <img src={brandingConfig.logo_url} className="h-12 object-contain mb-2 group-hover:opacity-50 transition-opacity" alt="Logo" />
-                                                        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/logo:opacity-100 transition-opacity">
-                                                            <Edit2 className="size-5 text-white" />
-                                                        </div>
-                                                    </div>
-                                                ) : (
-                                                    <div className="flex flex-col items-center">
-                                                        <Upload className="w-8 h-8 text-slate-700 group-hover:text-[#135bec] mb-3 transition-colors" />
-                                                        <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest text-center">Subir Identidad</p>
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-6">
-                                            <div>
-                                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-[2px] block mb-4">Color de Acento</label>
-                                                <div className="flex items-center gap-3">
-                                                    <div
-                                                        className="size-12 rounded-xl border-2 border-white/10 shadow-2xl cursor-pointer hover:scale-105 transition-all"
-                                                        style={{ backgroundColor: brandingConfig.primary_color }}
-                                                        onClick={() => document.getElementById('brandingColorPicker')?.click()}
-                                                    ></div>
-                                                    <input
-                                                        id="brandingColorPicker"
-                                                        type="color"
-                                                        className="sr-only"
-                                                        value={brandingConfig.primary_color}
-                                                        onChange={(e) => setBrandingConfig({ ...brandingConfig, primary_color: e.target.value })}
-                                                    />
-                                                    <div className="flex-1 bg-slate-950 border border-slate-800 rounded-xl py-3 px-4 text-xs text-white font-mono flex items-center justify-between">
-                                                        <span>{brandingConfig.primary_color.toUpperCase()}</span>
-                                                        <Edit2 className="size-3 text-slate-600" />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div>
-                                                <label className="text-[10px] font-black text-slate-500 uppercase tracking-[2px] block mb-4">Radio de Bordes</label>
-                                                <div className="relative">
-                                                    <select
-                                                        className="w-full bg-slate-950 border border-slate-800 rounded-xl py-3 px-4 text-xs text-white focus:ring-1 focus:ring-[#135bec] outline-none appearance-none cursor-pointer pr-10"
-                                                        value={brandingConfig.radius}
-                                                        onChange={(e) => setBrandingConfig({ ...brandingConfig, radius: e.target.value })}
-                                                    >
-                                                        <option value="4px">4px (Recto)</option>
-                                                        <option value="8px">8px (Suave)</option>
-                                                        <option value="12px">12px (Premium)</option>
-                                                        <option value="20px">20px (Redondeado)</option>
-                                                    </select>
-                                                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                                                        <ArrowDownRight className="size-3 text-slate-600" />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <button
-                                            onClick={handleUpdateBranding}
-                                            disabled={isSavingBranding}
-                                            className={`w-full py-4 bg-white text-slate-900 text-[10px] font-black rounded-2xl transition-all shadow-xl hover:shadow-2xl active:scale-[0.98] uppercase tracking-[3px] flex items-center justify-center gap-2 group ${isSavingBranding ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                        >
-                                            {isSavingBranding ? (
-                                                <div className="size-4 border-2 border-slate-900 border-t-transparent rounded-full animate-spin" />
-                                            ) : (
-                                                <CheckCircle2 className="size-4 group-hover:scale-110 transition-transform" />
-                                            )}
-                                            {isSavingBranding ? 'Sincronizando...' : 'Sincronizar Panel'}
-                                        </button>
-                                    </div>
-                                </section>
-
-                                {/* Design Pack Column */}
-                                <div className="glass-card rounded-[32px] p-8 border border-white/5 bg-slate-900/50 backdrop-blur-xl shadow-2xl relative overflow-hidden h-fit">
-                                    <div className="flex items-center justify-between mb-8 relative z-10">
-                                        <div className="flex items-center gap-3">
-                                            <div className="p-3 bg-[#135bec]/10 border border-[#135bec]/20 rounded-xl text-[#135bec]">
-                                                <Zap className="w-6 h-6" />
-                                            </div>
-                                            <div>
-                                                <h2 className="text-xl font-black text-white uppercase tracking-tighter">Estilos IA</h2>
-                                                <p className="text-slate-500 text-xs">Packs activos para clientes.</p>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="grid grid-cols-2 gap-4 relative z-10">
-                                        {PREFERRED_PACK_ORDER.map(style => {
-                                            const sample = IDENTITIES.find(id => id.subCategory === style) || IDENTITIES[0];
-                                            return (
-                                                <label key={style} className="relative block cursor-pointer group">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={brandingConfig.style_presets.includes(style)}
-                                                        onChange={() => toggleStylePreset(style)}
-                                                        className="peer sr-only"
-                                                    />
-                                                    <div className={`aspect-square rounded-2xl overflow-hidden relative border-2 transition-all duration-300 ${brandingConfig.style_presets.includes(style) ? 'border-[#135bec] scale-[1.02] shadow-xl shadow-[#135bec]/20' : 'border-white/5 opacity-40 hover:border-white/20 hover:opacity-80'}`}>
-                                                        <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent z-10"></div>
-                                                        <img
-                                                            alt={style}
-                                                            className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
-                                                            src={sample.url}
-                                                        />
-                                                        <div className="absolute bottom-2 left-3 z-20">
-                                                            <p className="text-[8px] font-black uppercase text-white tracking-[1px] leading-tight">{style}</p>
-                                                        </div>
-                                                        {brandingConfig.style_presets.includes(style) && (
-                                                            <div className="absolute top-2 right-2 z-20">
-                                                                <div className="bg-[#135bec] rounded-full p-1 shadow-xl border border-white/20">
-                                                                    <CheckCircle2 className="w-2.5 h-2.5 text-white" />
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </label>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Right Column: Live Mockup */}
-                        <div className="xl:col-span-4 sticky top-8">
-                            <div className="flex flex-col items-center">
-                                <div className="mb-6 flex items-center gap-3">
-                                    <div className="size-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-[4px]">Live Preview (Kiosk)</span>
-                                </div>
-
-                                <div className="relative w-[280px] h-[580px] bg-slate-800 rounded-[50px] p-3 border-[6px] border-slate-700 shadow-2xl overflow-hidden shadow-black/60">
-                                    {/* Notch */}
-                                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-32 h-6 bg-slate-700 rounded-b-2xl z-50"></div>
-
-                                    {/* Content Screen */}
-                                    <div className="w-full h-full bg-[#071121] rounded-[40px] overflow-hidden flex flex-col relative">
-                                        {/* BG pattern */}
-                                        <div className="absolute inset-0 opacity-20" style={{ background: `radial-gradient(circle at 50% 50%, ${brandingConfig.primary_color}33 0%, transparent 70%)` }} />
-
-                                        {/* Mockup Top Nav */}
-                                        <div className="p-6 flex flex-col items-center justify-center pt-10">
-                                            {brandingConfig.logo_url ? (
-                                                <img src={brandingConfig.logo_url} className="h-10 object-contain mb-4" alt="Mockup Logo" />
-                                            ) : (
-                                                <div className="h-10 w-32 bg-white/5 rounded-xl border border-white/10 flex items-center justify-center text-[8px] text-slate-600 font-black uppercase tracking-[2px]">Your Logo Here</div>
-                                            )}
-                                            <div className="w-12 h-0.5" style={{ background: `linear-gradient(90deg, transparent, ${brandingConfig.primary_color}, transparent)` }}></div>
-                                        </div>
-
-                                        {/* Mockup Title */}
-                                        <div className="px-6 py-2 text-center">
-                                            <h3 className="text-[14px] font-black text-white uppercase tracking-tighter italic">Descubre tu Identidad</h3>
-                                            <p className="text-[8px] text-slate-500 uppercase font-black tracking-widest mt-1 opacity-60">Selecciona un estandar de estilo</p>
-                                        </div>
-
-                                        {/* Mockup Grid */}
-                                        <div className="flex-1 overflow-y-auto px-6 py-4 no-scrollbar">
-                                            <div className="grid grid-cols-2 gap-3">
-                                                {brandingConfig.style_presets.slice(0, 4).map((style, i) => {
-                                                    const sample = IDENTITIES.find(id => id.subCategory === style) || IDENTITIES[0];
-                                                    return (
-                                                        <div key={i} className="aspect-[3/4] overflow-hidden relative border shadow-lg" style={{ borderRadius: brandingConfig.radius, borderColor: i === 0 ? brandingConfig.primary_color : 'rgba(255,255,255,0.05)' }}>
-                                                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent z-10"></div>
-                                                            <img src={sample.url} className="w-full h-full object-cover" />
-                                                            <div className="absolute bottom-2 left-2 z-20">
-                                                                <p className="text-[7px] font-black text-white uppercase">{style}</p>
-                                                            </div>
-                                                        </div>
-                                                    );
-                                                })}
-                                                {brandingConfig.style_presets.length < 4 && Array.from({ length: 4 - brandingConfig.style_presets.length }).map((_, i) => (
-                                                    <div key={i} className="aspect-[3/4] bg-white/5 border border-dashed border-white/10 flex items-center justify-center text-slate-800" style={{ borderRadius: brandingConfig.radius }}>
-                                                        <span className="material-symbols-outlined !text-sm">add</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-
-                                        {/* Mockup Button */}
-                                        <div className="p-6">
-                                            <div
-                                                className="w-full py-3 text-center text-white text-[9px] font-black uppercase tracking-[2px] shadow-lg shadow-black/20"
-                                                style={{ backgroundColor: brandingConfig.primary_color, borderRadius: brandingConfig.radius }}
-                                            >
-                                                Comenzar Experiencia
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Live Feed Component - Global Activity */}
-                            <div className="mt-8">
-                                <div className="flex items-center justify-between mb-4 px-2">
-                                    <div className="flex items-center gap-3">
-                                        <div className="size-8 rounded-lg bg-orange-500/10 flex items-center justify-center text-orange-500">
-                                            <Zap className="size-4" />
-                                        </div>
-                                        <div>
-                                            <h4 className="text-xs font-black text-white uppercase tracking-widest">Global Live Feed</h4>
-                                            <p className="text-[9px] text-slate-500 font-bold uppercase tracking-[2px]">Últimas capturas en tus eventos</p>
-                                        </div>
-                                    </div>
-                                    <button
-                                        onClick={() => setView('events')}
-                                        className="text-[9px] font-black text-[#135bec] uppercase tracking-widest hover:underline"
-                                    >
-                                        Ver todos los eventos
-                                    </button>
-                                </div>
-
-                                <div className="relative group/feed">
-                                    <div className="flex gap-4 overflow-x-auto pb-6 pt-2 no-scrollbar scroll-smooth">
-                                        {recentGlobalPhotos.length > 0 ? (
-                                            recentGlobalPhotos.map((photo, idx) => (
-                                                <motion.div
-                                                    key={photo.id}
-                                                    initial={{ opacity: 0, scale: 0.9 }}
-                                                    animate={{ opacity: 1, scale: 1 }}
-                                                    transition={{ delay: idx * 0.1 }}
-                                                    className="min-w-[140px] md:min-w-[180px] aspect-[3/4] rounded-2xl overflow-hidden border border-white/5 bg-slate-900 shadow-xl relative group/item"
-                                                >
-                                                    <img
-                                                        src={photo.image_url}
-                                                        alt="Recent"
-                                                        className="w-full h-full object-cover grayscale-[0.5] group-hover/item:grayscale-0 transition-all duration-500"
-                                                    />
-                                                    <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/80 to-transparent">
-                                                        <p className="text-[7px] font-black text-white/50 uppercase tracking-widest mb-0.5">
-                                                            {events.find(e => e.id === photo.event_id)?.event_name || 'Evento'}
-                                                        </p>
-                                                        <p className="text-[8px] font-bold text-white uppercase">
-                                                            Hace {Math.floor((Date.now() - new Date(photo.created_at).getTime()) / 60000)}m
-                                                        </p>
-                                                    </div>
-                                                </motion.div>
-                                            ))
-                                        ) : (
-                                            <div className="w-full h-40 rounded-[32px] border border-dashed border-white/10 flex flex-col items-center justify-center text-slate-600">
-                                                <span className="material-symbols-outlined text-3xl mb-2 opacity-20">cloud_off</span>
-                                                <p className="text-[10px] font-black uppercase tracking-[2px]">Esperando actividad...</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                    {/* Gradient Masks for horizontal scroll */}
-                                    <div className="absolute inset-y-0 left-0 w-20 bg-gradient-to-r from-[#0a0c0b]/50 to-transparent pointer-events-none opacity-0 group-hover/feed:opacity-100 transition-opacity"></div>
-                                    <div className="absolute inset-y-0 right-0 w-20 bg-gradient-to-l from-[#0a0c0b]/50 to-transparent pointer-events-none opacity-0 group-hover/feed:opacity-100 transition-opacity"></div>
-                                </div>
-                            </div>
-                        </div>
-                    </motion.div>
-                )}
-            </AnimatePresence>
-
-            {/* UI Modals */}
+            {/* Modals Container */}
             <AnimatePresence>
-                {/* Create Event Modal */}
-                {showCreateEventModal && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl">
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                            className="w-full max-w-md bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
-                        >
-                            <div className="flex items-center justify-between p-7 border-b border-white/5">
-                                <div>
-                                    <h3 className="text-xl font-black text-white uppercase tracking-tighter">Crear Evento</h3>
-                                    <p className="text-xs text-slate-500 mt-1 uppercase tracking-widest font-bold">Nueva instancia</p>
-                                </div>
-                                <button onClick={() => setShowCreateEventModal(false)} className="size-10 flex items-center justify-center rounded-xl bg-slate-800 text-slate-500 hover:text-white transition-all">
-                                    <X className="w-5 h-5" />
-                                </button>
-                            </div>
-                            <form onSubmit={handleCreateEvent} className="p-7 space-y-6">
-                                <div className="space-y-4">
-                                    <div>
-                                        <label className="text-[10px] font-black uppercase tracking-[2px] text-slate-500 mb-2 block">Nombre del Evento</label>
-                                        <input
-                                            required
-                                            type="text"
-                                            placeholder="Nombre comercial"
-                                            className="w-full bg-[#0a0a0b] border border-white/10 rounded-xl px-5 py-4 text-white focus:border-[#135bec] outline-none transition-all placeholder:text-slate-800"
-                                            value={newEvent.name}
-                                            onChange={e => setNewEvent({ ...newEvent, name: e.target.value })}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="text-[10px] font-black uppercase tracking-[2px] text-slate-500 mb-2 block">Email del Cliente (Asignación)</label>
-                                        <div className="relative">
-                                            <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-700 size-4" />
-                                            <input
-                                                required
-                                                type="email"
-                                                placeholder="cliente@ejemplo.com"
-                                                className="w-full bg-[#0a0a0b] border border-white/10 rounded-xl pl-11 pr-5 py-4 text-white focus:border-[#135bec] outline-none transition-all placeholder:text-slate-800 text-xs"
-                                                value={newEvent.client_email}
-                                                onChange={e => setNewEvent({ ...newEvent, client_email: e.target.value.toLowerCase() })}
-                                            />
-                                        </div>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="text-[10px] font-black uppercase tracking-[2px] text-slate-500 mb-2 block">Personalizado</label>
-                                            <input
-                                                type="text"
-                                                placeholder="slug"
-                                                className="w-full bg-[#0a0a0b] border border-white/10 rounded-xl px-4 py-3 text-white focus:border-[#135bec] outline-none transition-all text-xs font-mono"
-                                                value={newEvent.slug}
-                                                onChange={e => setNewEvent({ ...newEvent, slug: e.target.value.toLowerCase().replace(/\s+/g, '-') })}
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="text-[10px] font-black uppercase tracking-[2px] text-slate-500 mb-2 block">Créditos</label>
-                                            <div className="relative">
-                                                <ShoppingCart className="absolute left-4 top-1/2 -translate-y-1/2 text-[#135bec] size-4" />
-                                                <input
-                                                    required
-                                                    type="number"
-                                                    className="w-full bg-[#0a0a0b] border border-white/10 rounded-xl pl-11 pr-5 py-3 text-white focus:border-[#135bec] outline-none transition-all text-xs font-bold"
-                                                    value={newEvent.credits}
-                                                    onChange={e => setNewEvent({ ...newEvent, credits: Number(e.target.value) })}
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="text-[10px] font-black uppercase tracking-[2px] text-slate-500 mb-2 block">Inicio</label>
-                                            <input
-                                                required
-                                                type="date"
-                                                className="w-full bg-[#0a0a0b] border border-white/10 rounded-xl px-4 py-3 text-white focus:border-[#135bec] outline-none transition-all text-xs"
-                                                value={newEvent.start_date}
-                                                onChange={e => setNewEvent({ ...newEvent, start_date: e.target.value })}
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="text-[10px] font-black uppercase tracking-[2px] text-slate-500 mb-2 block">Fin</label>
-                                            <input
-                                                required
-                                                type="date"
-                                                className="w-full bg-[#0a0a0b] border border-white/10 rounded-xl px-4 py-3 text-white focus:border-[#135bec] outline-none transition-all text-xs"
-                                                value={newEvent.end_date}
-                                                onChange={e => setNewEvent({ ...newEvent, end_date: e.target.value })}
-                                            />
-                                        </div>
-                                    </div>
+                <CreateEventModal
+                    isOpen={showCreateEventModal}
+                    onClose={() => setShowCreateEventModal(false)}
+                    newEvent={newEvent}
+                    setNewEvent={setNewEvent}
+                    clients={clients}
+                    partner={partner}
+                    brandingConfig={brandingConfig}
+                    getClientBalance={getClientBalance}
+                    onEventCreate={onEventCreate}
+                    loading={loading}
+                />
 
-                                    <div className="p-4 bg-[#135bec]/5 border border-[#135bec]/10 rounded-xl flex items-center gap-4">
-                                        <div className="size-8 rounded-lg bg-[#135bec]/10 flex items-center justify-center text-[#135bec]">
-                                            <CheckCircle2 className="size-4" />
-                                        </div>
-                                        <div>
-                                            <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest leading-none">Verificación de Balance</p>
-                                            <p className="text-[11px] text-slate-400 mt-1 leading-tight">Se deducirán {newEvent.credits} créditos de tu balance mayorista ({availableCredits} disponibles).</p>
-                                        </div>
-                                    </div>
-                                </div>
+                <EditEventModal
+                    isOpen={!!editingEvent}
+                    onClose={() => setEditingEvent(null)}
+                    editingEvent={editingEvent}
+                    setEditingEvent={setEditingEvent}
+                    clients={clients}
+                    brandingConfig={brandingConfig}
+                    onEventUpdate={onEventUpdate}
+                    loading={loading}
+                />
 
-                                <button
-                                    disabled={loading}
-                                    type="submit"
-                                    className="w-full py-5 bg-[#135bec] hover:bg-[#135bec]/90 text-white text-[11px] font-black rounded-xl transition-all shadow-xl shadow-[#135bec]/20 uppercase tracking-widest disabled:opacity-50 disabled:cursor-not-allowed group/btn"
-                                >
-                                    {loading ? 'Creando...' : (
-                                        <span className="flex items-center justify-center gap-2">
-                                            Activar Instancia de Evento
-                                            <Zap className="size-4 group-hover:scale-110 transition-transform" />
-                                        </span>
-                                    )}
-                                </button>
-                            </form>
-                        </motion.div>
-                    </div>
-                )}
+                <ClientModal
+                    isOpen={showCreateClientModal || !!editingClient}
+                    onClose={() => { setShowCreateClientModal(false); setEditingClient(null); }}
+                    editingClient={editingClient}
+                    newClient={newClient}
+                    setNewClient={setNewClient}
+                    setEditingClient={setEditingClient}
+                    onClientCreate={onClientCreate}
+                    onClientUpdate={onClientUpdate}
+                    loading={loading}
+                />
 
-                {/* Edit Event Modal */}
-                {editingEvent && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl">
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                            className="w-full max-w-md bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
-                        >
-                            <div className="flex items-center justify-between p-7 border-b border-white/5">
-                                <div>
-                                    <h3 className="text-xl font-black text-white uppercase tracking-tighter">Editar Evento</h3>
-                                    <p className="text-xs text-slate-500 mt-1 uppercase tracking-widest font-bold">Modificar parámetros</p>
-                                </div>
-                                <button onClick={() => setEditingEvent(null)} className="size-10 flex items-center justify-center rounded-xl bg-slate-800 text-slate-500 hover:text-white transition-all">
-                                    <X className="w-5 h-5" />
-                                </button>
-                            </div>
-                            <div className="p-7 space-y-6">
-                                <div className="space-y-4">
-                                    <div>
-                                        <label className="text-[10px] font-black uppercase tracking-[2px] text-slate-500 mb-2 block">Nombre del Evento</label>
-                                        <input
-                                            required
-                                            type="text"
-                                            className="w-full bg-[#0a0a0b] border border-white/10 rounded-xl px-5 py-4 text-white focus:border-[#135bec] outline-none transition-all placeholder:text-slate-800"
-                                            value={editingEvent.event_name}
-                                            onChange={e => setEditingEvent({ ...editingEvent, event_name: e.target.value })}
-                                        />
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="text-[10px] font-black uppercase tracking-[2px] text-slate-500 mb-2 block">Inicio</label>
-                                            <input
-                                                required
-                                                type="date"
-                                                className="w-full bg-[#0a0a0b] border border-white/10 rounded-xl px-4 py-3 text-white focus:border-[#135bec] outline-none transition-all text-xs"
-                                                value={new Date(editingEvent.start_date).toISOString().split('T')[0]}
-                                                onChange={e => setEditingEvent({ ...editingEvent, start_date: e.target.value })}
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="text-[10px] font-black uppercase tracking-[2px] text-slate-500 mb-2 block">Fin</label>
-                                            <input
-                                                required
-                                                type="date"
-                                                className="w-full bg-[#0a0a0b] border border-white/10 rounded-xl px-4 py-3 text-white focus:border-[#135bec] outline-none transition-all text-xs"
-                                                value={new Date(editingEvent.end_date).toISOString().split('T')[0]}
-                                                onChange={e => setEditingEvent({ ...editingEvent, end_date: e.target.value })}
-                                            />
-                                        </div>
-                                    </div>
+                <ClientTopUpModal
+                    isOpen={!!showClientTopUpModal}
+                    onClose={() => setShowClientTopUpModal(null)}
+                    client={showClientTopUpModal}
+                    amount={clientTopUpAmount}
+                    setAmount={setClientTopUpAmount}
+                    partner={partner}
+                    onTopUp={onClientTopUp}
+                    loading={loading}
+                />
 
-                                    <div className="flex items-center gap-3 p-4 bg-white/5 rounded-2xl border border-white/5">
-                                        <div className={`size-10 rounded-xl flex items-center justify-center ${editingEvent.is_active ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'}`}>
-                                            <Zap className="size-5" />
-                                        </div>
-                                        <div className="flex-1">
-                                            <p className="text-[10px] font-black uppercase text-white tracking-widest leading-none">Estado</p>
-                                            <p className="text-[9px] text-slate-500 uppercase mt-1 leading-none">{editingEvent.is_active ? 'En Línea' : 'Inactivo'}</p>
-                                        </div>
-                                        <button
-                                            onClick={() => setEditingEvent({ ...editingEvent, is_active: !editingEvent.is_active })}
-                                            className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${editingEvent.is_active ? 'bg-rose-500/10 text-rose-500 hover:bg-rose-500 hover:text-white' : 'bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-white'}`}
-                                        >
-                                            {editingEvent.is_active ? 'Pausar' : 'Activar'}
-                                        </button>
-                                    </div>
-                                </div>
+                <EventTopUpModal
+                    isOpen={!!eventToTopUp}
+                    onClose={() => setEventToTopUp(null)}
+                    event={eventToTopUp}
+                    amount={topUpAmount}
+                    setAmount={setTopUpAmount}
+                    availableCredits={(partner?.credits_total || 0) - (partner?.credits_used || 0)}
+                    onTopUp={onEventTopUp}
+                    loading={loading}
+                />
 
-                                <button
-                                    disabled={loading}
-                                    onClick={async () => {
-                                        try {
-                                            setLoading(true);
-                                            const { error } = await supabase
-                                                .from('events')
-                                                .update({
-                                                    event_name: editingEvent.event_name,
-                                                    start_date: new Date(editingEvent.start_date).toISOString(),
-                                                    end_date: new Date(editingEvent.end_date).toISOString(),
-                                                    is_active: editingEvent.is_active
-                                                })
-                                                .eq('id', editingEvent.id);
-
-                                            if (error) throw error;
-                                            showToast('Evento actualizado correctamente');
-                                            setEditingEvent(null);
-                                            fetchPartnerData();
-                                        } catch (err: any) {
-                                            showToast('Error al actualizar: ' + err.message, 'error');
-                                        } finally {
-                                            setLoading(false);
-                                        }
-                                    }}
-                                    className="w-full py-5 bg-[#135bec] hover:bg-[#135bec]/90 text-white text-[11px] font-black rounded-xl transition-all shadow-xl shadow-[#135bec]/20 uppercase tracking-[3px] disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    {loading ? 'Sincronizando...' : 'Guardar Cambios'}
-                                </button>
-                            </div>
-                        </motion.div>
-                    </div>
-                )}
-
-                {/* Fast Top-up Modal */}
-                {eventToTopUp && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl">
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                            className="w-full max-w-sm bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
-                        >
-                            <div className="p-7 border-b border-white/5 flex items-center justify-between">
-                                <div>
-                                    <h3 className="text-lg font-black text-white uppercase tracking-tighter">Recargar Evento</h3>
-                                    <p className="text-[10px] text-slate-500 uppercase font-bold mt-1">{eventToTopUp.event_name}</p>
-                                </div>
-                                <button onClick={() => setEventToTopUp(null)} className="size-8 flex items-center justify-center rounded-lg bg-slate-800 text-slate-500 hover:text-white transition-all">
-                                    <X className="w-4 h-4" />
-                                </button>
-                            </div>
-                            <div className="p-7 space-y-6">
-                                <div>
-                                    <label className="text-[10px] font-black uppercase tracking-[2px] text-slate-500 mb-2 block">Cantidad de Créditos</label>
-                                    <div className="relative">
-                                        <ShoppingCart className="absolute left-4 top-1/2 -translate-y-1/2 text-emerald-500 size-4" />
-                                        <input
-                                            type="number"
-                                            className="w-full bg-[#0a0a0b] border border-white/10 rounded-xl pl-11 pr-5 py-4 text-white focus:border-emerald-500 outline-none transition-all font-bold text-center text-xl"
-                                            value={topUpAmount}
-                                            onChange={e => setTopUpAmount(Number(e.target.value))}
-                                        />
-                                    </div>
-                                    <p className="text-[9px] text-slate-500 mt-3 text-center uppercase tracking-widest">
-                                        Disponibles: <span className="text-white">{availableCredits.toLocaleString()}</span>
-                                    </p>
-                                </div>
-
-                                <button
-                                    disabled={loading || topUpAmount <= 0 || topUpAmount > availableCredits}
-                                    onClick={handleTopUpEvent}
-                                    className="w-full py-5 bg-emerald-500 hover:bg-emerald-400 text-[#071121] text-[11px] font-black rounded-xl transition-all shadow-xl shadow-emerald-500/20 uppercase tracking-[3px] disabled:opacity-30 disabled:grayscale"
-                                >
-                                    {loading ? 'Procesando...' : 'Confirmar Transferencia'}
-                                </button>
-                            </div>
-                        </motion.div>
-                    </div>
-                )}
+                <DeleteEventModal
+                    isOpen={!!eventToDelete}
+                    onClose={() => setEventToDelete(null)}
+                    eventToDelete={eventToDelete}
+                    onConfirm={onEventDelete}
+                />
             </AnimatePresence>
+
             {/* Toast System */}
             <AnimatePresence>
                 {toast.type && (
                     <motion.div
                         initial={{ opacity: 0, y: 50, scale: 0.9 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.9 }}
+                        exit={{ opacity: 0, y: 20, scale: 0.9 }}
                         className="fixed bottom-8 right-8 z-[100]"
                     >
-                        <div className={`px-6 py-4 rounded-2xl shadow-2xl flex items-center gap-4 backdrop-blur-xl border ${toast.type === 'error' ? 'bg-rose-500/20 border-rose-500/30 text-rose-500' :
-                            toast.type === 'info' ? 'bg-[#135bec]/20 border-[#135bec]/30 text-[#135bec]' :
-                                'bg-[#13ec80]/20 border-[#13ec80]/30 text-[#13ec80]'
+                        <div className={`flex items-center gap-4 px-6 py-4 rounded-2xl border backdrop-blur-xl shadow-2xl ${toast.type === 'success' ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500' :
+                                toast.type === 'error' ? 'bg-rose-500/10 border-rose-500/20 text-rose-500' :
+                                    'bg-[#135bec]/10 border-[#135bec]/20 text-blue-400'
                             }`}>
-                            {toast.type === 'error' ? <AlertTriangle className="size-5" /> :
-                                toast.type === 'info' ? <Info className="size-5" /> :
-                                    <CheckCircle2 className="size-5" />}
-                            <p className="text-xs font-black uppercase tracking-widest">{toast.message}</p>
+                            {toast.type === 'success' ? <CheckCircle2 className="size-5" /> :
+                                toast.type === 'error' ? <AlertTriangle className="size-5" /> :
+                                    <Info className="size-5" />}
+                            <p className="text-sm font-bold">{toast.message}</p>
+                            <button onClick={() => setToast({ message: '', type: null })} className="ml-2 opacity-50 hover:opacity-100">
+                                <X className="size-4" />
+                            </button>
                         </div>
                     </motion.div>
-                )}
-            </AnimatePresence>
-
-            {/* Delete Confirmation Modal */}
-            <AnimatePresence>
-                {eventToDelete && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl">
-                        <motion.div
-                            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                            animate={{ opacity: 1, scale: 1, y: 0 }}
-                            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-                            className="w-full max-w-md bg-slate-900 border border-white/10 rounded-2xl shadow-2xl overflow-hidden"
-                        >
-                            <div className="p-8 text-center">
-                                <div className="size-20 bg-rose-500/10 rounded-full flex items-center justify-center mx-auto mb-6 border border-rose-500/20">
-                                    <AlertTriangle className="size-10 text-rose-500" />
-                                </div>
-                                <h3 className="text-2xl font-black text-white uppercase tracking-tighter mb-2">¿Eliminar Evento?</h3>
-                                <p className="text-slate-400 text-sm leading-relaxed">
-                                    Esta acción es permanente. Se eliminará el evento <span className="text-white font-bold">"{eventToDelete.name}"</span> y todos sus datos asociados.
-                                </p>
-                            </div>
-                            <div className="flex border-t border-white/5 p-4 bg-slate-950/50 gap-3">
-                                <button
-                                    onClick={() => setEventToDelete(null)}
-                                    className="flex-1 py-4 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[10px] font-black rounded-xl transition-all uppercase tracking-[2px]"
-                                >
-                                    Cancelar
-                                </button>
-                                <button
-                                    onClick={handleDeleteEvent}
-                                    className="flex-1 py-4 bg-rose-500 hover:bg-rose-600 text-white text-[10px] font-black rounded-xl transition-all shadow-lg shadow-rose-500/20 uppercase tracking-[2px]"
-                                >
-                                    Confirmar Baja
-                                </button>
-                            </div>
-                        </motion.div>
-                    </div>
-                )}
-            </AnimatePresence>
-
-            {/* Top-Up Credits Modal (Cards de Cristal) */}
-            <AnimatePresence>
-                {showTopUpModal && (
-                    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8">
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            onClick={() => setShowTopUpModal(false)}
-                            className="absolute inset-0 bg-slate-950/80 backdrop-blur-md"
-                        />
-                        <motion.div
-                            initial={{ scale: 0.9, opacity: 0, y: 30 }}
-                            animate={{ scale: 1, opacity: 1, y: 0 }}
-                            exit={{ scale: 0.9, opacity: 0, y: 30 }}
-                            className="relative w-full max-w-5xl glass-card rounded-[48px] overflow-hidden bg-gradient-to-br from-slate-900/40 to-slate-950/40 border border-white/5 shadow-[0_32px_100px_rgba(0,0,0,0.8)]"
-                        >
-                            {/* Modal Header */}
-                            <div className="p-10 pb-4 flex justify-between items-start">
-                                <div className="space-y-1">
-                                    <div className="flex items-center gap-3">
-                                        <div className="p-2.5 bg-[#135bec]/10 border border-[#135bec]/20 rounded-xl">
-                                            <Wallet className="size-5 text-[#135bec]" />
-                                        </div>
-                                        <h2 className="text-3xl font-black text-white uppercase tracking-tighter">Cargar Energía AI</h2>
-                                    </div>
-                                    <p className="text-slate-500 text-[10px] font-black uppercase tracking-[3px] mt-2">Selecciona un pack de créditos para continuar operando</p>
-                                </div>
-                                <button
-                                    onClick={() => setShowTopUpModal(false)}
-                                    className="p-4 hover:bg-white/5 rounded-full text-slate-500 transition-colors group"
-                                >
-                                    <X className="size-6 group-hover:rotate-90 transition-transform duration-300" />
-                                </button>
-                            </div>
-
-                            {/* Cards Grid */}
-                            <div className="p-10 grid grid-cols-1 md:grid-cols-3 gap-8">
-                                {[
-                                    { qty: 5000, label: 'Pack Inicial', price: 30000, color: 'from-blue-600/10 to-transparent', border: 'border-blue-500/20' },
-                                    { qty: 10000, label: 'Pack Pro', price: 60000, color: 'from-[#135bec]/20 to-[#135bec]/5', border: 'border-[#135bec]/40', featured: true },
-                                    { qty: 20000, label: 'Pack Elite', price: 120000, color: 'from-purple-600/10 to-transparent', border: 'border-purple-500/20' }
-                                ].map((plan, i) => (
-                                    <motion.button
-                                        key={i}
-                                        disabled={isProcessingPayment}
-                                        whileHover={isProcessingPayment ? {} : { scale: 1.02, y: -8 }}
-                                        whileTap={isProcessingPayment ? {} : { scale: 0.98 }}
-                                        onClick={() => handlePurchase(plan)}
-                                        className={`relative group p-10 rounded-[40px] border ${plan.border} bg-gradient-to-br ${plan.color} backdrop-blur-3xl flex flex-col text-left transition-all overflow-hidden h-full ${isProcessingPayment ? 'opacity-50 cursor-not-allowed' : ''}`}
-                                    >
-                                        {plan.featured && (
-                                            <div className="absolute top-0 right-0 px-6 py-2 bg-[#135bec] text-white text-[9px] font-black uppercase tracking-widest rounded-bl-2xl shadow-lg animate-pulse">
-                                                Popular
-                                            </div>
-                                        )}
-
-                                        <div className="mb-12">
-                                            <p className="text-white/40 text-[10px] font-black uppercase tracking-[2px] mb-2">{plan.label}</p>
-                                            <h3 className="text-5xl font-black text-white flex items-baseline gap-2">
-                                                {plan.qty.toLocaleString()}
-                                                <span className="text-sm text-white/20 font-medium uppercase tracking-[3px]">Cds</span>
-                                            </h3>
-                                        </div>
-
-                                        <div className="mt-auto pt-10 border-t border-white/5 flex items-end justify-between">
-                                            <div className="space-y-1">
-                                                <p className="text-white/20 text-[9px] font-black uppercase tracking-widest">Inversión</p>
-                                                <h4 className="text-3xl font-black text-white tracking-tighter">${plan.price.toLocaleString()} <span className="text-xs text-white/30 font-medium uppercase tracking-widest ml-1">Ars</span></h4>
-                                            </div>
-                                            <div className="size-14 bg-white/5 border border-white/10 rounded-2xl flex items-center justify-center group-hover:bg-white text-white group-hover:text-black transition-all shadow-xl">
-                                                {isProcessingPayment ? (
-                                                    <div className="size-5 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                                                ) : (
-                                                    <ArrowUpRight className="size-6" />
-                                                )}
-                                            </div>
-                                        </div>
-
-                                        {/* Decorative details */}
-                                        <div className="absolute -bottom-10 -right-10 size-40 bg-white/5 rounded-full blur-[80px] group-hover:bg-white/10 transition-all opacity-0 group-hover:opacity-100" />
-                                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
-                                    </motion.button>
-                                ))}
-                            </div>
-
-                            {/* Trust Footer */}
-                            <div className="p-10 pt-0 flex flex-col items-center">
-                                <div className="flex items-center gap-8 opacity-40 hover:opacity-100 transition-all duration-500 grayscale hover:grayscale-0">
-                                    <img src="https://logodownload.org/wp-content/uploads/2019/06/mercado-pago-logo.png" className="h-5" alt="Mercado Pago" />
-                                    <div className="w-px h-6 bg-white/10" />
-                                    <div className="flex gap-4">
-                                        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/d/d6/Visa_2021.svg/512px-Visa_2021.svg.png" className="h-3.5" alt="Visa" />
-                                        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Mastercard-logo.svg/1280px-Mastercard-logo.svg.png" className="h-5" alt="Mastercard" />
-                                    </div>
-                                </div>
-                                <p className="text-[9px] text-slate-600 font-black uppercase tracking-[3px] mt-8 flex items-center gap-3">
-                                    <Shield className="size-4 text-emerald-500/50" />
-                                    Transacciones encriptadas y aseguradas por Mercado Pago Gateway
-                                </p>
-                            </div>
-                        </motion.div>
-                    </div>
                 )}
             </AnimatePresence>
         </div>
