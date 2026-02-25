@@ -1,7 +1,7 @@
 import React from 'react';
 import { AlertTriangle } from 'lucide-react';
-import { AlquimiaModal } from '../../shared';
-import { Event } from '../../../types/index';
+import { AlquimiaModal } from '../../../shared';
+import { Event } from '../../../../types/index';
 
 interface DeleteEventModalProps {
     isOpen: boolean;

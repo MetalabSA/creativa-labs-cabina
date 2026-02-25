@@ -1,7 +1,7 @@
 import React from 'react';
 import { ShoppingCart } from 'lucide-react';
-import { AlquimiaModal } from '../../shared';
-import { Client, Partner } from '../../../types/index';
+import { AlquimiaModal } from '../../../shared';
+import { Client, Partner } from '../../../../types/index';
 
 interface ClientTopUpModalProps {
     isOpen: boolean;

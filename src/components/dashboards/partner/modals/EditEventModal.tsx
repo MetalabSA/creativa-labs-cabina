@@ -1,8 +1,8 @@
 import React from 'react';
 import { Zap } from 'lucide-react';
-import { AlquimiaModal } from '../../shared';
-import { Event, Client } from '../../../types/index';
-import { PREFERRED_PACK_ORDER } from '../../../lib/constants';
+import { AlquimiaModal } from '../../../shared';
+import { Event, Client } from '../../../../types/index';
+import { PREFERRED_PACK_ORDER } from '../../../../lib/constants';
 
 interface EditEventModalProps {
     isOpen: boolean;

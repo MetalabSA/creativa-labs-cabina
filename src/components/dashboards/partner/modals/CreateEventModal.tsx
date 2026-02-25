@@ -6,9 +6,9 @@ import {
     CreditCard,
     Zap
 } from 'lucide-react';
-import { AlquimiaModal } from '../../shared';
-import { Client, Partner } from '../../../types/index';
-import { PREFERRED_PACK_ORDER } from '../../../lib/constants';
+import { AlquimiaModal } from '../../../shared';
+import { Client, Partner } from '../../../../types/index';
+import { PREFERRED_PACK_ORDER } from '../../../../lib/constants';
 
 interface CreateEventModalProps {
     isOpen: boolean;

@@ -1,7 +1,7 @@
 import React from 'react';
-import { AlquimiaModal } from '../../shared';
-import { Client } from '../../../types/index';
-import { PREFERRED_PACK_ORDER } from '../../../lib/constants';
+import { AlquimiaModal } from '../../../shared';
+import { Client } from '../../../../types/index';
+import { PREFERRED_PACK_ORDER } from '../../../../lib/constants';
 
 interface ClientModalProps {
     isOpen: boolean;
