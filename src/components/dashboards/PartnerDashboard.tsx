@@ -116,6 +116,8 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({
     const [editingClient, setEditingClient] = useState<Client | null>(null);
     const [showClientTopUpModal, setShowClientTopUpModal] = useState<Client | null>(null);
     const [clientTopUpAmount, setClientTopUpAmount] = useState(1000);
+    const [moderationSearchTerm, setModerationSearchTerm] = useState('');
+    const [moderationDateFilter, setModerationDateFilter] = useState('');
 
     const [newEvent, setNewEvent] = useState({
         name: '',
@@ -316,15 +318,23 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({
 
                         {view === 'moderation' && eventToModerate && (
                             <ModerationSection
-                                event={eventToModerate}
-                                photos={eventPhotos}
-                                setPhotos={setEventPhotos}
-                                onBack={() => setView('events')}
-                                onDeletePhoto={handleDeletePhoto}
-                                onBulkDelete={handleBulkDelete}
+                                eventToModerate={eventToModerate}
+                                setView={setView}
+                                filteredPhotos={eventPhotos.filter(p =>
+                                    (!moderationSearchTerm || p.profiles?.email?.toLowerCase().includes(moderationSearchTerm.toLowerCase()) || p.id.includes(moderationSearchTerm)) &&
+                                    (!moderationDateFilter || p.created_at.startsWith(moderationDateFilter))
+                                )}
+                                eventPhotos={eventPhotos}
+                                moderationSearchTerm={moderationSearchTerm}
+                                setModerationSearchTerm={setModerationSearchTerm}
+                                moderationDateFilter={moderationDateFilter}
+                                setModerationDateFilter={setModerationDateFilter}
+                                showToast={showToast}
+                                handleDeletePhoto={handleDeletePhoto}
                                 loading={moderationLoading}
                                 selectedPhotos={selectedPhotos}
                                 setSelectedPhotos={setSelectedPhotos}
+                                handleBulkDelete={handleBulkDelete}
                             />
                         )}
                     </AnimatePresence>

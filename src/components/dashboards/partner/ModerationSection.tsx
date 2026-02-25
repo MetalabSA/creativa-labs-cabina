@@ -25,7 +25,7 @@ interface ModerationSectionProps {
     setModerationDateFilter: (date: string) => void;
     showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
     handleDeletePhoto: (id: string) => void;
-    moderationLoading: boolean;
+    loading: boolean;
     selectedPhotos: string[];
     setSelectedPhotos: React.Dispatch<React.SetStateAction<string[]>>;
     handleBulkDelete: () => Promise<void>;
@@ -42,7 +42,7 @@ export const ModerationSection: React.FC<ModerationSectionProps> = ({
     setModerationDateFilter,
     showToast,
     handleDeletePhoto,
-    moderationLoading,
+    loading,
     selectedPhotos,
     setSelectedPhotos,
     handleBulkDelete
@@ -216,7 +216,7 @@ export const ModerationSection: React.FC<ModerationSectionProps> = ({
                 )}
             </AnimatePresence>
 
-            {moderationLoading ? (
+            {loading ? (
                 <div className="h-96 flex flex-col items-center justify-center gap-4">
                     <div className="size-12 border-4 border-[#135bec]/30 border-t-[#135bec] rounded-full animate-spin" />
                     <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Sincronizando Galería...</p>
