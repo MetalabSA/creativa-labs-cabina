@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAdmin } from '../../hooks/useAdmin';
+import { useCallback } from 'react';
 import Background3D from '../Background3D';
 
 // Modular Sections
@@ -35,9 +36,18 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
     const [partnerToDelete, setPartnerToDelete] = useState<{ id: string, name: string } | null>(null);
     const [editingStyle, setEditingStyle] = useState<any | null>(null);
 
+    // Toast State
+    const [toast, setToast] = useState<{ message: string, type: 'success' | 'error' | 'info' | null }>({ message: '', type: null });
+
+    const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {
+        setToast({ message, type });
+        setTimeout(() => setToast({ message: '', type: null }), 4000);
+    }, []);
+
     // Business Logic Hook
     const {
         loading,
+        isSaving,
         partners,
         pendingPartners,
         b2cUsers,
@@ -56,9 +66,8 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
         handleCreateUser,
         handleUpdateUser,
         handleUpdateStyle,
-        toast,
-        showToast
-    } = useAdmin();
+        handleStyleImageUpload
+    } = useAdmin({ showToast });
 
     if (loading && partners.length === 0) {
         return (
