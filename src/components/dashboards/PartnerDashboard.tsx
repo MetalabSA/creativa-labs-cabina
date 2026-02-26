@@ -69,6 +69,7 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({
         handleCreateClient,
         handleUpdateClient,
         handleClientTopUp,
+        handleResendInvitation,
         handleTopUpEvent
     } = usePartnerDashboard({ profile, showToast });
 
@@ -269,6 +270,7 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({
                                 exportClientReport={(client) => {
                                     showToast(`Exportando reporte de ${client.name}...`, 'info');
                                 }}
+                                onResendInvitation={handleResendInvitation}
                             />
                         )}
 

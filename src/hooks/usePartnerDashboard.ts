@@ -210,7 +210,8 @@ export const usePartnerDashboard = ({ profile, showToast }: UsePartnerDashboardP
                 email: clientData.email,
                 contact_person: clientData.contact_person,
                 phone: clientData.phone,
-                contracted_styles: clientData.contracted_styles || brandingConfig.style_presets
+                contracted_styles: clientData.contracted_styles || [],
+                invitation_sent_at: new Date().toISOString()
             }]);
             if (error) throw error;
             showToast('Cliente creado con éxito');
@@ -257,6 +258,27 @@ export const usePartnerDashboard = ({ profile, showToast }: UsePartnerDashboardP
             });
             if (error) throw error;
             showToast(`¡${amount} créditos asignados a ${clientName}!`);
+            fetchPartnerData();
+            return true;
+        } catch (error: any) {
+            showToast('Error: ' + error.message, 'error');
+            return false;
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleResendInvitation = async (client: Client) => {
+        try {
+            setLoading(true);
+            const { error } = await supabase
+                .from('clients')
+                .update({ invitation_sent_at: new Date().toISOString() })
+                .eq('id', client.id);
+
+            if (error) throw error;
+
+            showToast(`Invitación re-enviada a ${client.email}`);
             fetchPartnerData();
             return true;
         } catch (error: any) {
@@ -365,6 +387,7 @@ export const usePartnerDashboard = ({ profile, showToast }: UsePartnerDashboardP
         handleCreateClient,
         handleUpdateClient,
         handleClientTopUp,
+        handleResendInvitation,
         handleTopUpEvent,
         handlePurchase
     };

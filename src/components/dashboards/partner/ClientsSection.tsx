@@ -12,6 +12,7 @@ interface ClientsSectionProps {
     setSelectedClientId: (id: string | null) => void;
     setView: (view: 'overview' | 'events' | 'branding' | 'wallet' | 'moderation' | 'clients') => void;
     exportClientReport: (client: Client) => void;
+    onResendInvitation: (client: Client) => void;
 }
 
 export const ClientsSection: React.FC<ClientsSectionProps> = ({
@@ -22,7 +23,8 @@ export const ClientsSection: React.FC<ClientsSectionProps> = ({
     setShowClientTopUpModal,
     setSelectedClientId,
     setView,
-    exportClientReport
+    exportClientReport,
+    onResendInvitation
 }) => {
     return (
         <motion.div
@@ -60,12 +62,27 @@ export const ClientsSection: React.FC<ClientsSectionProps> = ({
                                 : 'border-l-4 border-l-[#135bec] border-white/5'
                                 }`}
                         >
-                            {client.credits_total === 0 && (
+                            {client.credits_total === 0 && !client.invitation_sent_at && (
                                 <div className="absolute top-0 right-0 pt-8 pr-8">
                                     <div className="px-3 py-1 bg-amber-500/10 border border-amber-500/20 rounded-full flex items-center gap-1.5">
                                         <Sparkles className="size-3 text-amber-500" />
                                         <span className="text-[8px] font-black text-amber-500 uppercase tracking-[2px]">Nuevo Lead</span>
                                     </div>
+                                </div>
+                            )}
+
+                            {client.invitation_sent_at && (
+                                <div className="absolute top-0 right-0 pt-8 pr-8 flex flex-col items-end gap-2">
+                                    <div className="px-3 py-1 bg-[#135bec]/10 border border-[#135bec]/20 rounded-full flex items-center gap-1.5">
+                                        <Mail className="size-3 text-[#135bec]" />
+                                        <span className="text-[8px] font-black text-[#135bec] uppercase tracking-[2px]">Invitación Enviada</span>
+                                    </div>
+                                    <button
+                                        onClick={() => onResendInvitation(client)}
+                                        className="text-[7px] font-black text-slate-500 hover:text-white uppercase tracking-widest transition-colors"
+                                    >
+                                        Re-enviar
+                                    </button>
                                 </div>
                             )}
                             <div className="flex items-center justify-between mb-8">

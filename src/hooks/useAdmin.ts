@@ -60,6 +60,8 @@ export const useAdmin = ({ showToast }: UseAdminProps) => {
     });
     const [recentLogs, setRecentLogs] = useState<any[]>([]);
     const [stylesMetadata, setStylesMetadata] = useState<any[]>([]);
+    const [pendingPartners, setPendingPartners] = useState<UserProfile[]>([]);
+    const [isSaving, setIsSaving] = useState(false);
 
     const fetchData = useCallback(async () => {
         try {
@@ -106,6 +108,9 @@ export const useAdmin = ({ showToast }: UseAdminProps) => {
                 };
             });
             setPartners(finalPartners);
+
+            const pendingPartnersData = profilesData.filter(p => p.role === 'pending_partner');
+            setPendingPartners(pendingPartnersData);
 
             const b2cUsersData = profilesData.filter(p => p.role === 'user' || !p.role);
             setB2CUsers(b2cUsersData);
@@ -347,6 +352,81 @@ export const useAdmin = ({ showToast }: UseAdminProps) => {
         }
     };
 
+    const handleApprovePartner = async (profileId: string) => {
+        try {
+            setLoading(true);
+            const { data: profile, error: fetchError } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', profileId)
+                .single();
+
+            if (fetchError || !profile) throw new Error("Perfil no encontrado");
+
+            // 1. Update role to partner
+            const { error: profileError } = await supabase
+                .from('profiles')
+                .update({ role: 'partner' })
+                .eq('id', profileId);
+            if (profileError) throw profileError;
+
+            // 2. Check if already in partners, if not insert
+            const { data: existingPartner } = await supabase
+                .from('partners')
+                .select('id')
+                .eq('user_id', profileId)
+                .maybeSingle();
+
+            if (!existingPartner) {
+                const { error: partnerError } = await supabase
+                    .from('partners')
+                    .insert({
+                        user_id: profileId,
+                        contact_email: profile.email,
+                        company_name: profile.full_name || profile.email.split('@')[0],
+                        credits_total: 0,
+                        credits_used: 0,
+                        is_active: true
+                    });
+                if (partnerError) throw partnerError;
+            } else {
+                await supabase.from('partners').update({ is_active: true }).eq('user_id', profileId);
+            }
+
+            showToast('Agencia aprobada con éxito');
+            fetchData();
+            return true;
+        } catch (error: any) {
+            showToast('Error al aprobar: ' + error.message, 'error');
+            return false;
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleRejectPartner = async (profileId: string) => {
+        try {
+            if (!confirm('¿Estás seguro de rechazar esta solicitud? El usuario volverá a ser un usuario básico.')) return false;
+
+            setLoading(true);
+            const { error } = await supabase
+                .from('profiles')
+                .update({ role: 'user' })
+                .eq('id', profileId);
+
+            if (error) throw error;
+
+            showToast('Solicitud rechazada');
+            fetchData();
+            return true;
+        } catch (error: any) {
+            showToast('Error: ' + error.message, 'error');
+            return false;
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleCreateUser = async (data: any) => {
         try {
             const { error } = await supabase.from('profiles').insert({
@@ -378,23 +458,73 @@ export const useAdmin = ({ showToast }: UseAdminProps) => {
         }
     };
 
-    const handleUpdateStyle = async (styleId: string, styleData: any, promptData: any) => {
+    const handleUpdateStyle = async (formData: any) => {
         try {
-            await Promise.all([
-                supabase.from('styles_metadata').upsert(styleData),
-                supabase.from('identity_prompts').upsert(promptData)
-            ]);
-            showToast('Estilo actualizado');
+            setIsSaving(true);
+            const { prompt, ...styleData } = formData;
+
+            // Prepare prompt object for identity_prompts table
+            const promptObj = {
+                id: styleData.id,
+                master_prompt: prompt,
+                updated_at: new Date().toISOString()
+            };
+
+            const { error: styleError } = await supabase
+                .from('styles_metadata')
+                .upsert(styleData);
+
+            if (styleError) throw styleError;
+
+            const { error: promptError } = await supabase
+                .from('identity_prompts')
+                .upsert(promptObj);
+
+            if (promptError) throw promptError;
+
+            showToast('Identidad sincronizada correctamente');
             fetchData();
             return true;
         } catch (error: any) {
-            showToast('Error: ' + error.message, 'error');
+            showToast('Error de sincronización: ' + error.message, 'error');
             return false;
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleStyleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return null;
+
+        try {
+            setIsSaving(true);
+            const fileExt = file.name.split('.').pop();
+            const fileName = `${Math.random()}.${fileExt}`;
+            const filePath = `styles/${fileName}`;
+
+            const { error: uploadError } = await (supabase.storage as any)
+                .from('styles')
+                .upload(filePath, file);
+
+            if (uploadError) throw uploadError;
+
+            const { data: { publicUrl } } = (supabase.storage as any)
+                .from('styles')
+                .getPublicUrl(filePath);
+
+            return publicUrl;
+        } catch (error: any) {
+            showToast('Error al subir imagen: ' + error.message, 'error');
+            return null;
+        } finally {
+            setIsSaving(false);
         }
     };
 
     return {
         loading,
+        isSaving,
         partners,
         b2cUsers,
         stats,
@@ -402,13 +532,17 @@ export const useAdmin = ({ showToast }: UseAdminProps) => {
         partnerStats,
         recentLogs,
         stylesMetadata,
+        pendingPartners,
         fetchData,
         handleCreatePartner,
         handleUpdatePartner,
         handleTopUpPartner,
         handleDeletePartner,
+        handleApprovePartner,
+        handleRejectPartner,
         handleCreateUser,
         handleUpdateUser,
-        handleUpdateStyle
+        handleUpdateStyle,
+        handleStyleImageUpload
     };
 };

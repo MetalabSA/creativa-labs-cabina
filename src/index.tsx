@@ -12,7 +12,13 @@ if (!rootElement) {
 // Lógica de Subdominio para separar productos (según Roadmap)
 const hostname = window.location.hostname;
 const isEvent = new URLSearchParams(window.location.search).has('event');
-const isSaaSManagement = (hostname.startsWith('kiosk') || hostname.startsWith('admin') || window.location.pathname.startsWith('/dashboard') || window.location.pathname.startsWith('/kiosk')) && !isEvent;
+const isSaaSManagement = (
+  hostname.startsWith('kiosk') ||
+  hostname.startsWith('admin') ||
+  window.location.pathname.startsWith('/dashboard') ||
+  window.location.pathname.startsWith('/kiosk') ||
+  hostname.includes('kiosk.metalabia')
+) && !isEvent;
 
 class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean, error: any }> {
   constructor(props: any) {

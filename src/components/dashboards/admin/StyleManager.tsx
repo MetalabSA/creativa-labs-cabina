@@ -16,45 +16,35 @@ interface StyleMetadata {
 }
 
 interface StyleManagerProps {
-    stylesMetadata: StyleMetadata[];
-    styleSearchQuery: string;
-    setStyleSearchQuery: (val: string) => void;
-    selectedCategoryFilter: string;
-    setSelectedCategoryFilter: (val: string) => void;
+    stylesMetadata: any[];
     setEditingStyle: (style: any) => void;
-    setStyleForm: (form: any) => void;
     fetchData: () => void;
     showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
-    setLoading: (loading: boolean) => void;
-    supabase: SupabaseClient;
 }
 
 export const StyleManager: React.FC<StyleManagerProps> = ({
     stylesMetadata,
-    styleSearchQuery,
-    setStyleSearchQuery,
-    selectedCategoryFilter,
-    setSelectedCategoryFilter,
     setEditingStyle,
-    setStyleForm,
     fetchData,
-    showToast,
-    setLoading,
-    supabase
+    showToast
 }) => {
+    const [styleSearchQuery, setStyleSearchQuery] = React.useState('');
+    const [selectedCategoryFilter, setSelectedCategoryFilter] = React.useState('all');
+    const [loading, setLoading] = React.useState(false);
+
     const handleCategoryToggle = async (category: string) => {
         const stylesInCat = stylesMetadata.filter(s => s.category?.toLowerCase() === category.toLowerCase());
         const targetActive = !stylesInCat.every(s => s.is_active);
 
         try {
             setLoading(true);
-            const { error: updateError } = await supabase
+            const { error: updateError } = await (window as any).supabase
                 .from('styles_metadata')
                 .update({ is_active: targetActive })
                 .ilike('category', category);
             if (updateError) throw updateError;
 
-            const { error: upsertError } = await supabase
+            const { error: upsertError } = await (window as any).supabase
                 .from('styles_metadata')
                 .upsert({
                     id: category.toLowerCase(),
@@ -78,14 +68,14 @@ export const StyleManager: React.FC<StyleManagerProps> = ({
 
         try {
             setLoading(true);
-            const { error: updateError } = await supabase
+            const { error: updateError } = await (window as any).supabase
                 .from('styles_metadata')
                 .update({ is_active: targetActive })
                 .eq('subcategory', sub)
                 .ilike('category', category);
             if (updateError) throw updateError;
 
-            const { error: upsertError } = await supabase
+            const { error: upsertError } = await (window as any).supabase
                 .from('styles_metadata')
                 .upsert({
                     id: sub.toLowerCase(),
@@ -109,8 +99,8 @@ export const StyleManager: React.FC<StyleManagerProps> = ({
             try {
                 setLoading(true);
                 await Promise.all([
-                    supabase.from('styles_metadata').delete().eq('id', style.id),
-                    supabase.from('identity_prompts').delete().eq('id', style.id)
+                    (window as any).supabase.from('styles_metadata').delete().eq('id', style.id),
+                    (window as any).supabase.from('identity_prompts').delete().eq('id', style.id)
                 ]);
                 showToast('Identidad purgada del sistema');
                 fetchData();
@@ -142,7 +132,6 @@ export const StyleManager: React.FC<StyleManagerProps> = ({
                     </div>
                     <button
                         onClick={() => {
-                            setStyleForm({ id: '', label: '', category: '', is_premium: false, usage_count: 0, prompt: '', tags: '', subcategory: '', image_url: '', is_active: true });
                             setEditingStyle('new');
                         }}
                         className="bg-[#13ec80] text-[#0a0c0b] px-6 py-2 rounded-xl font-bold flex items-center justify-center gap-2 hover:scale-[1.02] transition-all shadow-[0_0_20px_rgba(19,236,128,0.3)]"
@@ -248,18 +237,6 @@ export const StyleManager: React.FC<StyleManagerProps> = ({
 
                             <div onClick={() => {
                                 setEditingStyle(style);
-                                setStyleForm({
-                                    id: style.id,
-                                    label: style.label,
-                                    category: style.category || '',
-                                    is_premium: style.is_premium || false,
-                                    usage_count: style.usage_count || 0,
-                                    prompt: style.prompt || '',
-                                    tags: Array.isArray(style.tags) ? style.tags.join(', ') : (style.tags || ''),
-                                    subcategory: style.subcategory || '',
-                                    image_url: style.image_url || '',
-                                    is_active: style.is_active ?? true
-                                });
                             }}>
                                 {/* Preview Image */}
                                 <div className="aspect-[4/5] relative overflow-hidden">

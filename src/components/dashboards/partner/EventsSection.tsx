@@ -170,7 +170,7 @@ export const EventsSection: React.FC<EventsSectionProps> = ({
                                                 <Edit2 className="w-4 h-4 group-hover/action:rotate-12 transition-transform" />
                                             </button>
                                             <button
-                                                onClick={() => window.open(`https://photobooth.creativa-labs.com/?event=${event.event_slug}`, '_blank')}
+                                                onClick={() => window.open(`https://app.metalabia.com/?event=${event.event_slug}`, '_blank')}
                                                 className="p-2.5 bg-slate-800/50 hover:bg-slate-800 border border-white/5 rounded-xl text-slate-400 hover:text-white transition-all group/action"
                                                 title="Ver Kiosco (Público)"
                                             >

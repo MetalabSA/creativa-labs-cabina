@@ -12,8 +12,6 @@ interface B2CUser {
 
 interface B2CSectionProps {
     b2cUsers: B2CUser[];
-    b2cSearchQuery: string;
-    setB2CSearchQuery: (val: string) => void;
     setShowNewUserModal: (val: boolean) => void;
     setEditingUser: (u: B2CUser | null) => void;
     setShowTopUp: (val: { id: string, name: string } | null) => void;
@@ -23,14 +21,13 @@ interface B2CSectionProps {
 
 export const B2CSection: React.FC<B2CSectionProps> = ({
     b2cUsers,
-    b2cSearchQuery,
-    setB2CSearchQuery,
     setShowNewUserModal,
     setEditingUser,
     setShowTopUp,
     b2cStats,
     stats
 }) => {
+    const [b2cSearchQuery, setB2CSearchQuery] = React.useState('');
     return (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-10 gap-4">

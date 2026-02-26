@@ -19,6 +19,7 @@ interface Partner {
 
 interface PartnersSectionProps {
     partners: Partner[];
+    pendingPartners?: any[];
     partnerStats: any;
     showInactivePartners: boolean;
     setShowInactivePartners: (val: boolean) => void;
@@ -26,17 +27,22 @@ interface PartnersSectionProps {
     setShowTopUp: (val: { id: string, name: string } | null) => void;
     setEditingPartner: (p: Partner | null) => void;
     setPartnerForm: (form: any) => void;
+    onApprovePartner?: (id: string) => void;
+    onRejectPartner?: (id: string) => void;
 }
 
 export const PartnersSection: React.FC<PartnersSectionProps> = ({
     partners,
+    pendingPartners = [],
     partnerStats,
     showInactivePartners,
     setShowInactivePartners,
     setShowCreatePartner,
     setShowTopUp,
     setEditingPartner,
-    setPartnerForm
+    setPartnerForm,
+    onApprovePartner,
+    onRejectPartner
 }) => {
     return (
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -61,6 +67,53 @@ export const PartnersSection: React.FC<PartnersSectionProps> = ({
                     </button>
                 </div>
             </div>
+
+            {/* Pending Approvals Section */}
+            {pendingPartners.length > 0 && (
+                <div className="mb-12 animate-in fade-in slide-in-from-top-4 duration-700">
+                    <div className="flex items-center gap-3 mb-4">
+                        <div className="flex items-center justify-center size-8 rounded-lg bg-amber-500/20 text-amber-500 border border-amber-500/30">
+                            <span className="material-symbols-outlined !text-lg">how_to_reg</span>
+                        </div>
+                        <h3 className="text-sm font-black text-white uppercase tracking-widest italic">Solicitudes de Agencia Pendientes ({pendingPartners.length})</h3>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {pendingPartners.map(p => (
+                            <div key={p.id} className="bg-[#121413] border border-amber-500/20 rounded-2xl p-5 relative group overflow-hidden">
+                                <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 blur-2xl rounded-full -translate-y-12 translate-x-12" />
+
+                                <div className="flex justify-between items-start relative z-10 mb-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className="size-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+                                            <span className="text-amber-500 font-black">{p.full_name?.[0] || p.email[0]}</span>
+                                        </div>
+                                        <div>
+                                            <p className="font-bold text-white text-sm">{p.full_name || p.email.split('@')[0]}</p>
+                                            <p className="text-[10px] text-slate-500 font-mono">{p.email}</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-2 relative z-10">
+                                    <button
+                                        onClick={() => onApprovePartner?.(p.id)}
+                                        className="flex-1 bg-amber-500 hover:bg-amber-400 text-black font-black text-[10px] py-2 rounded-lg transition-all uppercase tracking-widest"
+                                    >
+                                        APROBAR
+                                    </button>
+                                    <button
+                                        onClick={() => onRejectPartner?.(p.id)}
+                                        className="flex-1 bg-white/5 hover:bg-rose-500/20 border border-white/10 hover:border-rose-500/30 text-slate-400 hover:text-rose-400 font-black text-[10px] py-2 rounded-lg transition-all uppercase tracking-widest"
+                                    >
+                                        RECHAZAR
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {/* Partner Analytics Row */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">

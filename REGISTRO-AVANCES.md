@@ -7,6 +7,14 @@
 - **Solución**: Se verificó la definición del estado `loading` en `Auth.tsx` y se resolvieron errores silenciosos de importación que bloqueaban el ciclo de renderizado de React.
 - **Importaciones**: Se detectaron y corrigieron múltiples faltas de importación de `motion` y `AnimatePresence` (framer-motion) y el icono `X` (lucide-react) en `Auth.tsx`, `App.tsx` y `BrandingPanel.tsx`.
 
+### 🧩 Galería de Moderación y Sincronización de Props
+- **Problema**: Error `ReferenceError: loading is not defined` en la sección de moderación y galería vacía por desajuste de props.
+- **Solución**: 
+    - Se sincronizaron los nombres de los props entre `PartnerDashboard.tsx` y `ModerationSection.tsx` (cambiando `moderationLoading` a `loading`).
+    - Se implementaron los estados de búsqueda (`moderationSearchTerm`) y filtros de fecha en el padre para habilitar la funcionalidad de la galería.
+    - Se pasaron funciones de borrado (individual y masivo) y sistema de notificaciones (`showToast`) faltantes.
+- **Build & Deploy**: Se ejecutó un nuevo build de producción y se subieron los cambios a GitHub incluyendo la carpeta `dist`.
+
 ### 🧩 Fixes de Modularización (Partner Dashboard)
 - **Problema**: Las secciones de "Eventos" e "Identidad" se rompían con errores de `Cannot read properties of undefined (reading 'map')`.
 - **Raíz del Problema**: Al mover el código a componentes separados (`EventsSection`, `ClientsSection`), se perdieron referencias a props esenciales como `filteredEvents` y estados de filtrado.
@@ -78,3 +86,19 @@ Al mover los archivos a `src/`, el sistema de build (Vite) perdió la pista de l
 1.  Ajuste masivo de imports: `../lib/` ➔ `../../lib/` en componentes de dashboards.
 2.  Configuración de Multi-Entry Points en `vite.config.ts` para generar tanto `index.html` como `dashboard.html`.
 3.  Ajuste del `manifest.json` y `favicon.png` para que usen rutas absolutas desde la raíz `/`.
+## [25-02-2026] - Fase 5 y 6: Configuración de Producción y Blindaje de Roles
+### 🌐 Implementación de Dominios de Producción
+- **Subdominios**: Se configuró el ruteo inteligente en `src/index.tsx` para distinguir entre `kiosk.metalabia.com` (SaaS Management) y `app.metalabia.com` (Experiencia B2C).
+- **Hardcoded Strings**: Se eliminaron todas las referencias residuales a `creativa-labs.com` en los botones de "Ver Kiosco" y enlaces de redirección, reemplazándolos por los nuevos dominios de Metalab.
+- **Supabase**: Se verificó la configuración de **Site URL** y **Redirect URLs** para asegurar que el flujo de autenticación sea fluido en producción y local (localhost:3000).
+
+### 🇪🇸 Estandarización de Idioma (Español)
+- **Auth Flow**: Se corrigieron las etiquetas de registro que estaban en portugués ("Sou Cliente" ➔ "Soy Cliente", "Sou Agência" ➔ "Soy Agencia") para mantener la consistencia en el mercado hispanohablante.
+- **Placeholders**: Se actualizaron los placeholders y textos de copyright a "Metalab — Digital Alchemy Studio 2025".
+
+### 🛡️ Auditoría de Seguridad e Independencia de Datos
+- **Aislamiento de Roles**: Se auditó el componente `ClientDashboard.tsx` confirmando que los clientes finales NO tienen visibilidad de precios mayoristas ni acceso a datos de otros partners.
+- **Auto-Matching**: Se implementó la lógica en `Auth.tsx` que detecta si un nuevo usuario fue invitado previamente por una agencia, asignándole automáticamente el rol de `client` y vinculándolo a su partner correspondiente sin intervención manual.
+
+### 🔑 Google OAuth
+- **Configuración**: Se validó la integración estándar de Supabase para el login con Google, la cual utiliza las credenciales configuradas en el Dashboard de Supabase, garantizando un flujo de entrada seguro y moderno.
