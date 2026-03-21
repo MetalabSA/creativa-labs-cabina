@@ -153,7 +153,7 @@ serve(async (req) => {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${currentApiKey}` },
             body: JSON.stringify({
-                model: "nano-banana-pro",
+                model: "nano-banana-2",
                 input: {
                     prompt: masterPrompt,
                     image_input: [publicPhotoUrl],

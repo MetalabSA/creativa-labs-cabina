@@ -35,6 +35,18 @@
 		},
 		{
 			"path": "../../alquimia-command-center"
+		},
+		{
+			"path": "../../Cntrol remoto"
+		},
+		{
+			"path": "../../Web-Alquimia"
+		},
+		{
+			"path": "../../Agencia de Agentes IA"
+		},
+		{
+			"path": "../../1SHOTPRO"
 		}
 	],
 	"settings": {}

@@ -2,6 +2,16 @@
 
 ---
 
+## v3.4.0 — 27 de Febrero de 2026
+
+### 🚀 Upgrade Core: Nano Banana 2
+- **Motor de Renderizado**: Se actualizó el modelo de Inteligencia Artificial en la Edge Function (`cabina-vision`) de `nano-banana-pro` a `nano-banana-2`.
+- **Velocidad y Calidad**: Representa una reducción en los tiempos de respuesta y una mejor adherencia a los prompts.
+- **Resolución Constante**: Se forzó explícitamente el `aspect_ratio` a `"9:16"` y el `output_format` a `"png"` para prevenir conflictos con los predeterminados del nuevo proveedor.
+- **Laboratorio Técnico**: Se realizaron benchmarks descartando la generación en 4K nativo debido a tiempos excesivos de GPU (>135s frente a los ~49s del 2K) y peso de Storage (16MB vs 5MB).
+
+---
+
 ## v3.3.1 — 23 de Febrero de 2026
 
 ### 🛠️ Corrección de Error Crítico y Refinamiento UX

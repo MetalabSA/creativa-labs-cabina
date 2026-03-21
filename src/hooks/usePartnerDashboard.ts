@@ -16,6 +16,7 @@ export const usePartnerDashboard = ({ profile, showToast }: UsePartnerDashboardP
     const [clients, setClients] = useState<Client[]>([]);
     const [generationsData, setGenerationsData] = useState<any[]>([]);
     const [recentGlobalPhotos, setRecentGlobalPhotos] = useState<any[]>([]);
+    const [stylesMetadata, setStylesMetadata] = useState<any[]>([]);
 
     const fetchPartnerData = useCallback(async () => {
         if (!profile) return;
@@ -56,15 +57,17 @@ export const usePartnerDashboard = ({ profile, showToast }: UsePartnerDashboardP
                 setEvents(eRes.data || []);
                 setTransactions(tRes.data || []);
             } else {
-                const [pRes, eRes, tRes] = await Promise.all([
+                const [pRes, eRes, tRes, stylesRes] = await Promise.all([
                     supabase.from('partners').select('*').eq('id', targetPartnerId).single(),
                     supabase.from('events').select('*').eq('partner_id', targetPartnerId).order('created_at', { ascending: false }),
-                    supabase.from('wallet_transactions').select('*').eq('partner_id', targetPartnerId).order('created_at', { ascending: false })
+                    supabase.from('wallet_transactions').select('*').eq('partner_id', targetPartnerId).order('created_at', { ascending: false }),
+                    supabase.from('styles_metadata').select('*')
                 ]);
 
                 if (pRes.error) throw pRes.error;
                 setPartner(pRes.data);
                 setTransactions(tRes.data || []);
+                setStylesMetadata(stylesRes?.data || []);
 
 
                 if (eRes.data && eRes.data.length > 0) {
@@ -74,7 +77,7 @@ export const usePartnerDashboard = ({ profile, showToast }: UsePartnerDashboardP
 
                     const { data: gens } = await supabase
                         .from('generations')
-                        .select('id, created_at, event_id, image_url')
+                        .select('id, created_at, event_id, image_url, style_id')
                         .in('event_id', eventIds)
                         .gte('created_at', sevenDaysAgo.toISOString())
                         .order('created_at', { ascending: false });
@@ -379,6 +382,7 @@ export const usePartnerDashboard = ({ profile, showToast }: UsePartnerDashboardP
         clients,
         generationsData,
         recentGlobalPhotos,
+        stylesMetadata,
         fetchPartnerData,
         getClientBalance,
         handleCreateEvent,

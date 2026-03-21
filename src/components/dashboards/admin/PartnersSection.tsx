@@ -89,7 +89,7 @@ export const PartnersSection: React.FC<PartnersSectionProps> = ({
                                             <span className="text-amber-500 font-black">{p.full_name?.[0] || p.email[0]}</span>
                                         </div>
                                         <div>
-                                            <p className="font-bold text-white text-sm">{p.full_name || p.email.split('@')[0]}</p>
+                                            <p className="font-bold text-white text-sm">{p.full_name || p.email?.split('@')[0] || 'Partner'}</p>
                                             <p className="text-[10px] text-slate-500 font-mono">{p.email}</p>
                                         </div>
                                     </div>
@@ -140,7 +140,7 @@ export const PartnersSection: React.FC<PartnersSectionProps> = ({
                 </div>
                 <div className="bg-[#121413] p-5 border border-[#1f2b24] rounded-xl relative overflow-hidden group">
                     <p className="text-[10px] font-bold text-slate-500 uppercase mb-2">Ratio de Consumo</p>
-                    <h3 className="text-2xl font-black text-amber-400">{partnerStats.avgConsumptionRate.toFixed(1)}%</h3>
+                    <h3 className="text-2xl font-black text-amber-400">{(partnerStats?.avgConsumptionRate || 0).toFixed(1)}%</h3>
                     <div className="absolute top-0 right-0 w-12 h-12 bg-amber-500/10 rounded-bl-full flex items-center justify-center translate-x-4 -translate-y-4 group-hover:translate-x-2 group-hover:-translate-y-2 transition-transform">
                         <span className="material-symbols-outlined text-amber-500 !text-sm">trending_up</span>
                     </div>

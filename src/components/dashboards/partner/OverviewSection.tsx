@@ -7,6 +7,7 @@ interface OverviewSectionProps {
     partner: Partner | null;
     events: Event[];
     generationsData: any[];
+    stylesMetadata: any[];
     setView: (view: 'overview' | 'events' | 'branding' | 'wallet' | 'moderation' | 'clients') => void;
 }
 
@@ -14,11 +15,34 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({
     partner,
     events,
     generationsData,
+    stylesMetadata,
     setView
 }) => {
     const availableCredits = (partner?.credits_total || 0) - (partner?.credits_used || 0);
     const isLowCredits = availableCredits > 0 && availableCredits < (partner?.credits_total || 0) * 0.2;
     const isCriticalCredits = availableCredits > 0 && availableCredits < (partner?.credits_total || 0) * 0.1;
+
+    const topStyles = React.useMemo(() => {
+        const counts: Record<string, number> = {};
+        generationsData.forEach(g => {
+            if (g.style_id) {
+                counts[g.style_id] = (counts[g.style_id] || 0) + 1;
+            }
+        });
+
+        return Object.entries(counts)
+            .sort(([, a], [, b]) => b - a)
+            .slice(0, 4)
+            .map(([id, count]) => {
+                const meta = stylesMetadata.find(m => m.id === id);
+                return {
+                    id,
+                    count,
+                    label: meta?.label || id,
+                    image: meta?.image_url || '/placeholder-style.jpg'
+                };
+            });
+    }, [generationsData, stylesMetadata]);
 
     return (
         <motion.div
@@ -131,6 +155,37 @@ export const OverviewSection: React.FC<OverviewSectionProps> = ({
                         );
                     })}
                 </div>
+            </div>
+
+            {/* Top Styles Section */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+                <div className="md:col-span-4">
+                    <h4 className="text-sm font-black text-white uppercase tracking-widest mb-4">Top Identidades IA</h4>
+                </div>
+                {topStyles.length > 0 ? topStyles.map((style, idx) => (
+                    <div key={style.id} className="glass-card rounded-[24px] overflow-hidden border border-white/5 bg-slate-900/40 group">
+                        <div className="aspect-square relative">
+                            <img src={style.image} alt={style.label} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700 opacity-60 group-hover:opacity-100" />
+                            <div className="absolute inset-0 bg-gradient-to-t from-[#0a0c0b] to-transparent" />
+                            <div className="absolute top-4 left-4 size-6 rounded-full bg-white/10 backdrop-blur-md border border-white/20 flex items-center justify-center text-[10px] font-black">
+                                #{idx + 1}
+                            </div>
+                        </div>
+                        <div className="p-4">
+                            <h5 className="text-[11px] font-black text-white uppercase tracking-wider mb-1 truncate">{style.label}</h5>
+                            <div className="flex items-center justify-between">
+                                <span className="text-[10px] text-slate-500 font-bold uppercase">{style.count} Generaciones</span>
+                                <div className="text-[#135bec]">
+                                    <TrendingUp className="size-3" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )) : (
+                    <div className="md:col-span-4 h-32 flex flex-col items-center justify-center bg-slate-900/40 rounded-[24px] border border-dashed border-white/5">
+                        <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">Sin datos de estilos hoy</p>
+                    </div>
+                )}
             </div>
         </motion.div>
     );

@@ -141,6 +141,25 @@ export const ModerationSection: React.FC<ModerationSectionProps> = ({
                         )}
                     </div>
                     <div className="w-px h-8 bg-white/5 mx-1" />
+                    <button
+                        onClick={() => {
+                            if (selectedPhotos.length === filteredPhotos.length) {
+                                setSelectedPhotos([]);
+                            } else {
+                                setSelectedPhotos(filteredPhotos.map(p => p.id));
+                            }
+                        }}
+                        className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2 ${selectedPhotos.length === filteredPhotos.length && filteredPhotos.length > 0
+                            ? 'bg-[#135bec] text-white'
+                            : 'bg-white/5 text-slate-400 border border-white/10 hover:border-white/20'
+                            }`}
+                    >
+                        <span className="material-symbols-outlined !text-sm">
+                            {selectedPhotos.length === filteredPhotos.length && filteredPhotos.length > 0 ? 'deselect' : 'select_all'}
+                        </span>
+                        {selectedPhotos.length === filteredPhotos.length && filteredPhotos.length > 0 ? 'Deseleccionar' : 'Seleccionar Todo'}
+                    </button>
+                    <div className="w-px h-8 bg-white/5 mx-1" />
                     <div className="flex items-center gap-3">
                         <button
                             onClick={() => {

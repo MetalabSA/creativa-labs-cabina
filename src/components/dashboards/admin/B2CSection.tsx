@@ -60,18 +60,18 @@ export const B2CSection: React.FC<B2CSectionProps> = ({
                 <div className="xl:col-span-3">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {b2cUsers
-                            .filter(u => u.email.toLowerCase().includes(b2cSearchQuery.toLowerCase()))
+                            .filter(u => (u.email || '').toLowerCase().includes(b2cSearchQuery.toLowerCase()) || (u.full_name || '').toLowerCase().includes(b2cSearchQuery.toLowerCase()))
                             .sort((a, b) => (b.total_generations || 0) - (a.total_generations || 0))
                             .map(u => (
                                 <div key={u.id} className="bg-[#121413] border border-[#1f2b24] rounded-[32px] p-6 hover:border-[#13ec80]/30 transition-all group relative overflow-hidden">
                                     <div className="flex items-start justify-between mb-6 relative z-10">
                                         <div className="flex items-center gap-4">
                                             <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#13ec80]/20 to-blue-500/20 flex items-center justify-center border border-white/5">
-                                                <span className="text-xl font-black text-white uppercase">{u.full_name?.[0] || u.email[0]}</span>
+                                                <span className="text-xl font-black text-white uppercase">{u.full_name?.[0] || u.email?.[0]}</span>
                                             </div>
                                             <div>
-                                                <h4 className="font-black text-white group-hover:text-[#13ec80] transition-colors line-clamp-1">{u.full_name || u.email.split('@')[0]}</h4>
-                                                <p className="text-[10px] text-slate-500 font-mono italic">{u.email}</p>
+                                                <h4 className="font-black text-white group-hover:text-[#13ec80] transition-colors line-clamp-1">{u.full_name || u.email?.split('@')[0] || 'Usuario'}</h4>
+                                                    <p className="text-slate-500 font-mono">{u.email ?? 'Sin email'}</p>
                                             </div>
                                         </div>
                                         <div className="flex gap-2">
@@ -82,7 +82,7 @@ export const B2CSection: React.FC<B2CSectionProps> = ({
                                                 <span className="material-symbols-outlined !text-sm">edit</span>
                                             </button>
                                             <button
-                                                onClick={() => setShowTopUp({ id: u.id, name: u.email })}
+                                                onClick={() => setShowTopUp({ id: u.id, name: u.email ?? 'Usuario' })}
                                                 className="px-3 h-8 rounded-full bg-[#13ec80]/10 border border-[#13ec80]/20 text-[#13ec80] text-[9px] font-black uppercase tracking-tighter hover:bg-[#13ec80] hover:text-black transition-all"
                                             >
                                                 Saldo
@@ -135,7 +135,7 @@ export const B2CSection: React.FC<B2CSectionProps> = ({
                         </h3>
 
                         <div className="space-y-6">
-                            {b2cStats.topStyles.slice(0, 5).map((style: any) => (
+                            {(b2cStats?.topStyles || []).slice(0, 5).map((style: any) => (
                                 <div key={style.id} className="group">
                                     <div className="flex justify-between items-center mb-2">
                                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest group-hover:text-white transition-colors">{style.id}</span>

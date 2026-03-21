@@ -312,17 +312,27 @@ export const useAdmin = ({ showToast }: UseAdminProps) => {
             const { data: partner } = await supabase.from('partners').select('credits_total, user_id').eq('id', partnerId).single();
             if (!partner) throw new Error("Partner no encontrado");
 
-            const newTotal = (partner.credits_total || 0) + amount;
-            const { error } = await supabase.from('partners').update({ credits_total: newTotal }).eq('id', partnerId);
-            if (error) throw error;
+            const numAmount = Number(amount);
+            if (isNaN(numAmount)) throw new Error("Monto inválido");
 
-            if (partner.user_id) {
-                await supabase.from('profiles').update({ credits: newTotal }).eq('id', partner.user_id);
-            }
+            // 1. Update Partner's related User Profile
+            if (!partner.user_id) throw new Error("Partner no tiene un user_id vinculado");
+            
+            const { data: profile } = await supabase.from('profiles').select('credits').eq('id', partner.user_id).single();
+            const newProfileTotal = (Number(profile?.credits) || 0) + numAmount;
+            
+            const { error: profileError } = await supabase.from('profiles').update({ credits: newProfileTotal }).eq('id', partner.user_id);
+            if (profileError) throw profileError;
 
+            // 2. Update Partner Record
+            const newPartnerTotal = (Number(partner.credits_total) || 0) + numAmount;
+            const { error: partnerError } = await supabase.from('partners').update({ credits_total: newPartnerTotal }).eq('id', partnerId);
+            if (partnerError) throw partnerError;
+
+            // 3. Log transaction
             await supabase.from('wallet_transactions').insert({
                 partner_id: partnerId,
-                amount: amount,
+                amount: numAmount,
                 type: 'top-up',
                 description: 'Recarga administrativa SuperAdmin'
             });

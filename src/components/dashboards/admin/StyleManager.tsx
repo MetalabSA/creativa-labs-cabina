@@ -1,6 +1,7 @@
 import React from 'react';
 import { Search } from 'lucide-react';
 import { SupabaseClient } from '@supabase/supabase-js';
+import { supabase } from '../../../lib/supabaseClient';
 
 interface StyleMetadata {
     id: string;
@@ -38,13 +39,13 @@ export const StyleManager: React.FC<StyleManagerProps> = ({
 
         try {
             setLoading(true);
-            const { error: updateError } = await (window as any).supabase
+            const { error: updateError } = await supabase
                 .from('styles_metadata')
                 .update({ is_active: targetActive })
                 .ilike('category', category);
             if (updateError) throw updateError;
 
-            const { error: upsertError } = await (window as any).supabase
+            const { error: upsertError } = await supabase
                 .from('styles_metadata')
                 .upsert({
                     id: category.toLowerCase(),
@@ -68,14 +69,14 @@ export const StyleManager: React.FC<StyleManagerProps> = ({
 
         try {
             setLoading(true);
-            const { error: updateError } = await (window as any).supabase
+            const { error: updateError } = await supabase
                 .from('styles_metadata')
                 .update({ is_active: targetActive })
                 .eq('subcategory', sub)
                 .ilike('category', category);
             if (updateError) throw updateError;
 
-            const { error: upsertError } = await (window as any).supabase
+            const { error: upsertError } = await supabase
                 .from('styles_metadata')
                 .upsert({
                     id: sub.toLowerCase(),
@@ -99,8 +100,8 @@ export const StyleManager: React.FC<StyleManagerProps> = ({
             try {
                 setLoading(true);
                 await Promise.all([
-                    (window as any).supabase.from('styles_metadata').delete().eq('id', style.id),
-                    (window as any).supabase.from('identity_prompts').delete().eq('id', style.id)
+                    supabase.from('styles_metadata').delete().eq('id', style.id),
+                    supabase.from('identity_prompts').delete().eq('id', style.id)
                 ]);
                 showToast('Identidad purgada del sistema');
                 fetchData();
@@ -143,17 +144,17 @@ export const StyleManager: React.FC<StyleManagerProps> = ({
 
             {/* Filters Bar */}
             <div className="flex flex-wrap items-center gap-4 mb-8">
-                <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
-                    {['all', ...Array.from(new Set(stylesMetadata.map(s => s.category?.toLowerCase()).filter(Boolean)))].map(cat => (
+                <div className="flex flex-wrap gap-2 mb-8 bg-white/5 p-2 rounded-2xl border border-white/5 backdrop-blur-md">
+                    {['all', ...Array.from(new Set(stylesMetadata.map(s => s.category?.trim().toLowerCase()).filter(Boolean).filter(c => c !== 'all')))].map(cat => (
                         <button
                             key={cat}
                             onClick={() => setSelectedCategoryFilter(cat!)}
-                            className={`px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${selectedCategoryFilter === cat
-                                ? 'bg-[#13ec80] text-black shadow-[0_0_15px_rgba(19,236,128,0.3)]'
-                                : 'bg-white/5 text-slate-500 border border-white/10 hover:border-white/20'
+                            className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap border ${selectedCategoryFilter === cat
+                                ? 'bg-[#13ec80] text-black border-[#13ec80] shadow-[0_0_20px_rgba(19,236,128,0.4)] scale-[1.02]'
+                                : 'bg-[#1a1d1c] text-slate-500 border-white/5 hover:border-white/20 hover:text-slate-300'
                                 }`}
                         >
-                            {cat === 'all' ? 'Todas / All' : cat}
+                            {cat === 'all' ? 'Todas / All' : cat.charAt(0).toUpperCase() + cat.slice(1)}
                         </button>
                     ))}
                 </div>
@@ -214,7 +215,8 @@ export const StyleManager: React.FC<StyleManagerProps> = ({
                 {stylesMetadata
                     .filter(s => {
                         const matchesSearch = (s.label || '').toLowerCase().includes(styleSearchQuery.toLowerCase()) ||
-                            (s.id || '').toLowerCase().includes(styleSearchQuery.toLowerCase());
+                            (s.id || '').toLowerCase().includes(styleSearchQuery.toLowerCase()) ||
+                            (s.category || '').toLowerCase().includes(styleSearchQuery.toLowerCase());
                         const matchesCat = selectedCategoryFilter === 'all' || s.category?.toLowerCase() === selectedCategoryFilter;
                         return matchesSearch && matchesCat;
                     })

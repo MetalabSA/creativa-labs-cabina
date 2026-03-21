@@ -254,6 +254,7 @@ export const PartnerDashboard: React.FC<PartnerDashboardProps> = ({
                                 partner={partner}
                                 events={events}
                                 generationsData={generationsData}
+                                stylesMetadata={stylesMetadata}
                                 setView={setView}
                             />
                         )}
