@@ -65,6 +65,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
         handleRejectPartner,
         handleCreateUser,
         handleUpdateUser,
+        handleTopUpUser,
         handleUpdateStyle,
         handleStyleImageUpload
     } = useAdmin({ showToast });
@@ -125,7 +126,7 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                             b2cStats={b2cStats}
                             stats={stats}
                             setEditingUser={setEditingUser}
-                            setShowTopUp={setShowTopUp}
+                            setShowTopUp={(v) => setShowTopUp(v ? { id: v.id, name: v.targetName } : null)}
                             setShowNewUserModal={setShowNewUserModal}
                         />
                     )}
@@ -175,7 +176,15 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                         isOpen={true}
                         target={showTopUp}
                         onClose={() => setShowTopUp(null)}
-                        onConfirm={handleTopUpPartner}
+                        onConfirm={async (id, name, amount) => {
+                            // Los partners tienen UUID o similar, los perfiles de usuario B2C coinciden por user_id o profiles.id
+                            const isPartner = partners.some(p => p.id === id);
+                            const success = isPartner 
+                                ? await handleTopUpPartner(id, name, amount)
+                                : await handleTopUpUser(id, name, amount);
+                            
+                            if (success) setShowTopUp(null);
+                        }}
                     />
                 )}
 
@@ -187,7 +196,12 @@ export const Admin: React.FC<AdminProps> = ({ onBack }) => {
                             setShowNewUserModal(false);
                             setEditingUser(null);
                         }}
-                        onSave={editingUser ? handleUpdateUser : handleCreateUser}
+                        onSave={async (data) => {
+                            if (editingUser) {
+                                return handleUpdateUser(editingUser.id, data);
+                            }
+                            return handleCreateUser(data);
+                        }}
                         isSaving={isSaving}
                         stylesMetadata={stylesMetadata}
                     />

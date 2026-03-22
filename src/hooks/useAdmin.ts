@@ -346,6 +346,28 @@ export const useAdmin = ({ showToast }: UseAdminProps) => {
         }
     };
 
+    const handleTopUpUser = async (userId: string, userName: string, amount: number) => {
+        try {
+            const numAmount = Number(amount);
+            if (isNaN(numAmount)) throw new Error("Monto inválido");
+
+            const { data: profile } = await supabase.from('profiles').select('credits').eq('id', userId).single();
+            if (!profile) throw new Error("Usuario no encontrado");
+
+            const newTotal = (Number(profile.credits) || 0) + numAmount;
+            
+            const { error: profileError } = await supabase.from('profiles').update({ credits: newTotal }).eq('id', userId);
+            if (profileError) throw profileError;
+
+            showToast(`¡${amount} créditos acreditados a ${userName}!`);
+            fetchData();
+            return true;
+        } catch (error: any) {
+            showToast('Error: ' + error.message, 'error');
+            return false;
+        }
+    };
+
     const handleDeletePartner = async (partnerId: string) => {
         try {
             const partner = partners.find(p => p.id === partnerId);
@@ -439,19 +461,51 @@ export const useAdmin = ({ showToast }: UseAdminProps) => {
 
     const handleCreateUser = async (data: any) => {
         try {
-            const { error } = await supabase.from('profiles').insert({
-                email: data.email.toLowerCase(),
+            setIsSaving(true);
+            const email = data.email.toLowerCase();
+            
+            // 1. Crear usuario en Auth
+            const { data: authData, error: authError } = await supabase.auth.signUp({
+                email,
+                password: data.password || 'User123!',
+            });
+
+            // Si el error es que ya existe, no es crítico para este flujo
+            if (authError && !authError.message.includes('already registered')) throw authError;
+
+            let userId = authData.user?.id;
+
+            // 2. Si no tenemos el ID (porque ya existía), lo buscamos
+            if (!userId) {
+                const { data: profile } = await supabase.from('profiles').select('id').eq('email', email).maybeSingle();
+                userId = profile?.id;
+            }
+
+            if (!userId) throw new Error("No se pudo obtener el ID del usuario");
+
+            // 3. Pequeña espera por el trigger de Supabase
+            await new Promise(r => setTimeout(r, 800));
+
+            // 4. USAR UPSERT para 'pisar' los 5 créditos automáticos con los que el Admin defina
+            const { error: profileError } = await supabase.from('profiles').upsert({
+                id: userId,
+                email,
+                full_name: data.full_name || email.split('@')[0],
                 credits: Number(data.credits),
-                unlocked_packs: data.packs.split(',').map((p: string) => p.trim()).filter(Boolean),
+                unlocked_packs: data.unlocked_packs || [],
                 role: 'user'
             });
-            if (error) throw error;
-            showToast('Usuario creado');
+
+            if (profileError) throw profileError;
+
+            showToast('Usuario configurado con éxito');
             fetchData();
             return true;
         } catch (error: any) {
             showToast('Error: ' + error.message, 'error');
             return false;
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -547,6 +601,7 @@ export const useAdmin = ({ showToast }: UseAdminProps) => {
         handleCreatePartner,
         handleUpdatePartner,
         handleTopUpPartner,
+        handleTopUpUser,
         handleDeletePartner,
         handleApprovePartner,
         handleRejectPartner,

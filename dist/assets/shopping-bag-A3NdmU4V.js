@@ -1,4 +1,4 @@
-import{c as a}from"./DashboardApp-C9KkE3ci.js";/**
+import{c as a}from"./DashboardApp-CT9Tf9Wo.js";/**
  * @license lucide-react v0.554.0 - ISC
  *
  * This source code is licensed under the ISC license.

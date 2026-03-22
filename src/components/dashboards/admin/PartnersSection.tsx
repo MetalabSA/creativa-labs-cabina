@@ -213,7 +213,7 @@ export const PartnersSection: React.FC<PartnersSectionProps> = ({
                                     <td className="px-6 py-4 text-right">
                                         <div className="flex items-center justify-end gap-2">
                                             <button
-                                                onClick={() => setShowTopUp({ id: p.id, name: p.company_name || p.name })}
+                                                onClick={() => setShowTopUp({ id: p.id, name: p.company_name || p.name || 'Partner' })}
                                                 className="text-[10px] font-black text-[#13ec80] border border-[#13ec80]/30 px-4 py-2 rounded-lg hover:bg-[#13ec80]/10 transition-all flex items-center gap-2"
                                             >
                                                 RECARGAR

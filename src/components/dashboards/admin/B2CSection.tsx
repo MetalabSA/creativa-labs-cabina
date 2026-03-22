@@ -82,7 +82,7 @@ export const B2CSection: React.FC<B2CSectionProps> = ({
                                                 <span className="material-symbols-outlined !text-sm">edit</span>
                                             </button>
                                             <button
-                                                onClick={() => setShowTopUp({ id: u.id, name: u.email ?? 'Usuario' })}
+                                                onClick={() => setShowTopUp({ id: u.id, name: u.full_name || u.email || 'Usuario' })}
                                                 className="px-3 h-8 rounded-full bg-[#13ec80]/10 border border-[#13ec80]/20 text-[#13ec80] text-[9px] font-black uppercase tracking-tighter hover:bg-[#13ec80] hover:text-black transition-all"
                                             >
                                                 Saldo
